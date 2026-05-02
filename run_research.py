@@ -91,17 +91,45 @@ def step_load_wide_universe(conn, run_id: str, limit: int = 1500) -> list[dict]:
 def step_fetch_wide_market_data(
     conn, run_id: str, wide_universe: list[dict], date_iso: str,
     skip: bool = False,
+    chunk_size: int = 40,
+    chunk_sleep_sec: float = 2.0,
 ) -> dict[str, dict]:
-    """Wide universe 가격/재무 batch fetch.
+    """Wide universe 가격/재무 batch fetch — chunked + retry.
 
+    yfinance 가 데이터센터 IP 의 대량 요청을 차단하는 경우가 많아 chunk 로 끊어 호출.
     skip=True 면 빈 dict (개발/테스트용).
     """
+    import time as _time
     if skip or not wide_universe:
         log.info("[3/15] wide market data skipped")
         return {}
     tickers = [u["ticker"] for u in wide_universe]
-    log.info("[3/15] fetching wide market data for %d tickers...", len(tickers))
-    md_map = fetch_market_universe(tickers, period="1y", enrich=False)
+    n = len(tickers)
+    n_chunks = (n + chunk_size - 1) // chunk_size
+    log.info(
+        "[3/15] fetching wide market data for %d tickers (%d chunks of %d)...",
+        n, n_chunks, chunk_size,
+    )
+    md_map: dict[str, dict] = {}
+    for i in range(0, n, chunk_size):
+        chunk = tickers[i:i + chunk_size]
+        chunk_idx = i // chunk_size + 1
+        try:
+            res = fetch_market_universe(chunk, period="1y", enrich=False)
+            md_map.update(res)
+            avail = sum(1 for m in res.values() if m.get("available"))
+            log.info(
+                "[3/15] chunk %d/%d: ok=%d/%d (cumulative %d/%d)",
+                chunk_idx, n_chunks, avail, len(chunk), len(md_map), n,
+            )
+        except Exception as e:
+            log.warning("[3/15] chunk %d/%d failed: %s", chunk_idx, n_chunks, e)
+            for t in chunk:
+                md_map.setdefault(t, {"available": False, "error": str(e)})
+        # rate-limit 회피
+        if chunk_idx < n_chunks:
+            _time.sleep(chunk_sleep_sec)
+
     avail = sum(1 for m in md_map.values() if m.get("available"))
     log.info("[3/15] wide market ok=%d / total=%d", avail, len(md_map))
     return md_map
