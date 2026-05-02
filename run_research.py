@@ -129,6 +129,8 @@ def step_fetch_news(conn, run_id: str, universe: list[dict]) -> dict[str, list[d
                     "confidence_level_ko": summary_payload.get("confidence_level_ko"),
                     "body_excerpt": summary_payload.get("body_excerpt"),
                     "key_points_ko": summary_payload.get("key_points_ko"),
+                    "follow_up_items_ko": summary_payload.get("follow_up_items_ko"),
+                    "content_availability": summary_payload.get("content_availability"),
                 })
                 summarized += 1
             except Exception as e:

@@ -259,7 +259,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE news_raw ADD COLUMN thesis_impact_ko TEXT",
         "ALTER TABLE news_raw ADD COLUMN confidence_level_ko TEXT",
         "ALTER TABLE news_raw ADD COLUMN body_excerpt TEXT",
-        "ALTER TABLE news_raw ADD COLUMN key_points_ko TEXT",  # JSON list
+        "ALTER TABLE news_raw ADD COLUMN key_points_ko TEXT",  # legacy: JSON list
+        "ALTER TABLE news_raw ADD COLUMN follow_up_items_ko TEXT",  # JSON list
+        "ALTER TABLE news_raw ADD COLUMN content_availability TEXT",
     )
     for s in _ALTER_STATEMENTS:
         try:
@@ -529,8 +531,9 @@ def upsert_news(
                 importance_score, source_quality, staleness, event_status_kw, is_urgent,
                 fetched_at,
                 detailed_summary_ko, investment_implication_ko, thesis_impact_ko,
-                confidence_level_ko, body_excerpt, key_points_ko
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                confidence_level_ko, body_excerpt, key_points_ko,
+                follow_up_items_ko, content_availability
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(news_id) DO UPDATE SET
                 run_id=excluded.run_id,
                 title=excluded.title,
@@ -549,7 +552,9 @@ def upsert_news(
                 thesis_impact_ko=COALESCE(excluded.thesis_impact_ko, news_raw.thesis_impact_ko),
                 confidence_level_ko=COALESCE(excluded.confidence_level_ko, news_raw.confidence_level_ko),
                 body_excerpt=COALESCE(excluded.body_excerpt, news_raw.body_excerpt),
-                key_points_ko=COALESCE(excluded.key_points_ko, news_raw.key_points_ko)
+                key_points_ko=COALESCE(excluded.key_points_ko, news_raw.key_points_ko),
+                follow_up_items_ko=COALESCE(excluded.follow_up_items_ko, news_raw.follow_up_items_ko),
+                content_availability=COALESCE(excluded.content_availability, news_raw.content_availability)
             """,
             (
                 nid,
@@ -572,6 +577,8 @@ def upsert_news(
                 it.get("confidence_level_ko") or it.get("confidence_level") or it.get("confidence"),
                 it.get("body_excerpt"),
                 dump_json(it.get("key_points_ko")) if it.get("key_points_ko") else None,
+                dump_json(it.get("follow_up_items_ko")) if it.get("follow_up_items_ko") else None,
+                it.get("content_availability"),
             ),
         )
         n += 1
@@ -593,7 +600,9 @@ def update_news_summary(
             thesis_impact_ko = ?,
             confidence_level_ko = ?,
             body_excerpt = ?,
-            key_points_ko = ?
+            key_points_ko = ?,
+            follow_up_items_ko = ?,
+            content_availability = ?
         WHERE news_id = ?
         """,
         (
@@ -603,6 +612,8 @@ def update_news_summary(
             summary_payload.get("confidence_level_ko"),
             summary_payload.get("body_excerpt"),
             dump_json(summary_payload.get("key_points_ko")) if summary_payload.get("key_points_ko") else None,
+            dump_json(summary_payload.get("follow_up_items_ko")) if summary_payload.get("follow_up_items_ko") else None,
+            summary_payload.get("content_availability"),
             news_id,
         ),
     )

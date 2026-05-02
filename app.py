@@ -673,6 +673,18 @@ CUSTOM_CSS = """
     .para-row.kpts-row .kpts-line + .kpts-line {
         border-top: 1px dashed var(--line);
     }
+    /* 뉴스 카드 Follow-up Items — 정돈된 리스트 */
+    ul.news-followups {
+        list-style: disc outside;
+        padding-left: 18px;
+        margin: 0;
+    }
+    ul.news-followups li {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #1F2937;
+        padding: 3px 0;
+    }
     @media (max-width: 640px) {
         .para-row.kpts-row {
             grid-template-columns: 1fr;
@@ -2542,8 +2554,15 @@ def render_stock_detail():
                     if row_db["confidence_level_ko"]:
                         n["confidence_level_ko"] = row_db["confidence_level_ko"]
                     try:
-                        if row_db["key_points_ko"]:
-                            n["key_points_ko"] = db.load_json(row_db["key_points_ko"], default=[])
+                        if "follow_up_items_ko" in row_db.keys() and row_db["follow_up_items_ko"]:
+                            n["follow_up_items_ko"] = db.load_json(
+                                row_db["follow_up_items_ko"], default=[]
+                            )
+                    except Exception:
+                        pass
+                    try:
+                        if "content_availability" in row_db.keys() and row_db["content_availability"]:
+                            n["content_availability"] = row_db["content_availability"]
                     except Exception:
                         pass
 
@@ -2603,7 +2622,7 @@ def render_stock_detail():
             link_btn = (
                 f'<a class="news-link" href="{link}" target="_blank" rel="noopener noreferrer">기사 원문 보기 →</a>'
                 if link
-                else '<span class="news-link" style="opacity:0.5;">링크 확인 필요</span>'
+                else '<span class="news-link" style="opacity:0.5;">원문 링크 확인 필요</span>'
             )
             confidence_chip = (
                 f'<span class="chip chip-needs-check" style="margin-left:8px; font-size:11px;">'
@@ -2620,20 +2639,17 @@ def render_stock_detail():
                 "확인 필요": "needs-check",
             }.get(cls_label_safe, "needs-check")
 
-            # 핵심 포인트 (DB에 있으면 표시) — 카드 안 메인 콘텐츠
-            # 불릿 마커 없이 자연스러운 한국어 문장 줄바꿈으로만 표시
-            kpts = n.get("key_points_ko") or []
-            kpts_html = ""
-            if kpts:
-                items = "".join(
-                    f'<div class="kpts-line">{p}</div>'
-                    for p in kpts[:5]
+            # ── Follow-up Items: bullet 리스트 (Key points 섹션은 폐기) ──
+            follow_ups = n.get("follow_up_items_ko") or []
+            follow_html = ""
+            if follow_ups:
+                fu_items = "".join(
+                    f'<li>{p}</li>' for p in follow_ups[:6]
                 )
-                # 라벨 + 줄단위 본문은 grid 2열로 정렬 (kpts-row)
-                kpts_html = (
+                follow_html = (
                     '<div class="para-row kpts-row">'
-                    '<div class="para-label">Key points</div>'
-                    f'<div class="para-text">{items}</div>'
+                    '<div class="para-label">Follow-up Items</div>'
+                    f'<div class="para-text"><ul class="news-followups">{fu_items}</ul></div>'
                     "</div>"
                 )
 
@@ -2648,11 +2664,11 @@ def render_stock_detail():
                 '<span class="para-label">Summary</span>'
                 f'<span class="para-text">{detailed_ko}</span>'
                 "</div>"
-                f"{kpts_html}"
                 '<div class="para-row">'
-                '<span class="para-label">투자적 의미</span>'
+                '<span class="para-label">Key Thesis</span>'
                 f'<span class="para-text">{implication}</span>'
                 "</div>"
+                f"{follow_html}"
                 f"{link_btn}"
                 "</div>",
                 unsafe_allow_html=True,
@@ -2866,18 +2882,17 @@ def render_news_detail():
     link = row_db["link"] or ""
     detailed = row_db["detailed_summary_ko"] or row_db["summary"] or "본문 요약이 제공되지 않습니다."
     implication = row_db["investment_implication_ko"] or "추가 정밀 검토 필요"
-    impact = row_db["thesis_impact_ko"] or row_db["thesis_impact_kw"] if False else (
-        row_db["thesis_impact_ko"] or "확인 필요"
-    )
-    confidence = row_db["confidence_level_ko"] or row_db["confidence_level_ko"] or "Low"
+    impact = row_db["thesis_impact_ko"] or "확인 필요"
+    confidence = row_db["confidence_level_ko"] or "Low"
 
-    # key_points_ko 파싱
-    kpts_raw = None
+    # Follow-up Items 파싱
+    follow_ups: list[str] = []
     try:
-        kpts_raw = row_db["key_points_ko"]
+        fu_raw = row_db["follow_up_items_ko"]
+        if fu_raw:
+            follow_ups = db.load_json(fu_raw, default=[]) or []
     except Exception:
-        kpts_raw = None
-    key_points = db.load_json(kpts_raw, default=[]) if kpts_raw else []
+        follow_ups = []
 
     # 종목명 표시
     universe_map = {r["ticker"]: r for r in (rows or [])}
@@ -2889,43 +2904,41 @@ def render_news_detail():
     st.markdown(
         '<div class="card">'
         f'<div class="pick-name" style="font-size:20px;">{title}</div>'
-        f'<div class="pick-type">관련 종목: {name_display} · {source} · {published}</div>'
+        f'<div class="pick-type">관련 종목: {name_display} · {source} · {published} · Confidence {confidence}</div>'
         "</div>",
         unsafe_allow_html=True,
     )
     st.markdown(
         '<div class="judgment-card">'
-        '<div class="judgment-eyebrow">한국어 상세 요약</div>'
+        '<div class="judgment-eyebrow">Summary</div>'
         f'<div class="judgment-body">{detailed}</div>'
         "</div>",
         unsafe_allow_html=True,
     )
 
-    if key_points:
-        st.markdown('<div class="section-title">핵심 포인트</div>', unsafe_allow_html=True)
-        body = "".join(
-            f'<div class="bullet"><span class="bullet-num">{i+1}.</span><span>{b}</span></div>'
-            for i, b in enumerate(key_points)
-        )
-        st.markdown(f'<div class="card">{body}</div>', unsafe_allow_html=True)
-
     st.markdown(
         '<div class="card">'
         '<div class="para-row">'
-        '<span class="para-label">투자적 의미</span>'
+        '<span class="para-label">Key Thesis</span>'
         f'<span class="para-text">{implication}</span>'
         "</div>"
         '<div class="para-row">'
         '<span class="para-label">Thesis 영향</span>'
         f'<span class="para-text">{impact}</span>'
         "</div>"
-        '<div class="para-row">'
-        '<span class="para-label">Confidence</span>'
-        f'<span class="para-text">{confidence}</span>'
-        "</div>"
         "</div>",
         unsafe_allow_html=True,
     )
+
+    if follow_ups:
+        items_html = "".join(f"<li>{x}</li>" for x in follow_ups[:8])
+        st.markdown(
+            '<div class="card">'
+            '<div class="section-title first">Follow-up Items</div>'
+            f'<ul class="news-followups">{items_html}</ul>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     if link:
         st.markdown(
