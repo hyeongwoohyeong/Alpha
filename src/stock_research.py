@@ -19,7 +19,10 @@ from __future__ import annotations
 from typing import Any
 
 from .curated import (
+    anti_thesis_specific as _curated_anti_thesis,
     company_type as _curated_company_type,
+    core_kpis as _curated_core_kpis,
+    investment_thesis as _curated_investment_thesis,
     key_metrics as _curated_key_metrics,
     simple_explanation as _curated_simple_explanation,
     thesis_pillars as _curated_thesis_pillars,
@@ -51,37 +54,56 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
     # 2. core_thesis
     core = core_thesis_full(row)
 
-    # 3. key_points (thesis_pillars 우선)
-    pillars = _curated_thesis_pillars(ticker)
-    if pillars:
-        kpts = list(pillars[:3])
-        # 큐레이션 이벤트가 strengthen 이면 보충 한 줄
-        for ev in row.get("curated_events") or []:
-            if ev.get("classification") == "strengthen":
-                kpts.append(
-                    f"최근 이벤트({ev.get('type','')}) 반영 시 thesis 확장 가능성"
-                )
-                break
+    # 3. key_points — 종목 고유 투자 thesis (한 단락) 우선,
+    #    없으면 thesis_pillars (3개 항목) + 이벤트 보강
+    thesis_paragraph = _curated_investment_thesis(ticker)
+    if thesis_paragraph:
+        kpts = [thesis_paragraph]
+        # 큐레이션 thesis_pillars 가 있으면 첫 1~2 항목 추가 (과도한 중복 방지)
+        pillars = _curated_thesis_pillars(ticker)
+        for p in pillars[:2]:
+            kpts.append(p)
     else:
-        kpts = ["카테고리 catalyst 점검", "재무 추세 점검", "Valuation 정합성 점검"]
+        pillars = _curated_thesis_pillars(ticker)
+        if pillars:
+            kpts = list(pillars[:3])
+        else:
+            kpts = [
+                "카테고리 catalyst 점검",
+                "재무 추세 점검",
+                "Valuation 정합성 점검",
+            ]
+    # 큐레이션 이벤트가 strengthen 이면 보충 한 줄
+    for ev in row.get("curated_events") or []:
+        if ev.get("classification") == "strengthen":
+            kpts.append(
+                f"최근 이벤트({ev.get('type','')}) 반영 시 thesis 확장 가능성"
+            )
+            break
 
-    # 4. key_risks
-    krsks = key_risks_bullets(row)
-
-    # 5. check_items (key_metrics 큐레이션 우선)
-    metrics = _curated_key_metrics(ticker)
-    if metrics:
-        chks = list(metrics[:5])
+    # 4. key_risks — 종목 고유 anti-thesis 우선, 없으면 기존 룰 기반
+    specific_anti = _curated_anti_thesis(ticker)
+    if specific_anti:
+        krsks = list(specific_anti[:5])
     else:
+        krsks = key_risks_bullets(row)
+
+    # 5. check_items — 종목 고유 KPI 사용 (CORE_KPIS_KO → fallback KEY_METRICS)
+    chks = _curated_core_kpis(ticker)
+    if not chks:
         chks = ["실적 가이던스", "주요 catalyst", "Valuation 변화"]
-    # 이벤트 needs_check / new_risk 보강
+    chks = chks[:6]
+    # 이벤트 needs_check / new_risk 가 있으면 한 줄 보강
     for ev in row.get("curated_events") or []:
         if ev.get("classification") in ("needs_check", "new_risk", "weaken"):
             chks.append(f"최근 이벤트 점검: {ev.get('check') or ev.get('summary', '')}")
             break
 
-    # 6. anti_thesis
-    anti = anti_thesis(row)
+    # 6. anti_thesis — Specific 우선, 없으면 기존 anti_thesis(row) fallback
+    if specific_anti:
+        anti = list(specific_anti[:5])
+    else:
+        anti = anti_thesis(row)
 
     # 7. final_view
     final_view = final_judgment(row)

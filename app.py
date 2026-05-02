@@ -2902,7 +2902,11 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
 
 
 def render_brief_discovery_section():
-    """Daily Brief 안의 신규 발굴 후보 섹션."""
+    """Daily Brief 안의 신규 발굴 후보 섹션.
+
+    Tier 2 Promotion 통과 후보가 있으면 그것을 표시. 없으면 Tier 1 의 큐별
+    상위 후보를 "예비 발굴 후보" 로 표시 (정밀 검토 전 단계 명시).
+    """
     data = _fetch_discovery_data()
     promoted = data.get("promoted") or []
     queues = data.get("queues") or {}
@@ -2935,16 +2939,80 @@ def render_brief_discovery_section():
     )
     st.markdown(summary_html, unsafe_allow_html=True)
 
-    # 승격 후보 카드 (최대 5개)
     if promoted:
+        # ── Tier 2 통과 후보 ──
+        st.markdown(
+            '<div class="info-row check" style="margin-bottom:8px;">'
+            'Tier 2 Promotion 통과 — Deep Dive 권장 후보'
+            "</div>",
+            unsafe_allow_html=True,
+        )
         for i, c in enumerate(promoted[:5]):
             _render_discovery_card(c, i, key_prefix="brief_disc")
+        return
+
+    # ── Tier 2 통과 후보 없음 — Tier 1 예비 후보 표시 (큐별 상위 1~2개씩) ──
+    st.markdown(
+        '<div class="info-row alert" style="margin-bottom:8px;">'
+        'Tier 2 Promotion 통과 후보 없음 — 아래는 <b>정밀 검토 전 예비 후보</b> 입니다 (Tier 1 정량 시그널만 통과). '
+        '추천이 아니며, Discovery 페이지에서 큐별 전체 후보를 확인하실 수 있습니다.'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 큐별 상위 후보 모아서 카드로 표시
+    preliminary: list[dict] = []
+    seen: set[str] = set()
+    queue_order = [
+        "Quality Dislocation",
+        "Earnings Revision",
+        "Civilization Alpha",
+        "Unusual Volume",
+    ]
+    # 1차 — 각 큐 1등씩
+    for q in queue_order:
+        for it in (queues.get(q) or [])[:5]:
+            t = it.get("ticker")
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            preliminary.append({
+                "ticker": t,
+                "name": it.get("ticker"),  # _render_discovery_card 가 wide_universe 매핑
+                "queue_type": q,
+                "reason": it.get("signal_summary"),
+                "discovery_score": it.get("score"),
+                "thesis_impact": "정밀 검토 전 (Tier 1 시그널만 통과)",
+                "action_recommendation": "Promotion 미통과 — 후속 뉴스 / 이벤트 확인 후 Deep Dive 검토",
+            })
+            break  # 큐당 1개만
+    # 2차 — 부족하면 큐별 2등으로 보충 (총 5개 목표)
+    for q in queue_order:
+        if len(preliminary) >= 5:
+            break
+        for it in (queues.get(q) or [])[1:5]:
+            t = it.get("ticker")
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            preliminary.append({
+                "ticker": t,
+                "name": it.get("ticker"),
+                "queue_type": q,
+                "reason": it.get("signal_summary"),
+                "discovery_score": it.get("score"),
+                "thesis_impact": "정밀 검토 전 (Tier 1 시그널만 통과)",
+                "action_recommendation": "Promotion 미통과 — 후속 뉴스 / 이벤트 확인 후 Deep Dive 검토",
+            })
+            if len(preliminary) >= 5:
+                break
+
+    if preliminary:
+        for i, c in enumerate(preliminary):
+            _render_discovery_card(c, i, key_prefix="brief_prelim")
     else:
         st.markdown(
-            '<div class="card">'
-            "Tier 2 Promotion 단계까지 통과한 후보가 없습니다. "
-            "Discovery 페이지에서 큐별 후보를 직접 확인할 수 있습니다."
-            "</div>",
+            '<div class="card">큐별 후보 수는 있으나 표시할 항목이 없습니다.</div>',
             unsafe_allow_html=True,
         )
 

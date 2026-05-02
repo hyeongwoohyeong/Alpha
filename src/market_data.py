@@ -156,12 +156,32 @@ def _hist_to_record(ticker: str, hist: pd.DataFrame | None) -> dict[str, Any]:
         except Exception:
             pass
 
+    daily_ret = (last / prev - 1.0) if prev > 0 else None
+
+    # 데이터 품질 flag 자동 판정 — split-adjusted 또는 데이터 오류 의심
+    data_quality_flag = "OK"
+    data_quality_reason: str | None = None
+    if last is None or last <= 0:
+        data_quality_flag = "Missing"
+        data_quality_reason = "유효한 종가 없음"
+    elif daily_ret is not None and abs(daily_ret) > 0.5:
+        # 단일일 ±50% 변동 → split / 분할 미반영 가능성
+        data_quality_flag = "Suspected Split/Price Error"
+        data_quality_reason = f"전일 대비 {daily_ret * 100:+.1f}% — split 미반영 의심"
+    elif dd_high is not None and dd_high < -0.85:
+        # 52주 고점 대비 -85% 이상 — 비정상 데이터 가능성
+        data_quality_flag = "Check Required"
+        data_quality_reason = f"52주 고점 대비 {abs(dd_high)*100:.1f}% — 데이터 / 분할 확인 필요"
+    elif high_52w > 0 and low_52w > 0 and (high_52w / low_52w) > 30:
+        data_quality_flag = "Check Required"
+        data_quality_reason = f"52주 고저점 비율 {high_52w/low_52w:.1f}x — split 의심"
+
     rec.update(
         {
             "available": True,
             "current_price": last,
             "previous_close": prev,
-            "daily_return": (last / prev - 1.0) if prev > 0 else None,
+            "daily_return": daily_ret,
             "5d_return": _period_return(closes, 5),
             "1m_return": _period_return(closes, 21),
             "3m_return": _period_return(closes, 63),
@@ -173,6 +193,8 @@ def _hist_to_record(ticker: str, hist: pd.DataFrame | None) -> dict[str, Any]:
             "volume": vol,
             "avg_volume_30d": avg_vol30,
             "history": hist,
+            "data_quality_flag": data_quality_flag,
+            "data_quality_reason": data_quality_reason,
         }
     )
     return rec
