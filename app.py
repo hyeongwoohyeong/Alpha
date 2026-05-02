@@ -639,6 +639,42 @@ CUSTOM_CSS = """
             margin-bottom: 4px;
         }
     }
+    /* 라벨 + 불릿 리스트 — grid 2열로 hanging indent 와 같은 정렬 */
+    .para-row.kpts-row {
+        display: grid;
+        grid-template-columns: var(--label-width) minmax(0, 1fr);
+        column-gap: 22px;
+        align-items: start;
+        padding-left: 0;
+        text-indent: 0;
+        margin-bottom: 14px;
+    }
+    .para-row.kpts-row .para-label {
+        display: block;
+        width: auto;
+        padding-right: 0;
+        text-indent: 0;
+        margin: 0;
+    }
+    .para-row.kpts-row .para-text {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #334155;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+        min-width: 0;
+    }
+    .para-row.kpts-row .bullet {
+        padding: 4px 0;
+        font-size: 15px;
+        line-height: 1.7;
+    }
+    @media (max-width: 640px) {
+        .para-row.kpts-row {
+            grid-template-columns: 1fr;
+            row-gap: 4px;
+        }
+    }
 
     /* ---------- 이 회사는 쉽게 말해 ---------- */
     .simple-card {
@@ -2588,10 +2624,11 @@ def render_stock_detail():
                     f'<div class="bullet"><span class="bullet-num">·</span><span>{p}</span></div>'
                     for p in kpts[:5]
                 )
+                # 라벨 + 불릿 리스트는 grid 2열로 정렬 (kpts-row)
                 kpts_html = (
-                    '<div class="para-row" style="margin-top:8px;">'
-                    '<span class="para-label">Key points</span>'
-                    f'<span class="para-text">{items}</span>'
+                    '<div class="para-row kpts-row">'
+                    '<div class="para-label">Key points</div>'
+                    f'<div class="para-text">{items}</div>'
                     "</div>"
                 )
 
