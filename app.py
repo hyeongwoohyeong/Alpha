@@ -2764,6 +2764,29 @@ def render_dislocation_card(row: dict[str, Any], idx: int):
             navigate_to("detail", row["ticker"])
 
 
+@st.cache_data(show_spinner=False)
+def _wide_universe_name_map() -> dict[str, str]:
+    """ticker → company name 매핑 (wide_universe.csv + core_universe.csv 통합)."""
+    name_map: dict[str, str] = {}
+    try:
+        from src.universe import load_wide_universe, load_universe
+        for u in load_wide_universe():
+            t = (u.get("ticker") or "").upper()
+            n = u.get("name") or ""
+            if t and n:
+                name_map[t] = n
+        # core 의 한국어 이름이 우선
+        for u in load_universe():
+            t = (u.get("ticker") or "").upper()
+            ko = u.get("name_ko") or ""
+            en = u.get("name_en") or ""
+            if t and (ko or en):
+                name_map[t] = ko or en
+    except Exception:
+        pass
+    return name_map
+
+
 def _fetch_discovery_data():
     """DB 에서 Discovery 큐별 / Promotion 데이터 로드 (실패 시 빈 dict)."""
     try:
@@ -2787,8 +2810,13 @@ def _fetch_discovery_data():
 
 def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
     """Discovery / Promotion 후보 카드 — 종목명 + 큐 + 사유 + 핵심 지표 + 추천."""
-    ticker = c.get("ticker") or "?"
-    name = c.get("name") or ticker
+    ticker = (c.get("ticker") or "?").upper()
+    # name 이 ticker 와 같거나 비어있으면 wide universe 매핑에서 보강
+    raw_name = c.get("name")
+    if not raw_name or raw_name.upper() == ticker:
+        name = _wide_universe_name_map().get(ticker, ticker)
+    else:
+        name = raw_name
     queue = c.get("queue_type") or "—"
     reason = c.get("reason") or c.get("signal_summary") or ""
     impact = c.get("thesis_impact") or "확인 필요"
