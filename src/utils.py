@@ -17,6 +17,8 @@ from typing import Any, Iterable
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 UNIVERSE_CSV = DATA_DIR / "universe.csv"
+CORE_UNIVERSE_CSV = DATA_DIR / "core_universe.csv"
+WIDE_UNIVERSE_CSV = DATA_DIR / "wide_universe.csv"
 DAILY_SNAPSHOTS_CSV = DATA_DIR / "daily_snapshots.csv"
 DECISION_LOG_CSV = DATA_DIR / "decision_log.csv"
 WATCHLIST_JSON = DATA_DIR / "watchlist.json"

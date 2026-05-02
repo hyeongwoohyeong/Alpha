@@ -92,33 +92,118 @@ def _humanize_english(text: str) -> str:
 def summarize_news_to_korean(
     news_item: dict[str, Any],
     stock_context: dict[str, Any] | None = None,
+    *,
+    budget=None,
+    cfg=None,
+    conn=None,
 ) -> dict[str, Any]:
-    """뉴스 항목을 한국어 리서치 메모로 변환.
+    """뉴스 → 한국어 리서치 메모.
 
-    Returns:
-    {
-        "detailed_summary_ko": "...",
-        "key_points_ko": [...],
-        "investment_implication_ko": "...",
-        "thesis_impact_ko": "Thesis 강화 / Thesis 약화 / 신규 리스크 / 단기 노이즈 / 리스크 해소 / 확인 필요",
-        "confidence_level_ko": "High / Medium / Low",
-        "body_excerpt": "...",  # 가져올 수 있으면 원문 발췌
-    }
-
-    LLM 환경변수가 있으면 LLM 호출, 없으면 rule-based 폴백.
+    캐시/LLM 모드:
+        - conn 이 주어지고 ENABLE_SUMMARY_CACHE=on 이면 article_summaries 조회 → hit 시 재사용
+        - LLM_MODE=none 이면 항상 룰 기반
+        - LLM_MODE=low_cost / high_quality 이면 LLM 호출 (budget 한도 안에서)
+        - 결과는 conn 이 있으면 article_summaries 캐시에 저장
     """
-    # LLM 사용 가능 여부 (향후 연동) — 현재는 rule-based 만 활성화
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    # cfg / budget lazy import (순환 import 회피)
+    from .config import load_config, make_budget
+    cfg = cfg or load_config()
+    if budget is None:
+        budget = make_budget(cfg)
+
+    url = (news_item.get("link") or "").strip() or None
+
+    # 1) 캐시 조회
+    if conn is not None and cfg.enable_summary_cache and url:
         try:
-            return _summarize_with_anthropic(news_item, stock_context)
+            from . import database as _db
+            cached = _db.fetch_article_summary(conn, url)
         except Exception as e:
-            log.warning("Anthropic 요약 실패 → 폴백: %s", e)
-    if os.environ.get("OPENAI_API_KEY"):
+            log.debug("article cache read failed: %s", e)
+            cached = None
+        if cached:
+            try:
+                fu = cached["follow_up_items_ko"]
+                follow_ups = _safe_json_list(fu)
+            except Exception:
+                follow_ups = []
+            return {
+                "detailed_summary_ko": cached["detailed_summary_ko"],
+                "investment_implication_ko": cached["investment_implication_ko"],
+                "follow_up_items_ko": follow_ups,
+                "thesis_impact_ko": cached["thesis_impact"] or "확인 필요",
+                "confidence_level_ko": cached["confidence_level"] or "Low",
+                "content_availability": cached["content_availability"],
+                "body_excerpt": news_item.get("summary"),
+                "key_points_ko": [],
+                "from_cache": True,
+                "model_used": cached["model_used"],
+            }
+
+    # 2) LLM 모드 판단
+    payload: dict[str, Any] | None = None
+    model_used = "rule-based"
+    if cfg.llm_enabled and budget.can_call():
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            try:
+                payload = _summarize_with_anthropic(news_item, stock_context)
+                budget.record()
+                model_used = "claude-haiku-4-5" if not cfg.use_high_quality_llm else "claude-opus-4"
+            except Exception as e:
+                log.warning("Anthropic 요약 실패 → 폴백: %s", e)
+        if payload is None and os.environ.get("OPENAI_API_KEY"):
+            try:
+                payload = _summarize_with_openai(news_item, stock_context)
+                budget.record()
+                model_used = "gpt-4o-mini" if not cfg.use_high_quality_llm else "gpt-4o"
+            except Exception as e:
+                log.warning("OpenAI 요약 실패 → 폴백: %s", e)
+
+    if payload is None:
+        payload = _summarize_rule_based(news_item, stock_context)
+        model_used = "rule-based"
+
+    # 3) 캐시 저장
+    if conn is not None and cfg.enable_summary_cache and url:
         try:
-            return _summarize_with_openai(news_item, stock_context)
+            from . import database as _db
+            _db.upsert_article_summary(
+                conn,
+                url=url,
+                title=news_item.get("title"),
+                source=news_item.get("source"),
+                published_at=news_item.get("published_at"),
+                ticker=news_item.get("ticker"),
+                content_availability=payload.get("content_availability"),
+                detailed_summary_ko=payload.get("detailed_summary_ko"),
+                investment_implication_ko=payload.get("investment_implication_ko"),
+                follow_up_items_ko=payload.get("follow_up_items_ko"),
+                thesis_impact=payload.get("thesis_impact_ko"),
+                confidence_level=payload.get("confidence_level_ko"),
+                model_used=model_used,
+            )
+            conn.commit()
         except Exception as e:
-            log.warning("OpenAI 요약 실패 → 폴백: %s", e)
-    return _summarize_rule_based(news_item, stock_context)
+            log.debug("article cache write failed: %s", e)
+
+    payload["model_used"] = model_used
+    payload["from_cache"] = False
+    return payload
+
+
+def _safe_json_list(raw) -> list:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return raw
+    try:
+        import json as _json
+        v = _json.loads(raw)
+        if isinstance(v, list):
+            return v
+    except Exception:
+        pass
+    return []
 
 
 # ---------------------------------------------------------------------------

@@ -1210,6 +1210,7 @@ def render_tag(tag: str) -> str:
 
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
+    ("discovery", "Discovery"),
     ("detail", "종목 상세"),
     ("dislocation", "우량주 과매도"),
     ("watchlist", "관심종목"),
@@ -1926,6 +1927,9 @@ def render_today_brief():
                 "</div>",
                 unsafe_allow_html=True,
             )
+
+    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목)
+    render_brief_discovery_section()
 
     # 금일 주요 관찰 종목
     st.markdown('<div class="section-title">금일 주요 관찰 종목</div>', unsafe_allow_html=True)
@@ -2760,6 +2764,217 @@ def render_dislocation_card(row: dict[str, Any], idx: int):
             navigate_to("detail", row["ticker"])
 
 
+def _fetch_discovery_data():
+    """DB 에서 Discovery 큐별 / Promotion 데이터 로드 (실패 시 빈 dict)."""
+    try:
+        from src import database as _db
+        with _db.db_session() as conn:
+            queues = {}
+            for q in (
+                "Quality Dislocation",
+                "Earnings Revision",
+                "Unusual Volume",
+                "Civilization Alpha",
+            ):
+                items = [dict(r) for r in _db.fetch_discovery_scores(conn, queue_type=q, limit=20)]
+                queues[q] = items
+            promoted = [dict(r) for r in _db.fetch_promotion_candidates(conn, promoted_only=True, limit=20)]
+            all_promotion = [dict(r) for r in _db.fetch_promotion_candidates(conn, promoted_only=False, limit=50)]
+        return {"queues": queues, "promoted": promoted, "all_promotion": all_promotion}
+    except Exception as e:
+        return {"queues": {}, "promoted": [], "all_promotion": [], "error": str(e)}
+
+
+def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
+    """Discovery / Promotion 후보 카드 — 종목명 + 큐 + 사유 + 핵심 지표 + 추천."""
+    ticker = c.get("ticker") or "?"
+    name = c.get("name") or ticker
+    queue = c.get("queue_type") or "—"
+    reason = c.get("reason") or c.get("signal_summary") or ""
+    impact = c.get("thesis_impact") or "확인 필요"
+    recommendation = c.get("action_recommendation") or ""
+    promo_score = c.get("promotion_score")
+    disc_score = c.get("discovery_score") or c.get("score")
+    latest = c.get("latest_event_summary") or ""
+
+    score_html = ""
+    if promo_score is not None:
+        score_html += f'<span class="chip chip-strengthen" style="margin-left:6px;">Promo {promo_score:.0f}</span>'
+    if disc_score is not None:
+        score_html += f'<span class="chip chip-needs-check" style="margin-left:6px;">Disc {disc_score:.0f}</span>'
+
+    body = (
+        '<div class="card">'
+        '<div class="news-head">'
+        f'<div class="news-title">{name} ({ticker})</div>'
+        f'<span class="chip chip-needs-check">{queue}</span>'
+        f'{score_html}'
+        "</div>"
+        '<div class="para-row">'
+        '<span class="para-label">Signal</span>'
+        f'<span class="para-text">{reason or "—"}</span>'
+        "</div>"
+    )
+    if latest:
+        body += (
+            '<div class="para-row">'
+            '<span class="para-label">최근 이벤트</span>'
+            f'<span class="para-text">{latest}</span>'
+            "</div>"
+        )
+    body += (
+        '<div class="para-row">'
+        '<span class="para-label">Thesis 영향</span>'
+        f'<span class="para-text">{impact}</span>'
+        "</div>"
+    )
+    if recommendation:
+        body += (
+            '<div class="para-row">'
+            '<span class="para-label">권장</span>'
+            f'<span class="para-text">{recommendation}</span>'
+            "</div>"
+        )
+    body += "</div>"
+    st.markdown(body, unsafe_allow_html=True)
+
+
+def render_brief_discovery_section():
+    """Daily Brief 안의 신규 발굴 후보 섹션."""
+    data = _fetch_discovery_data()
+    promoted = data.get("promoted") or []
+    queues = data.get("queues") or {}
+
+    queue_counts = {q: len(items) for q, items in queues.items()}
+    total_disc = sum(queue_counts.values())
+
+    st.markdown('<div class="section-title">금일 신규 발굴 후보</div>', unsafe_allow_html=True)
+    if total_disc == 0 and not promoted:
+        st.markdown(
+            '<div class="card">'
+            '아직 Discovery 데이터가 없습니다. <code>python3 run_research.py</code> 를 실행해 wide universe 스캔을 수행하세요.'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    # 큐 요약
+    summary_html = (
+        '<div class="card">'
+        '<div class="para-row">'
+        '<span class="para-label">큐별 후보 수</span>'
+        '<span class="para-text">'
+        f'Quality Dislocation {queue_counts.get("Quality Dislocation", 0)} · '
+        f'Earnings Revision {queue_counts.get("Earnings Revision", 0)} · '
+        f'Unusual Volume {queue_counts.get("Unusual Volume", 0)} · '
+        f'Civilization Alpha {queue_counts.get("Civilization Alpha", 0)}'
+        "</span></div>"
+        "</div>"
+    )
+    st.markdown(summary_html, unsafe_allow_html=True)
+
+    # 승격 후보 카드 (최대 5개)
+    if promoted:
+        for i, c in enumerate(promoted[:5]):
+            _render_discovery_card(c, i, key_prefix="brief_disc")
+    else:
+        st.markdown(
+            '<div class="card">'
+            "Tier 2 Promotion 단계까지 통과한 후보가 없습니다. "
+            "Discovery 페이지에서 큐별 후보를 직접 확인할 수 있습니다."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def render_discovery():
+    """전용 Discovery 페이지 — 큐별 + 승격 후보 + 필터."""
+    render_back_button("discovery")
+    page_header(
+        "Discovery",
+        meta="미국 상장주식 wide universe 정량 스크리닝 → Tier 1 / Tier 2 후보",
+    )
+
+    data = _fetch_discovery_data()
+    if data.get("error"):
+        st.error(f"Discovery 데이터 로드 실패: {data['error']}")
+    queues = data.get("queues") or {}
+    promoted = data.get("promoted") or []
+    all_promo = data.get("all_promotion") or []
+
+    has_any = any(queues.values()) or promoted or all_promo
+    if not has_any:
+        st.markdown(
+            '<div class="card">'
+            "Discovery 데이터가 비어 있습니다. <code>python3 run_research.py</code> 를 실행하면 "
+            "wide universe (~300 종목) 를 스크리닝해 큐별 후보 + 승격 후보를 채웁니다."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    # 1) 승격 후보 (Tier 2 통과)
+    st.markdown(
+        '<div class="section-title">Tier 2 승격 후보 (Deep Dive 권장)</div>',
+        unsafe_allow_html=True,
+    )
+    if promoted:
+        for i, c in enumerate(promoted):
+            _render_discovery_card(c, i, key_prefix="disc_promoted")
+    else:
+        st.markdown(
+            '<div class="card">아직 deep dive 까지 승격된 후보가 없습니다.</div>',
+            unsafe_allow_html=True,
+        )
+
+    # 2) 필터 (큐 선택)
+    st.markdown('<div class="section-title">Queue 별 후보</div>', unsafe_allow_html=True)
+    queue_keys = list(queues.keys())
+    sel = st.radio(
+        "큐 선택",
+        queue_keys + ["전체"],
+        index=len(queue_keys),
+        horizontal=True,
+        key="discovery_queue_filter",
+    )
+    if sel == "전체":
+        # 큐별 상위 3개씩
+        for q in queue_keys:
+            items = queues.get(q, [])
+            if not items:
+                continue
+            st.markdown(f'<div class="section-title">{q}</div>', unsafe_allow_html=True)
+            for i, it in enumerate(items[:5]):
+                # discovery_scores 행은 키 이름이 다름
+                normalized = {
+                    "ticker": it.get("ticker"),
+                    "name": it.get("ticker"),
+                    "queue_type": q,
+                    "reason": it.get("signal_summary"),
+                    "discovery_score": it.get("score"),
+                    "thesis_impact": "—",
+                }
+                _render_discovery_card(normalized, i, key_prefix=f"qall_{q}")
+    else:
+        items = queues.get(sel, [])
+        if not items:
+            st.markdown(
+                f'<div class="card">{sel} 큐에 후보가 없습니다.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            for i, it in enumerate(items[:20]):
+                normalized = {
+                    "ticker": it.get("ticker"),
+                    "name": it.get("ticker"),
+                    "queue_type": sel,
+                    "reason": it.get("signal_summary"),
+                    "discovery_score": it.get("score"),
+                    "thesis_impact": "—",
+                }
+                _render_discovery_card(normalized, i, key_prefix=f"q_{sel}")
+
+
 def render_dislocation():
     render_back_button("dislocation")
     page_header(
@@ -3072,6 +3287,8 @@ if st.session_state.get("scroll_to_top", False):
 
 if nav == "brief":
     render_today_brief()
+elif nav == "discovery":
+    render_discovery()
 elif nav == "detail":
     render_stock_detail()
 elif nav == "dislocation":

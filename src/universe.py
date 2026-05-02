@@ -8,7 +8,14 @@ import csv
 import json
 from typing import Any
 
-from .utils import UNIVERSE_CSV, WATCHLIST_JSON, ensure_data_dir, get_logger
+from .utils import (
+    CORE_UNIVERSE_CSV,
+    UNIVERSE_CSV,
+    WATCHLIST_JSON,
+    WIDE_UNIVERSE_CSV,
+    ensure_data_dir,
+    get_logger,
+)
 
 log = get_logger("universe")
 
@@ -59,13 +66,19 @@ CATEGORY_LABEL_KO: dict[str, str] = {
 
 
 def load_universe() -> list[dict[str, Any]]:
-    """universe.csv 로드. 존재하지 않거나 비어 있으면 빈 리스트."""
-    if not UNIVERSE_CSV.exists():
-        log.warning("universe.csv 가 존재하지 않습니다: %s", UNIVERSE_CSV)
+    """Core watchlist (Tier 3 deep dive 대상) 로드.
+
+    우선순위:
+        1) data/core_universe.csv
+        2) data/universe.csv (legacy)
+    """
+    target = CORE_UNIVERSE_CSV if CORE_UNIVERSE_CSV.exists() else UNIVERSE_CSV
+    if not target.exists():
+        log.warning("core/legacy universe.csv 둘 다 없습니다: %s", target)
         return []
 
     rows: list[dict[str, Any]] = []
-    with UNIVERSE_CSV.open("r", encoding="utf-8") as f:
+    with target.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
             if not r.get("ticker"):
@@ -85,6 +98,47 @@ def load_universe() -> list[dict[str, Any]]:
 
 def get_universe_map() -> dict[str, dict[str, Any]]:
     return {row["ticker"]: row for row in load_universe()}
+
+
+def load_wide_universe() -> list[dict[str, Any]]:
+    """Discovery 대상 wide universe 로드.
+
+    필터:
+        - is_active == 1
+        - is_etf == 0
+        - is_spac == 0
+    """
+    if not WIDE_UNIVERSE_CSV.exists():
+        log.warning("wide_universe.csv 가 없습니다 — Discovery 단계가 비활성화됩니다")
+        return []
+
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    with WIDE_UNIVERSE_CSV.open("r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            ticker = (r.get("ticker") or "").strip().upper()
+            if not ticker or ticker in seen:
+                continue
+            if (r.get("is_active") or "1").strip() == "0":
+                continue
+            if (r.get("is_etf") or "0").strip() == "1":
+                continue
+            if (r.get("is_spac") or "0").strip() == "1":
+                continue
+            seen.add(ticker)
+            rows.append(
+                {
+                    "ticker": ticker,
+                    "name": (r.get("name") or "").strip(),
+                    "sector": (r.get("sector") or "").strip(),
+                    "industry": (r.get("industry") or "").strip(),
+                    "market_cap_tier": (r.get("market_cap_tier") or "").strip(),
+                    "exchange": (r.get("exchange") or "").strip(),
+                    "is_adr": (r.get("is_adr") or "0").strip() == "1",
+                }
+            )
+    return rows
 
 
 def theme_weight(theme: str) -> float:

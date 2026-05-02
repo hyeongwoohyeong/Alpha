@@ -240,11 +240,66 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         FOREIGN KEY (decision_id) REFERENCES decision_log(decision_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS discovery_scores (
+        run_id           TEXT,
+        date             TEXT NOT NULL,
+        ticker           TEXT NOT NULL,
+        queue_type       TEXT NOT NULL,
+        score            REAL,
+        rank             INTEGER,
+        signal_summary   TEXT,
+        key_metrics_json TEXT,
+        created_at       TEXT,
+        PRIMARY KEY (date, ticker, queue_type)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS promotion_candidates (
+        run_id                TEXT,
+        date                  TEXT NOT NULL,
+        ticker                TEXT NOT NULL,
+        name                  TEXT,
+        queue_type            TEXT,
+        discovery_score       REAL,
+        promotion_score       REAL,
+        reason                TEXT,
+        latest_event_summary  TEXT,
+        thesis_impact         TEXT,
+        action_recommendation TEXT,
+        promoted_to_deep_dive INTEGER NOT NULL DEFAULT 0,
+        created_at            TEXT,
+        PRIMARY KEY (date, ticker)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS article_summaries (
+        article_url_hash      TEXT PRIMARY KEY,
+        article_url           TEXT,
+        title                 TEXT,
+        source                TEXT,
+        published_at          TEXT,
+        ticker                TEXT,
+        content_availability  TEXT,
+        detailed_summary_ko   TEXT,
+        investment_implication_ko TEXT,
+        follow_up_items_ko    TEXT,
+        thesis_impact         TEXT,
+        confidence_level      TEXT,
+        model_used            TEXT,
+        token_estimate        INTEGER,
+        created_at            TEXT,
+        updated_at            TEXT
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_news_ticker_date ON news_raw(ticker, published_at)",
     "CREATE INDEX IF NOT EXISTS idx_events_ticker ON events(ticker, event_date)",
     "CREATE INDEX IF NOT EXISTS idx_scores_date ON scores(date)",
     "CREATE INDEX IF NOT EXISTS idx_research_ticker_date ON stock_research(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_decision_date ON decision_log(date, ticker)",
+    "CREATE INDEX IF NOT EXISTS idx_discovery_date ON discovery_scores(date, queue_type)",
+    "CREATE INDEX IF NOT EXISTS idx_promotion_date ON promotion_candidates(date, promoted_to_deep_dive)",
+    "CREATE INDEX IF NOT EXISTS idx_article_url ON article_summaries(article_url)",
 )
 
 
@@ -1043,4 +1098,201 @@ def fetch_dislocation_candidates(
             """,
             (date_iso, limit),
         )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Discovery scores / promotion candidates
+# ---------------------------------------------------------------------------
+
+def upsert_discovery_score(
+    conn: sqlite3.Connection,
+    run_id: str,
+    date_iso: str,
+    ticker: str,
+    queue_type: str,
+    score: float,
+    rank: int,
+    signal_summary: str,
+    key_metrics: dict | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO discovery_scores
+            (run_id, date, ticker, queue_type, score, rank, signal_summary, key_metrics_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(date, ticker, queue_type) DO UPDATE SET
+            run_id=excluded.run_id,
+            score=excluded.score,
+            rank=excluded.rank,
+            signal_summary=excluded.signal_summary,
+            key_metrics_json=excluded.key_metrics_json
+        """,
+        (
+            run_id, date_iso, ticker, queue_type, score, rank, signal_summary,
+            dump_json(key_metrics) if key_metrics else None,
+            now_iso(),
+        ),
+    )
+
+
+def fetch_discovery_scores(
+    conn: sqlite3.Connection,
+    date_iso: str | None = None,
+    queue_type: str | None = None,
+    limit: int = 100,
+) -> list[sqlite3.Row]:
+    if not date_iso:
+        r = conn.execute("SELECT MAX(date) AS d FROM discovery_scores").fetchone()
+        date_iso = r["d"] if r and r["d"] else None
+    if not date_iso:
+        return []
+    if queue_type:
+        return list(conn.execute(
+            "SELECT * FROM discovery_scores WHERE date=? AND queue_type=? "
+            "ORDER BY rank ASC, score DESC LIMIT ?",
+            (date_iso, queue_type, limit),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM discovery_scores WHERE date=? ORDER BY score DESC LIMIT ?",
+        (date_iso, limit),
+    ))
+
+
+def upsert_promotion_candidate(
+    conn: sqlite3.Connection,
+    run_id: str,
+    date_iso: str,
+    ticker: str,
+    payload: dict,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO promotion_candidates
+            (run_id, date, ticker, name, queue_type, discovery_score, promotion_score,
+             reason, latest_event_summary, thesis_impact, action_recommendation,
+             promoted_to_deep_dive, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(date, ticker) DO UPDATE SET
+            run_id=excluded.run_id,
+            queue_type=excluded.queue_type,
+            discovery_score=excluded.discovery_score,
+            promotion_score=excluded.promotion_score,
+            reason=excluded.reason,
+            latest_event_summary=excluded.latest_event_summary,
+            thesis_impact=excluded.thesis_impact,
+            action_recommendation=excluded.action_recommendation,
+            promoted_to_deep_dive=excluded.promoted_to_deep_dive
+        """,
+        (
+            run_id, date_iso, ticker,
+            payload.get("name"),
+            payload.get("queue_type"),
+            payload.get("discovery_score"),
+            payload.get("promotion_score"),
+            payload.get("reason"),
+            payload.get("latest_event_summary"),
+            payload.get("thesis_impact"),
+            payload.get("action_recommendation"),
+            int(bool(payload.get("promoted_to_deep_dive"))),
+            now_iso(),
+        ),
+    )
+
+
+def fetch_promotion_candidates(
+    conn: sqlite3.Connection,
+    date_iso: str | None = None,
+    promoted_only: bool = False,
+    limit: int = 50,
+) -> list[sqlite3.Row]:
+    if not date_iso:
+        r = conn.execute("SELECT MAX(date) AS d FROM promotion_candidates").fetchone()
+        date_iso = r["d"] if r and r["d"] else None
+    if not date_iso:
+        return []
+    if promoted_only:
+        return list(conn.execute(
+            "SELECT * FROM promotion_candidates WHERE date=? AND promoted_to_deep_dive=1 "
+            "ORDER BY promotion_score DESC LIMIT ?",
+            (date_iso, limit),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM promotion_candidates WHERE date=? ORDER BY promotion_score DESC LIMIT ?",
+        (date_iso, limit),
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Article summary cache (URL hash 기준)
+# ---------------------------------------------------------------------------
+
+def make_article_url_hash(url: str | None) -> str | None:
+    if not url:
+        return None
+    return hashlib.sha1(url.strip().encode("utf-8")).hexdigest()
+
+
+def fetch_article_summary(
+    conn: sqlite3.Connection, url: str | None
+) -> sqlite3.Row | None:
+    h = make_article_url_hash(url)
+    if not h:
+        return None
+    return conn.execute(
+        "SELECT * FROM article_summaries WHERE article_url_hash=?", (h,)
+    ).fetchone()
+
+
+def upsert_article_summary(
+    conn: sqlite3.Connection,
+    *,
+    url: str | None,
+    title: str | None,
+    source: str | None,
+    published_at: str | None,
+    ticker: str | None,
+    content_availability: str | None,
+    detailed_summary_ko: str | None,
+    investment_implication_ko: str | None,
+    follow_up_items_ko: list | None,
+    thesis_impact: str | None,
+    confidence_level: str | None,
+    model_used: str | None,
+    token_estimate: int | None = None,
+) -> None:
+    h = make_article_url_hash(url)
+    if not h:
+        return
+    conn.execute(
+        """
+        INSERT INTO article_summaries
+            (article_url_hash, article_url, title, source, published_at, ticker,
+             content_availability, detailed_summary_ko, investment_implication_ko,
+             follow_up_items_ko, thesis_impact, confidence_level, model_used,
+             token_estimate, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(article_url_hash) DO UPDATE SET
+            title=COALESCE(excluded.title, article_summaries.title),
+            source=COALESCE(excluded.source, article_summaries.source),
+            published_at=COALESCE(excluded.published_at, article_summaries.published_at),
+            ticker=COALESCE(excluded.ticker, article_summaries.ticker),
+            content_availability=COALESCE(excluded.content_availability, article_summaries.content_availability),
+            detailed_summary_ko=COALESCE(excluded.detailed_summary_ko, article_summaries.detailed_summary_ko),
+            investment_implication_ko=COALESCE(excluded.investment_implication_ko, article_summaries.investment_implication_ko),
+            follow_up_items_ko=COALESCE(excluded.follow_up_items_ko, article_summaries.follow_up_items_ko),
+            thesis_impact=COALESCE(excluded.thesis_impact, article_summaries.thesis_impact),
+            confidence_level=COALESCE(excluded.confidence_level, article_summaries.confidence_level),
+            model_used=COALESCE(excluded.model_used, article_summaries.model_used),
+            token_estimate=COALESCE(excluded.token_estimate, article_summaries.token_estimate),
+            updated_at=excluded.updated_at
+        """,
+        (
+            h, url, title, source, published_at, ticker,
+            content_availability,
+            detailed_summary_ko, investment_implication_ko,
+            dump_json(follow_up_items_ko) if follow_up_items_ko else None,
+            thesis_impact, confidence_level, model_used, token_estimate,
+            now_iso(), now_iso(),
+        ),
     )

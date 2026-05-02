@@ -1,0 +1,311 @@
+ticker,name,sector,industry,market_cap_tier,exchange,is_etf,is_spac,is_adr,is_active
+AAPL,Apple,Technology,Consumer Electronics,large,NASDAQ,0,0,0,1
+MSFT,Microsoft,Technology,Software,large,NASDAQ,0,0,0,1
+GOOGL,Alphabet,Communication Services,Internet Content,large,NASDAQ,0,0,0,1
+GOOG,Alphabet Class C,Communication Services,Internet Content,large,NASDAQ,0,0,0,1
+AMZN,Amazon,Consumer Discretionary,Internet Retail,large,NASDAQ,0,0,0,1
+META,Meta Platforms,Communication Services,Internet Content,large,NASDAQ,0,0,0,1
+NVDA,NVIDIA,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+TSLA,Tesla,Consumer Discretionary,Auto Manufacturers,large,NASDAQ,0,0,0,1
+AVGO,Broadcom,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+TSM,Taiwan Semiconductor,Technology,Semiconductors,large,NYSE,0,0,1,1
+ORCL,Oracle,Technology,Software,large,NYSE,0,0,0,1
+NFLX,Netflix,Communication Services,Entertainment,large,NASDAQ,0,0,0,1
+CRM,Salesforce,Technology,Software,large,NYSE,0,0,0,1
+ADBE,Adobe,Technology,Software,large,NASDAQ,0,0,0,1
+AMD,Advanced Micro Devices,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+QCOM,Qualcomm,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+INTC,Intel,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+MU,Micron Technology,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+TXN,Texas Instruments,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+AMAT,Applied Materials,Technology,Semiconductor Equipment,large,NASDAQ,0,0,0,1
+LRCX,Lam Research,Technology,Semiconductor Equipment,large,NASDAQ,0,0,0,1
+KLAC,KLA,Technology,Semiconductor Equipment,large,NASDAQ,0,0,0,1
+ASML,ASML,Technology,Semiconductor Equipment,large,NASDAQ,0,0,1,1
+ARM,Arm Holdings,Technology,Semiconductors,large,NASDAQ,0,0,1,1
+SMCI,Super Micro Computer,Technology,Computer Hardware,mid,NASDAQ,0,0,0,1
+DELL,Dell Technologies,Technology,Computer Hardware,large,NYSE,0,0,0,1
+HPE,Hewlett Packard Enterprise,Technology,Computer Hardware,large,NYSE,0,0,0,1
+ANET,Arista Networks,Technology,Communication Equipment,large,NYSE,0,0,0,1
+CSCO,Cisco Systems,Technology,Communication Equipment,large,NASDAQ,0,0,0,1
+JNPR,Juniper Networks,Technology,Communication Equipment,mid,NYSE,0,0,0,1
+CIEN,Ciena,Technology,Communication Equipment,mid,NYSE,0,0,0,1
+CRDO,Credo Technology,Technology,Semiconductors,mid,NASDAQ,0,0,0,1
+ALAB,Astera Labs,Technology,Semiconductors,mid,NASDAQ,0,0,0,1
+CLS,Celestica,Technology,Electronic Components,mid,NYSE,0,0,0,1
+JBL,Jabil,Technology,Electronic Components,large,NYSE,0,0,0,1
+FLEX,Flex,Technology,Electronic Components,mid,NASDAQ,0,0,0,1
+NOW,ServiceNow,Technology,Software,large,NYSE,0,0,0,1
+INTU,Intuit,Technology,Software,large,NASDAQ,0,0,0,1
+PANW,Palo Alto Networks,Technology,Software,large,NASDAQ,0,0,0,1
+CRWD,CrowdStrike,Technology,Software,large,NASDAQ,0,0,0,1
+FTNT,Fortinet,Technology,Software,large,NASDAQ,0,0,0,1
+ZS,Zscaler,Technology,Software,large,NASDAQ,0,0,0,1
+NET,Cloudflare,Technology,Software,large,NYSE,0,0,0,1
+DDOG,Datadog,Technology,Software,large,NASDAQ,0,0,0,1
+SNOW,Snowflake,Technology,Software,large,NYSE,0,0,0,1
+MDB,MongoDB,Technology,Software,mid,NASDAQ,0,0,0,1
+TEAM,Atlassian,Technology,Software,large,NASDAQ,0,0,1,1
+WDAY,Workday,Technology,Software,large,NASDAQ,0,0,0,1
+DOCU,DocuSign,Technology,Software,mid,NASDAQ,0,0,0,1
+SHOP,Shopify,Technology,Software,large,NYSE,0,0,1,1
+PLTR,Palantir Technologies,Technology,Software,large,NASDAQ,0,0,0,1
+APP,AppLovin,Technology,Software,large,NASDAQ,0,0,0,1
+U,Unity Software,Technology,Software,mid,NYSE,0,0,0,1
+RBLX,Roblox,Communication Services,Electronic Gaming,mid,NYSE,0,0,0,1
+TWLO,Twilio,Technology,Software,mid,NYSE,0,0,0,1
+COIN,Coinbase,Financial Services,Capital Markets,large,NASDAQ,0,0,0,1
+HOOD,Robinhood Markets,Financial Services,Capital Markets,mid,NASDAQ,0,0,0,1
+SQ,Block,Technology,Software,large,NYSE,0,0,0,1
+PYPL,PayPal,Financial Services,Credit Services,large,NASDAQ,0,0,0,1
+V,Visa,Financial Services,Credit Services,large,NYSE,0,0,0,1
+MA,Mastercard,Financial Services,Credit Services,large,NYSE,0,0,0,1
+AXP,American Express,Financial Services,Credit Services,large,NYSE,0,0,0,1
+JPM,JPMorgan Chase,Financial Services,Banks,large,NYSE,0,0,0,1
+BAC,Bank of America,Financial Services,Banks,large,NYSE,0,0,0,1
+WFC,Wells Fargo,Financial Services,Banks,large,NYSE,0,0,0,1
+GS,Goldman Sachs,Financial Services,Capital Markets,large,NYSE,0,0,0,1
+MS,Morgan Stanley,Financial Services,Capital Markets,large,NYSE,0,0,0,1
+SCHW,Charles Schwab,Financial Services,Capital Markets,large,NYSE,0,0,0,1
+BLK,BlackRock,Financial Services,Asset Management,large,NYSE,0,0,0,1
+KKR,KKR,Financial Services,Asset Management,large,NYSE,0,0,0,1
+APO,Apollo Global Management,Financial Services,Asset Management,large,NYSE,0,0,0,1
+BRK.B,Berkshire Hathaway,Financial Services,Insurance,large,NYSE,0,0,0,1
+PGR,Progressive,Financial Services,Insurance,large,NYSE,0,0,0,1
+TRV,Travelers,Financial Services,Insurance,large,NYSE,0,0,0,1
+LMT,Lockheed Martin,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+NOC,Northrop Grumman,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+RTX,RTX,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+GD,General Dynamics,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+HII,Huntington Ingalls,Industrials,Aerospace & Defense,mid,NYSE,0,0,0,1
+LHX,L3Harris Technologies,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+TDG,TransDigm,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+HEI,HEICO,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+BA,Boeing,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+GE,General Electric,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
+AXON,Axon Enterprise,Industrials,Aerospace & Defense,large,NASDAQ,0,0,0,1
+RKLB,Rocket Lab USA,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,0,1
+LUNR,Intuitive Machines,Industrials,Aerospace & Defense,small,NASDAQ,0,0,0,1
+CAT,Caterpillar,Industrials,Farm & Heavy Construction,large,NYSE,0,0,0,1
+DE,Deere,Industrials,Farm & Heavy Construction,large,NYSE,0,0,0,1
+HON,Honeywell,Industrials,Specialty Industrial,large,NASDAQ,0,0,0,1
+MMM,3M,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+EMR,Emerson Electric,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+ETN,Eaton,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+ITW,Illinois Tool Works,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+PH,Parker-Hannifin,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+ROK,Rockwell Automation,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+DOV,Dover,Industrials,Specialty Industrial,large,NYSE,0,0,0,1
+VRT,Vertiv Holdings,Industrials,Electrical Equipment,large,NYSE,0,0,0,1
+PWR,Quanta Services,Industrials,Engineering & Construction,large,NYSE,0,0,0,1
+MTZ,MasTec,Industrials,Engineering & Construction,mid,NYSE,0,0,0,1
+PRIM,Primoris Services,Industrials,Engineering & Construction,small,NYSE,0,0,0,1
+BLDR,Builders FirstSource,Industrials,Engineering & Construction,large,NYSE,0,0,0,1
+URI,United Rentals,Industrials,Rental & Leasing,large,NYSE,0,0,0,1
+CEG,Constellation Energy,Utilities,Utilities Independent,large,NASDAQ,0,0,0,1
+VST,Vistra,Utilities,Utilities Independent,large,NYSE,0,0,0,1
+NEE,NextEra Energy,Utilities,Utilities Regulated,large,NYSE,0,0,0,1
+SO,Southern,Utilities,Utilities Regulated,large,NYSE,0,0,0,1
+DUK,Duke Energy,Utilities,Utilities Regulated,large,NYSE,0,0,0,1
+AEP,American Electric Power,Utilities,Utilities Regulated,large,NASDAQ,0,0,0,1
+SRE,Sempra,Utilities,Utilities Regulated,large,NYSE,0,0,0,1
+ED,Consolidated Edison,Utilities,Utilities Regulated,large,NYSE,0,0,0,1
+TLN,Talen Energy,Utilities,Utilities Independent,mid,NASDAQ,0,0,0,1
+SMR,NuScale Power,Utilities,Utilities Independent,small,NYSE,0,0,0,1
+BWXT,BWX Technologies,Industrials,Aerospace & Defense,mid,NYSE,0,0,0,1
+CCJ,Cameco,Energy,Uranium,large,NYSE,0,0,1,1
+URA,Uranium ETF Placeholder,Energy,Uranium,mid,NYSE,1,0,0,0
+LEU,Centrus Energy,Industrials,Specialty Industrial,small,NYSE,0,0,0,1
+UEC,Uranium Energy,Energy,Uranium,small,NYSE,0,0,0,1
+XOM,Exxon Mobil,Energy,Oil & Gas Integrated,large,NYSE,0,0,0,1
+CVX,Chevron,Energy,Oil & Gas Integrated,large,NYSE,0,0,0,1
+COP,ConocoPhillips,Energy,Oil & Gas E&P,large,NYSE,0,0,0,1
+EOG,EOG Resources,Energy,Oil & Gas E&P,large,NYSE,0,0,0,1
+SLB,Schlumberger,Energy,Oil & Gas Equipment,large,NYSE,0,0,0,1
+HAL,Halliburton,Energy,Oil & Gas Equipment,large,NYSE,0,0,0,1
+PSX,Phillips 66,Energy,Oil & Gas Refining,large,NYSE,0,0,0,1
+MPC,Marathon Petroleum,Energy,Oil & Gas Refining,large,NYSE,0,0,0,1
+LNG,Cheniere Energy,Energy,Oil & Gas Midstream,large,NYSE,0,0,0,1
+KMI,Kinder Morgan,Energy,Oil & Gas Midstream,large,NYSE,0,0,0,1
+UNH,UnitedHealth,Healthcare,Healthcare Plans,large,NYSE,0,0,0,1
+JNJ,Johnson & Johnson,Healthcare,Drug Manufacturers General,large,NYSE,0,0,0,1
+LLY,Eli Lilly,Healthcare,Drug Manufacturers General,large,NYSE,0,0,0,1
+MRK,Merck,Healthcare,Drug Manufacturers General,large,NYSE,0,0,0,1
+PFE,Pfizer,Healthcare,Drug Manufacturers General,large,NYSE,0,0,0,1
+ABBV,AbbVie,Healthcare,Drug Manufacturers General,large,NYSE,0,0,0,1
+AZN,AstraZeneca,Healthcare,Drug Manufacturers General,large,NASDAQ,0,0,1,1
+NVO,Novo Nordisk,Healthcare,Drug Manufacturers General,large,NYSE,0,0,1,1
+TMO,Thermo Fisher Scientific,Healthcare,Diagnostics & Research,large,NYSE,0,0,0,1
+DHR,Danaher,Healthcare,Diagnostics & Research,large,NYSE,0,0,0,1
+ABT,Abbott Laboratories,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+ISRG,Intuitive Surgical,Healthcare,Medical Devices,large,NASDAQ,0,0,0,1
+MDT,Medtronic,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+SYK,Stryker,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+BSX,Boston Scientific,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+EW,Edwards Lifesciences,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+ZBH,Zimmer Biomet,Healthcare,Medical Devices,large,NYSE,0,0,0,1
+TMDX,TransMedics Group,Healthcare,Medical Devices,mid,NASDAQ,0,0,0,1
+NTRA,Natera,Healthcare,Diagnostics & Research,large,NASDAQ,0,0,0,1
+EXAS,Exact Sciences,Healthcare,Diagnostics & Research,mid,NASDAQ,0,0,0,1
+VRTX,Vertex Pharmaceuticals,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
+REGN,Regeneron Pharmaceuticals,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
+GILD,Gilead Sciences,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
+BIIB,Biogen,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
+MRNA,Moderna,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
+PG,Procter & Gamble,Consumer Defensive,Household Products,large,NYSE,0,0,0,1
+KO,Coca-Cola,Consumer Defensive,Beverages,large,NYSE,0,0,0,1
+PEP,PepsiCo,Consumer Defensive,Beverages,large,NASDAQ,0,0,0,1
+COST,Costco Wholesale,Consumer Defensive,Discount Stores,large,NASDAQ,0,0,0,1
+WMT,Walmart,Consumer Defensive,Discount Stores,large,NYSE,0,0,0,1
+TGT,Target,Consumer Defensive,Discount Stores,large,NYSE,0,0,0,1
+HD,Home Depot,Consumer Discretionary,Home Improvement,large,NYSE,0,0,0,1
+LOW,Lowes,Consumer Discretionary,Home Improvement,large,NYSE,0,0,0,1
+SBUX,Starbucks,Consumer Discretionary,Restaurants,large,NASDAQ,0,0,0,1
+MCD,McDonalds,Consumer Discretionary,Restaurants,large,NYSE,0,0,0,1
+CMG,Chipotle Mexican Grill,Consumer Discretionary,Restaurants,large,NYSE,0,0,0,1
+NKE,Nike,Consumer Discretionary,Footwear,large,NYSE,0,0,0,1
+LULU,Lululemon Athletica,Consumer Discretionary,Apparel,large,NASDAQ,0,0,0,1
+DECK,Deckers Outdoor,Consumer Discretionary,Footwear,large,NYSE,0,0,0,1
+TJX,TJX Companies,Consumer Discretionary,Apparel Retail,large,NYSE,0,0,0,1
+ROST,Ross Stores,Consumer Discretionary,Apparel Retail,large,NASDAQ,0,0,0,1
+DIS,Walt Disney,Communication Services,Entertainment,large,NYSE,0,0,0,1
+SPOT,Spotify Technology,Communication Services,Internet Content,large,NYSE,0,0,1,1
+WBD,Warner Bros. Discovery,Communication Services,Entertainment,mid,NASDAQ,0,0,0,1
+PARA,Paramount Global,Communication Services,Entertainment,mid,NASDAQ,0,0,0,1
+CMCSA,Comcast,Communication Services,Telecom Services,large,NASDAQ,0,0,0,1
+T,AT&T,Communication Services,Telecom Services,large,NYSE,0,0,0,1
+VZ,Verizon Communications,Communication Services,Telecom Services,large,NYSE,0,0,0,1
+TMUS,T-Mobile US,Communication Services,Telecom Services,large,NASDAQ,0,0,0,1
+UBER,Uber Technologies,Industrials,Software Application,large,NYSE,0,0,0,1
+LYFT,Lyft,Industrials,Software Application,mid,NASDAQ,0,0,0,1
+ABNB,Airbnb,Consumer Discretionary,Travel Services,large,NASDAQ,0,0,0,1
+BKNG,Booking Holdings,Consumer Discretionary,Travel Services,large,NASDAQ,0,0,0,1
+EXPE,Expedia Group,Consumer Discretionary,Travel Services,large,NASDAQ,0,0,0,1
+MAR,Marriott International,Consumer Discretionary,Lodging,large,NASDAQ,0,0,0,1
+HLT,Hilton Worldwide,Consumer Discretionary,Lodging,large,NYSE,0,0,0,1
+DAL,Delta Air Lines,Industrials,Airlines,large,NYSE,0,0,0,1
+UAL,United Airlines,Industrials,Airlines,large,NASDAQ,0,0,0,1
+LUV,Southwest Airlines,Industrials,Airlines,large,NYSE,0,0,0,1
+AAL,American Airlines,Industrials,Airlines,large,NASDAQ,0,0,0,1
+F,Ford Motor,Consumer Discretionary,Auto Manufacturers,large,NYSE,0,0,0,1
+GM,General Motors,Consumer Discretionary,Auto Manufacturers,large,NYSE,0,0,0,1
+RIVN,Rivian Automotive,Consumer Discretionary,Auto Manufacturers,mid,NASDAQ,0,0,0,1
+LCID,Lucid Group,Consumer Discretionary,Auto Manufacturers,small,NASDAQ,0,0,0,1
+NIO,NIO,Consumer Discretionary,Auto Manufacturers,mid,NYSE,0,0,1,1
+XPEV,XPeng,Consumer Discretionary,Auto Manufacturers,small,NYSE,0,0,1,1
+LI,Li Auto,Consumer Discretionary,Auto Manufacturers,large,NASDAQ,0,0,1,1
+MELI,MercadoLibre,Consumer Discretionary,Internet Retail,large,NASDAQ,0,0,0,1
+PDD,PDD Holdings,Consumer Discretionary,Internet Retail,large,NASDAQ,0,0,1,1
+BABA,Alibaba Group,Consumer Discretionary,Internet Retail,large,NYSE,0,0,1,1
+JD,JD.com,Consumer Discretionary,Internet Retail,large,NASDAQ,0,0,1,1
+BIDU,Baidu,Communication Services,Internet Content,large,NASDAQ,0,0,1,1
+SE,Sea Ltd,Communication Services,Internet Content,large,NYSE,0,0,1,1
+GRAB,Grab Holdings,Industrials,Software Application,mid,NASDAQ,0,0,1,1
+DASH,DoorDash,Consumer Discretionary,Internet Retail,large,NYSE,0,0,0,1
+UPST,Upstart Holdings,Financial Services,Credit Services,small,NASDAQ,0,0,0,1
+SOFI,SoFi Technologies,Financial Services,Credit Services,large,NASDAQ,0,0,0,1
+AFRM,Affirm Holdings,Financial Services,Credit Services,large,NASDAQ,0,0,0,1
+NU,Nu Holdings,Financial Services,Banks,large,NYSE,0,0,1,1
+MELI,MercadoLibre,Consumer Discretionary,Internet Retail,large,NASDAQ,0,0,0,0
+PINS,Pinterest,Communication Services,Internet Content,large,NYSE,0,0,0,1
+SNAP,Snap,Communication Services,Internet Content,large,NYSE,0,0,0,1
+RDDT,Reddit,Communication Services,Internet Content,large,NYSE,0,0,0,1
+ROKU,Roku,Communication Services,Entertainment,mid,NASDAQ,0,0,0,1
+TTD,Trade Desk,Technology,Software,large,NASDAQ,0,0,0,1
+ZM,Zoom Communications,Technology,Software,mid,NASDAQ,0,0,0,1
+OKTA,Okta,Technology,Software,mid,NASDAQ,0,0,0,1
+HUBS,HubSpot,Technology,Software,large,NYSE,0,0,0,1
+VEEV,Veeva Systems,Technology,Software,large,NYSE,0,0,0,1
+PATH,UiPath,Technology,Software,mid,NYSE,0,0,0,1
+S,SentinelOne,Technology,Software,mid,NYSE,0,0,0,1
+CHKP,Check Point Software,Technology,Software,large,NASDAQ,0,0,1,1
+GEN,Gen Digital,Technology,Software,large,NASDAQ,0,0,0,1
+RBRK,Rubrik,Technology,Software,mid,NYSE,0,0,0,1
+VRSN,Verisign,Technology,Software,large,NASDAQ,0,0,0,1
+FSLR,First Solar,Technology,Solar,mid,NASDAQ,0,0,0,1
+ENPH,Enphase Energy,Technology,Solar,mid,NASDAQ,0,0,0,1
+SEDG,SolarEdge Technologies,Technology,Solar,small,NASDAQ,0,0,0,1
+RUN,Sunrun,Technology,Solar,small,NASDAQ,0,0,0,1
+PLUG,Plug Power,Industrials,Specialty Industrial,small,NASDAQ,0,0,0,1
+BE,Bloom Energy,Industrials,Specialty Industrial,mid,NYSE,0,0,0,1
+ALB,Albemarle,Basic Materials,Specialty Chemicals,large,NYSE,0,0,0,1
+LIN,Linde,Basic Materials,Specialty Chemicals,large,NYSE,0,0,0,1
+APD,Air Products and Chemicals,Basic Materials,Specialty Chemicals,large,NYSE,0,0,0,1
+SHW,Sherwin-Williams,Basic Materials,Specialty Chemicals,large,NYSE,0,0,0,1
+ECL,Ecolab,Basic Materials,Specialty Chemicals,large,NYSE,0,0,0,1
+NEM,Newmont,Basic Materials,Gold,large,NYSE,0,0,0,1
+FCX,Freeport-McMoRan,Basic Materials,Copper,large,NYSE,0,0,0,1
+SCCO,Southern Copper,Basic Materials,Copper,large,NYSE,0,0,0,1
+NUE,Nucor,Basic Materials,Steel,large,NYSE,0,0,0,1
+STLD,Steel Dynamics,Basic Materials,Steel,large,NASDAQ,0,0,0,1
+CLF,Cleveland-Cliffs,Basic Materials,Steel,mid,NYSE,0,0,0,1
+ESTC,Elastic,Technology,Software,mid,NYSE,0,0,0,1
+GTLB,GitLab,Technology,Software,mid,NASDAQ,0,0,0,1
+DT,Dynatrace,Technology,Software,large,NYSE,0,0,0,1
+NTAP,NetApp,Technology,Computer Hardware,large,NASDAQ,0,0,0,1
+PSTG,Pure Storage,Technology,Computer Hardware,large,NYSE,0,0,0,1
+WDC,Western Digital,Technology,Computer Hardware,mid,NASDAQ,0,0,0,1
+STX,Seagate Technology,Technology,Computer Hardware,large,NASDAQ,0,0,0,1
+ON,ON Semiconductor,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+MCHP,Microchip Technology,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+ADI,Analog Devices,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+NXPI,NXP Semiconductors,Technology,Semiconductors,large,NASDAQ,0,0,1,1
+SWKS,Skyworks Solutions,Technology,Semiconductors,large,NASDAQ,0,0,0,1
+QRVO,Qorvo,Technology,Semiconductors,mid,NASDAQ,0,0,0,1
+WOLF,Wolfspeed,Technology,Semiconductors,small,NYSE,0,0,0,1
+CRSP,CRISPR Therapeutics,Healthcare,Biotechnology,small,NASDAQ,0,0,1,1
+NTLA,Intellia Therapeutics,Healthcare,Biotechnology,small,NASDAQ,0,0,0,1
+BEAM,Beam Therapeutics,Healthcare,Biotechnology,small,NASDAQ,0,0,0,1
+EDIT,Editas Medicine,Healthcare,Biotechnology,small,NASDAQ,0,0,0,1
+RXRX,Recursion Pharmaceuticals,Healthcare,Biotechnology,small,NASDAQ,0,0,0,1
+SDGR,Schrodinger,Healthcare,Biotechnology,small,NASDAQ,0,0,0,1
+TEM,Tempus AI,Healthcare,Health Information Services,mid,NASDAQ,0,0,0,1
+HIMS,Hims & Hers Health,Healthcare,Health Information Services,mid,NYSE,0,0,0,1
+DOCS,Doximity,Communication Services,Internet Content,mid,NYSE,0,0,0,1
+VRT,Vertiv Holdings,Industrials,Electrical Equipment,large,NYSE,0,0,0,0
+ORLY,O'Reilly Automotive,Consumer Discretionary,Specialty Retail,large,NASDAQ,0,0,0,1
+AZO,AutoZone,Consumer Discretionary,Specialty Retail,large,NYSE,0,0,0,1
+ULTA,Ulta Beauty,Consumer Discretionary,Specialty Retail,large,NASDAQ,0,0,0,1
+DPZ,Dominos Pizza,Consumer Discretionary,Restaurants,large,NYSE,0,0,0,1
+WING,Wingstop,Consumer Discretionary,Restaurants,mid,NASDAQ,0,0,0,1
+TXRH,Texas Roadhouse,Consumer Discretionary,Restaurants,large,NASDAQ,0,0,0,1
+DKNG,DraftKings,Consumer Discretionary,Gambling,large,NASDAQ,0,0,0,1
+PENN,PENN Entertainment,Consumer Discretionary,Gambling,small,NASDAQ,0,0,0,1
+MGM,MGM Resorts,Consumer Discretionary,Resorts & Casinos,large,NYSE,0,0,0,1
+CCL,Carnival,Consumer Discretionary,Travel Services,large,NYSE,0,0,0,1
+RCL,Royal Caribbean Cruises,Consumer Discretionary,Travel Services,large,NYSE,0,0,0,1
+NCLH,Norwegian Cruise Line,Consumer Discretionary,Travel Services,mid,NYSE,0,0,0,1
+PLNT,Planet Fitness,Consumer Discretionary,Leisure,mid,NYSE,0,0,0,1
+EL,Estee Lauder,Consumer Defensive,Household Products,large,NYSE,0,0,0,1
+CL,Colgate-Palmolive,Consumer Defensive,Household Products,large,NYSE,0,0,0,1
+CHWY,Chewy,Consumer Discretionary,Internet Retail,mid,NYSE,0,0,0,1
+WIX,Wix.com,Technology,Software,mid,NASDAQ,0,0,1,1
+SQSP,Squarespace,Technology,Software,small,NYSE,0,0,0,0
+TWO,Two Harbors Investment,Real Estate,REIT Mortgage,small,NYSE,0,0,0,1
+NSA,National Storage Affiliates,Real Estate,REIT Industrial,small,NYSE,0,0,0,1
+DLR,Digital Realty Trust,Real Estate,REIT Specialty,large,NYSE,0,0,0,1
+EQIX,Equinix,Real Estate,REIT Specialty,large,NASDAQ,0,0,0,1
+AMT,American Tower,Real Estate,REIT Specialty,large,NYSE,0,0,0,1
+CCI,Crown Castle,Real Estate,REIT Specialty,large,NYSE,0,0,0,1
+SBAC,SBA Communications,Real Estate,REIT Specialty,large,NASDAQ,0,0,0,1
+PLD,Prologis,Real Estate,REIT Industrial,large,NYSE,0,0,0,1
+WELL,Welltower,Real Estate,REIT Healthcare,large,NYSE,0,0,0,1
+VICI,VICI Properties,Real Estate,REIT Diversified,large,NYSE,0,0,0,1
+IBM,IBM,Technology,Information Technology Services,large,NYSE,0,0,0,1
+ACN,Accenture,Technology,Information Technology Services,large,NYSE,0,0,0,1
+CTSH,Cognizant Technology Solutions,Technology,Information Technology Services,large,NASDAQ,0,0,0,1
+INFY,Infosys,Technology,Information Technology Services,large,NYSE,0,0,1,1
+WIT,Wipro,Technology,Information Technology Services,large,NYSE,0,0,1,1
+GLBE,Global-E Online,Technology,Software,small,NASDAQ,0,0,1,1
+DUOL,Duolingo,Technology,Software,large,NASDAQ,0,0,0,1
+COUP,Coupang,Consumer Discretionary,Internet Retail,large,NYSE,0,0,1,1
+CPNG,Coupang,Consumer Discretionary,Internet Retail,large,NYSE,0,0,1,0
+FOUR,Shift4 Payments,Technology,Software,mid,NYSE,0,0,0,1
+TOST,Toast,Technology,Software,large,NYSE,0,0,0,1
+GLOB,Globant,Technology,Information Technology Services,large,NYSE,0,0,1,1
+ESLT,Elbit Systems,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,1,1
+KTOS,Kratos Defense & Security,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,0,1
+AVAV,AeroVironment,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,0,1
+MRCY,Mercury Systems,Industrials,Aerospace & Defense,small,NASDAQ,0,0,0,1
+MOG.A,Moog,Industrials,Aerospace & Defense,small,NYSE,0,0,0,1
+HWM,Howmet Aerospace,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
