@@ -2825,18 +2825,25 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
     disc_score = c.get("discovery_score") or c.get("score")
     latest = c.get("latest_event_summary") or ""
 
-    score_html = ""
+    score_chips = ""
     if promo_score is not None:
-        score_html += f'<span class="chip chip-strengthen" style="margin-left:6px;">Promo {promo_score:.0f}</span>'
+        score_chips += f'<span class="chip chip-strengthen">Promo {promo_score:.0f}</span>'
     if disc_score is not None:
-        score_html += f'<span class="chip chip-needs-check" style="margin-left:6px;">Disc {disc_score:.0f}</span>'
+        score_chips += f'<span class="chip chip-needs-check">Disc {disc_score:.0f}</span>'
+
+    badges_html = (
+        '<div style="display:flex; flex-direction:column; gap:6px; '
+        'align-items:flex-end; flex-shrink:0;">'
+        f'<span class="chip chip-needs-check">{queue}</span>'
+        f'{score_chips}'
+        "</div>"
+    )
 
     body = (
         '<div class="card">'
-        '<div class="news-head">'
+        '<div class="news-head" style="align-items:flex-start;">'
         f'<div class="news-title">{name} ({ticker})</div>'
-        f'<span class="chip chip-needs-check">{queue}</span>'
-        f'{score_html}'
+        f'{badges_html}'
         "</div>"
         '<div class="para-row">'
         '<span class="para-label">Signal</span>'
