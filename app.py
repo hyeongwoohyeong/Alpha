@@ -1025,19 +1025,101 @@ def scroll_to_top():
     )
 
 
-def navigate_to(nav_key: str, ticker: str | None = None) -> None:
+def _sync_query_params(page: str, ticker: str | None = None, news_id: str | None = None):
+    """URL query params 동기화 — 브라우저 뒤로가기 보조."""
+    try:
+        qp = st.query_params
+        qp["page"] = page
+        if ticker:
+            qp["ticker"] = ticker
+        elif "ticker" in qp:
+            del qp["ticker"]
+        if news_id:
+            qp["news_id"] = news_id
+        elif "news_id" in qp:
+            del qp["news_id"]
+    except Exception:
+        pass
+
+
+def navigate_to(
+    nav_key: str,
+    ticker: str | None = None,
+    news_id: str | None = None,
+    push_history: bool = True,
+) -> None:
     """공통 페이지 이동.
 
-    - 사이드바 메뉴 / 종목 카드 상세 보기 / 우량주 과매도·관심종목 카드의
-      모든 이동 경로가 이 함수를 통해 일관되게 처리되도록 한다.
-    - ticker 가 주어지면 selected_ticker 도 함께 갱신한다.
-    - 항상 화면 최상단으로 스크롤되도록 플래그를 세우고 즉시 rerun.
+    - 종목 카드 / 뉴스 카드 / 우량주 과매도 / 관심종목 의 모든 이동 경로가
+      이 함수를 통해 일관되게 처리되도록 한다.
+    - push_history=True 면 현재 상태를 navigation_history 에 push.
+    - 사이드바 메뉴 클릭은 navigate_from_sidebar() 사용 (history clear).
     """
+    if push_history:
+        history = st.session_state.setdefault("navigation_history", [])
+        current_state = {
+            "page_key": st.session_state.get("nav_key", "brief"),
+            "ticker": st.session_state.get("selected_ticker"),
+            "news_id": st.session_state.get("selected_news_id"),
+        }
+        # 같은 상태가 연속으로 쌓이지 않도록
+        if not history or history[-1] != current_state:
+            history.append(current_state)
+        st.session_state["navigation_history"] = history[-20:]
+
     if ticker is not None:
         st.session_state["selected_ticker"] = ticker
+    if news_id is not None:
+        st.session_state["selected_news_id"] = news_id
     st.session_state["nav_key"] = nav_key
     st.session_state["scroll_to_top"] = True
+
+    _sync_query_params(
+        nav_key,
+        st.session_state.get("selected_ticker"),
+        st.session_state.get("selected_news_id"),
+    )
     st.rerun()
+
+
+def navigate_from_sidebar(nav_key: str) -> None:
+    """사이드바 메뉴 클릭 — history 초기화 + push_history=False."""
+    st.session_state["navigation_history"] = []
+    st.session_state["selected_news_id"] = None
+    navigate_to(nav_key, push_history=False)
+
+
+def go_back() -> None:
+    """앱 내부 뒤로가기."""
+    history = st.session_state.get("navigation_history", []) or []
+    if history:
+        prev = history.pop()
+        st.session_state["navigation_history"] = history
+        st.session_state["nav_key"] = prev.get("page_key") or "brief"
+        st.session_state["selected_ticker"] = prev.get("ticker")
+        st.session_state["selected_news_id"] = prev.get("news_id")
+    else:
+        st.session_state["nav_key"] = "brief"
+        st.session_state["selected_ticker"] = None
+        st.session_state["selected_news_id"] = None
+    st.session_state["scroll_to_top"] = True
+    _sync_query_params(
+        st.session_state["nav_key"],
+        st.session_state.get("selected_ticker"),
+        st.session_state.get("selected_news_id"),
+    )
+    st.rerun()
+
+
+def render_back_button(key_suffix: str = ""):
+    """페이지 헤더 위에 표시할 ← 이전으로 버튼."""
+    history = st.session_state.get("navigation_history") or []
+    if not history:
+        return
+    cols = st.columns([2, 8])
+    with cols[0]:
+        if st.button("← 이전으로", key=f"back_{key_suffix}", use_container_width=True):
+            go_back()
 
 
 def get_refresh_token() -> int:
@@ -1084,7 +1166,20 @@ NAV_ITEMS: list[tuple[str, str]] = [
 NAV_LABEL_BY_KEY = {k: l for k, l in NAV_ITEMS}
 
 if "nav_key" not in st.session_state:
-    st.session_state["nav_key"] = "brief"
+    # query_params 우선 → 없으면 기본
+    try:
+        qp = st.query_params
+        st.session_state["nav_key"] = qp.get("page", "brief") or "brief"
+        if qp.get("ticker"):
+            st.session_state["selected_ticker"] = qp["ticker"]
+        if qp.get("news_id"):
+            st.session_state["selected_news_id"] = qp["news_id"]
+    except Exception:
+        st.session_state["nav_key"] = "brief"
+if "navigation_history" not in st.session_state:
+    st.session_state["navigation_history"] = []
+if "selected_news_id" not in st.session_state:
+    st.session_state["selected_news_id"] = None
 
 with st.sidebar:
     st.markdown(
@@ -1104,7 +1199,7 @@ with st.sidebar:
             type="primary" if is_active else "secondary",
             use_container_width=True,
         ):
-            navigate_to(key)
+            navigate_from_sidebar(key)
 
     st.markdown('<div class="nav-label" style="margin-top:24px;">System</div>', unsafe_allow_html=True)
     with st.expander("환경 진단", expanded=False):
@@ -1834,6 +1929,7 @@ def render_today_brief():
 
 def render_stock_detail():
     # scroll_to_top 처리는 라우팅 직전에 통합 처리되므로 여기서는 별도 처리 없음
+    render_back_button("stock_detail")
     if not rows:
         page_header("종목 상세")
         st.warning("투자 유니버스 데이터가 비어있습니다.")
@@ -2386,15 +2482,44 @@ def render_stock_detail():
     # ================== [NEW] 주요 뉴스 ==================
     st.markdown('<div class="section-title">주요 뉴스</div>', unsafe_allow_html=True)
     news_items = news_with_impact(row, limit=5)
+
+    # DB 에서 한국어 요약 보강 (run_research 가 채운 detailed_summary_ko 등)
+    try:
+        with db.db_session() as conn:
+            for n in news_items:
+                nid = n.get("news_id") or db.make_news_id(
+                    row["ticker"], n.get("link"), n.get("title"), n.get("published_at")
+                )
+                row_db = db.fetch_news_by_id(conn, nid)
+                if row_db:
+                    n["news_id"] = nid
+                    if row_db["detailed_summary_ko"]:
+                        n["detailed_summary_ko"] = row_db["detailed_summary_ko"]
+                    if row_db["investment_implication_ko"]:
+                        n["investment_implication_ko"] = row_db["investment_implication_ko"]
+                    if row_db["thesis_impact_ko"]:
+                        n["thesis_impact_ko"] = row_db["thesis_impact_ko"]
+                    if row_db["confidence_level_ko"]:
+                        n["confidence_level_ko"] = row_db["confidence_level_ko"]
+    except Exception:
+        pass
+
     if not news_items:
         st.markdown(
             '<div class="card">최근 뉴스 데이터가 없습니다. 데이터 업데이트 후 다시 확인하세요.</div>',
             unsafe_allow_html=True,
         )
     else:
-        for n in news_items:
-            cls_key = (n.get("thesis_impact") or "needs_check").replace("_", "-")
-            cls_label = n.get("thesis_impact_label") or "확인 필요"
+        # 펼치기 상태는 session_state 로 관리 (종목별)
+        expand_key = f"news_expanded::{row['ticker']}"
+        if expand_key not in st.session_state:
+            st.session_state[expand_key] = set()
+        expanded: set = st.session_state[expand_key]
+
+        for i, n in enumerate(news_items):
+            cls_key = (n.get("thesis_impact") or n.get("thesis_impact_ko") or "needs_check")
+            cls_key = cls_key.replace("_", "-").replace(" ", "-")
+            cls_label = n.get("thesis_impact_label") or n.get("thesis_impact_ko") or "확인 필요"
             link = n.get("link") or ""
             title = n.get("title") or "(제목 없음)"
             title_html = (
@@ -2404,23 +2529,53 @@ def render_stock_detail():
             )
             source = n.get("source") or "출처 확인 필요"
             published = n.get("published_at") or "날짜 확인 필요"
-            summary = n.get("summary") or "요약 정보가 제공되지 않습니다."
-            implication = n.get("investment_implication") or "추가 정밀 검토 필요"
+
+            detailed_ko = n.get("detailed_summary_ko") or n.get("summary") or "요약 정보가 제공되지 않습니다."
+            implication = n.get("investment_implication_ko") or n.get("investment_implication") or "추가 정밀 검토 필요"
+            confidence = n.get("confidence_level_ko") or n.get("confidence_level") or n.get("confidence") or "Low"
+
+            nid = n.get("news_id") or f"news_{row['ticker']}_{i}"
+            is_expanded = nid in expanded
+
+            # 카드 표시 (펼침 여부에 따라 detail 길이 조정)
+            if is_expanded:
+                detail_html = detailed_ko
+            else:
+                # 짧게 (앞 200자)
+                detail_html = (
+                    detailed_ko[:200] + ("…" if len(detailed_ko) > 200 else "")
+                )
+
             link_btn = (
                 f'<a class="news-link" href="{link}" target="_blank" rel="noopener noreferrer">기사 보기 →</a>'
                 if link
                 else '<span class="news-link" style="opacity:0.5;">링크 확인 필요</span>'
             )
+            confidence_chip = (
+                f'<span class="chip chip-needs-check" style="margin-left:8px; font-size:11px;">'
+                f'Confidence {confidence}</span>'
+            )
+
+            cls_label_safe = (cls_label or "확인 필요").replace("Thesis ", "")
+            chip_cls_key = {
+                "강화": "strengthen",
+                "약화": "weaken",
+                "리스크 해소": "strengthen",
+                "신규 리스크": "new-risk",
+                "단기 노이즈": "noise",
+                "확인 필요": "needs-check",
+            }.get(cls_label_safe, "needs-check")
+
             st.markdown(
                 '<div class="news-card">'
                 '<div class="news-head">'
                 f'<div class="news-title">{title_html}</div>'
-                f'<span class="chip chip-{cls_key}">{cls_label}</span>'
+                f'<span class="chip chip-{chip_cls_key}">{cls_label}</span>'
                 "</div>"
-                f'<div class="news-meta">{source} · {published}</div>'
+                f'<div class="news-meta">{source} · {published}{confidence_chip}</div>'
                 '<div class="para-row">'
-                '<span class="para-label">요약</span>'
-                f'<span class="para-text">{summary}</span>'
+                '<span class="para-label">상세 요약</span>'
+                f'<span class="para-text">{detail_html}</span>'
                 "</div>"
                 '<div class="para-row">'
                 '<span class="para-label">투자적 의미</span>'
@@ -2430,6 +2585,22 @@ def render_stock_detail():
                 "</div>",
                 unsafe_allow_html=True,
             )
+            # 펼치기/접기 + 뉴스 상세 보기 버튼
+            btn_cols = st.columns([2, 2, 6])
+            with btn_cols[0]:
+                btn_label = "요약 접기" if is_expanded else "요약 펼치기"
+                if st.button(btn_label, key=f"news_toggle_{row['ticker']}_{i}",
+                             use_container_width=True):
+                    if is_expanded:
+                        expanded.discard(nid)
+                    else:
+                        expanded.add(nid)
+                    st.session_state[expand_key] = expanded
+                    st.rerun()
+            with btn_cols[1]:
+                if st.button("상세 보기", key=f"news_detail_{row['ticker']}_{i}",
+                             use_container_width=True):
+                    navigate_to("news_detail", ticker=row["ticker"], news_id=nid)
     st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
     # 리서치 품질 카드 (종합 판단 직전)
@@ -2518,6 +2689,7 @@ def render_dislocation_card(row: dict[str, Any], idx: int):
 
 
 def render_dislocation():
+    render_back_button("dislocation")
     page_header(
         "우량주 과매도",
         meta="Quality Dislocation · 52주 고점 대비 -20% ~ -55% 구간의 카테고리 리더",
@@ -2539,6 +2711,7 @@ def render_dislocation():
 # ---------------------------------------------------------------------------
 
 def render_watchlist():
+    render_back_button("watchlist")
     page_header("관심종목", meta="사용자 등록 종목 우선 추적")
     render_data_health_warning()
 
@@ -2593,7 +2766,120 @@ def render_watchlist():
 # 화면: 회고 리포트
 # ---------------------------------------------------------------------------
 
+def render_news_detail():
+    """뉴스 상세 페이지 — selected_news_id 기준."""
+    render_back_button("news_detail")
+    page_header("뉴스 상세", meta="원문 + 한국어 리서치 메모")
+
+    nid = st.session_state.get("selected_news_id")
+    ticker = st.session_state.get("selected_ticker")
+    if not nid:
+        st.markdown('<div class="card">선택된 뉴스가 없습니다.</div>', unsafe_allow_html=True)
+        return
+
+    # DB 우선 조회
+    try:
+        with db.db_session() as conn:
+            row_db = db.fetch_news_by_id(conn, nid)
+    except Exception:
+        row_db = None
+
+    if not row_db:
+        # 메모리 rows 에서 fallback
+        if rows and ticker:
+            cur_row = next((r for r in rows if r["ticker"] == ticker), None)
+            if cur_row:
+                for n in cur_row.get("news") or []:
+                    cand = db.make_news_id(
+                        ticker, n.get("link"), n.get("title"), n.get("published_at")
+                    )
+                    if cand == nid:
+                        row_db = type("Obj", (), {"__getitem__": lambda s, k: n.get(k)})()
+                        break
+    if not row_db:
+        st.markdown(
+            '<div class="card">해당 뉴스를 DB에서 찾을 수 없습니다. '
+            'run_research.py 를 실행해 뉴스 요약을 갱신해 주세요.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    title = row_db["title"] or "(제목 없음)"
+    source = row_db["source"] or "출처 확인 필요"
+    published = row_db["published_at"] or "날짜 확인 필요"
+    link = row_db["link"] or ""
+    detailed = row_db["detailed_summary_ko"] or row_db["summary"] or "본문 요약이 제공되지 않습니다."
+    implication = row_db["investment_implication_ko"] or "추가 정밀 검토 필요"
+    impact = row_db["thesis_impact_ko"] or row_db["thesis_impact_kw"] if False else (
+        row_db["thesis_impact_ko"] or "확인 필요"
+    )
+    confidence = row_db["confidence_level_ko"] or row_db["confidence_level_ko"] or "Low"
+
+    # key_points_ko 파싱
+    kpts_raw = None
+    try:
+        kpts_raw = row_db["key_points_ko"]
+    except Exception:
+        kpts_raw = None
+    key_points = db.load_json(kpts_raw, default=[]) if kpts_raw else []
+
+    # 종목명 표시
+    universe_map = {r["ticker"]: r for r in (rows or [])}
+    name_display = display_name(
+        (universe_map.get(ticker) or {}).get("name_ko", "") if ticker else "",
+        ticker or "",
+    ) if ticker else "—"
+
+    st.markdown(
+        '<div class="card">'
+        f'<div class="pick-name" style="font-size:20px;">{title}</div>'
+        f'<div class="pick-type">관련 종목: {name_display} · {source} · {published}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="judgment-card">'
+        '<div class="judgment-eyebrow">한국어 상세 요약</div>'
+        f'<div class="judgment-body">{detailed}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if key_points:
+        st.markdown('<div class="section-title">핵심 포인트</div>', unsafe_allow_html=True)
+        body = "".join(
+            f'<div class="bullet"><span class="bullet-num">{i+1}.</span><span>{b}</span></div>'
+            for i, b in enumerate(key_points)
+        )
+        st.markdown(f'<div class="card">{body}</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="card">'
+        '<div class="para-row">'
+        '<span class="para-label">투자적 의미</span>'
+        f'<span class="para-text">{implication}</span>'
+        "</div>"
+        '<div class="para-row">'
+        '<span class="para-label">Thesis 영향</span>'
+        f'<span class="para-text">{impact}</span>'
+        "</div>"
+        '<div class="para-row">'
+        '<span class="para-label">Confidence</span>'
+        f'<span class="para-text">{confidence}</span>'
+        "</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if link:
+        st.markdown(
+            f'<a class="news-link" href="{link}" target="_blank" rel="noopener noreferrer">기사 원문 보기 →</a>',
+            unsafe_allow_html=True,
+        )
+
+
 def render_retrospective():
+    render_back_button("retro")
     page_header("회고 리포트", meta="DB performance_tracking + decision_log")
 
     # ── DB 기반 성과 요약 (신규) ──────────────────────────────────────
@@ -2725,3 +3011,5 @@ elif nav == "watchlist":
     render_watchlist()
 elif nav == "retro":
     render_retrospective()
+elif nav == "news_detail":
+    render_news_detail()

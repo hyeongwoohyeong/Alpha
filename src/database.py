@@ -252,6 +252,20 @@ def init_schema(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
     for stmt in _SCHEMA_STATEMENTS:
         cur.execute(stmt)
+    # 새 컬럼 idempotent 추가 (기존 DB도 호환)
+    _ALTER_STATEMENTS = (
+        "ALTER TABLE news_raw ADD COLUMN detailed_summary_ko TEXT",
+        "ALTER TABLE news_raw ADD COLUMN investment_implication_ko TEXT",
+        "ALTER TABLE news_raw ADD COLUMN thesis_impact_ko TEXT",
+        "ALTER TABLE news_raw ADD COLUMN confidence_level_ko TEXT",
+        "ALTER TABLE news_raw ADD COLUMN body_excerpt TEXT",
+        "ALTER TABLE news_raw ADD COLUMN key_points_ko TEXT",  # JSON list
+    )
+    for s in _ALTER_STATEMENTS:
+        try:
+            cur.execute(s)
+        except sqlite3.OperationalError:
+            pass  # 이미 컬럼이 존재
     conn.commit()
 
 
@@ -502,7 +516,7 @@ def upsert_news(
 ) -> int:
     n = 0
     for it in news_items:
-        nid = make_news_id(
+        nid = it.get("news_id") or make_news_id(
             it.get("ticker", "?"),
             it.get("link"),
             it.get("title"),
@@ -513,8 +527,10 @@ def upsert_news(
             INSERT INTO news_raw (
                 news_id, run_id, ticker, title, source, published_at, link, summary,
                 importance_score, source_quality, staleness, event_status_kw, is_urgent,
-                fetched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                fetched_at,
+                detailed_summary_ko, investment_implication_ko, thesis_impact_ko,
+                confidence_level_ko, body_excerpt, key_points_ko
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(news_id) DO UPDATE SET
                 run_id=excluded.run_id,
                 title=excluded.title,
@@ -527,7 +543,13 @@ def upsert_news(
                 staleness=excluded.staleness,
                 event_status_kw=excluded.event_status_kw,
                 is_urgent=excluded.is_urgent,
-                fetched_at=excluded.fetched_at
+                fetched_at=excluded.fetched_at,
+                detailed_summary_ko=COALESCE(excluded.detailed_summary_ko, news_raw.detailed_summary_ko),
+                investment_implication_ko=COALESCE(excluded.investment_implication_ko, news_raw.investment_implication_ko),
+                thesis_impact_ko=COALESCE(excluded.thesis_impact_ko, news_raw.thesis_impact_ko),
+                confidence_level_ko=COALESCE(excluded.confidence_level_ko, news_raw.confidence_level_ko),
+                body_excerpt=COALESCE(excluded.body_excerpt, news_raw.body_excerpt),
+                key_points_ko=COALESCE(excluded.key_points_ko, news_raw.key_points_ko)
             """,
             (
                 nid,
@@ -544,11 +566,50 @@ def upsert_news(
                 it.get("event_status"),
                 int(bool(it.get("is_urgent"))),
                 now_iso(),
+                it.get("detailed_summary_ko"),
+                it.get("investment_implication_ko"),
+                it.get("thesis_impact_ko") or it.get("thesis_impact"),
+                it.get("confidence_level_ko") or it.get("confidence_level") or it.get("confidence"),
+                it.get("body_excerpt"),
+                dump_json(it.get("key_points_ko")) if it.get("key_points_ko") else None,
             ),
         )
         n += 1
     conn.commit()
     return n
+
+
+def update_news_summary(
+    conn: sqlite3.Connection,
+    news_id: str,
+    summary_payload: dict[str, Any],
+) -> None:
+    """이미 저장된 news_raw 행에 한국어 요약 필드만 갱신."""
+    conn.execute(
+        """
+        UPDATE news_raw SET
+            detailed_summary_ko = ?,
+            investment_implication_ko = ?,
+            thesis_impact_ko = ?,
+            confidence_level_ko = ?,
+            body_excerpt = ?,
+            key_points_ko = ?
+        WHERE news_id = ?
+        """,
+        (
+            summary_payload.get("detailed_summary_ko"),
+            summary_payload.get("investment_implication_ko"),
+            summary_payload.get("thesis_impact_ko"),
+            summary_payload.get("confidence_level_ko"),
+            summary_payload.get("body_excerpt"),
+            dump_json(summary_payload.get("key_points_ko")) if summary_payload.get("key_points_ko") else None,
+            news_id,
+        ),
+    )
+
+
+def fetch_news_by_id(conn: sqlite3.Connection, news_id: str) -> sqlite3.Row | None:
+    return conn.execute("SELECT * FROM news_raw WHERE news_id = ?", (news_id,)).fetchone()
 
 
 def fetch_news_for_ticker(

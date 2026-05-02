@@ -54,6 +54,7 @@ from src.market_data import (
     market_summary_ko,
 )
 from src.news_fetcher import aggregate_importance, fetch_ticker_news
+from src.news_summarizer import summarize_news_to_korean
 from src.scoring import assign_action_tag, classify_company_type, compute_scores
 from src.stock_research import build_stock_research, short_rationale
 from src.universe import load_universe
@@ -100,6 +101,7 @@ def step_fetch_market_proxies(conn, run_id: str, date_iso: str) -> tuple[dict, s
 def step_fetch_news(conn, run_id: str, universe: list[dict]) -> dict[str, list[dict]]:
     log.info("[3/12] fetching news for %d tickers...", len(universe))
     news_map: dict[str, list[dict]] = {}
+    summarized = 0
     for u in universe:
         ticker = u["ticker"]
         try:
@@ -108,11 +110,32 @@ def step_fetch_news(conn, run_id: str, universe: list[dict]) -> dict[str, list[d
             log.warning("[%s] news fetch failed: %s", ticker, e)
             news = []
         news_map[ticker] = news
-        # DB 저장 (enrich는 aggregate_importance에서)
-        if news:
-            for n in news:
-                n["ticker"] = ticker
-            db.upsert_news(conn, run_id, news)
+
+        if not news:
+            continue
+
+        # 한국어 요약 — LLM 환경변수가 없어도 rule-based 폴백
+        for n in news:
+            n["ticker"] = ticker
+            n["news_id"] = db.make_news_id(
+                ticker, n.get("link"), n.get("title"), n.get("published_at")
+            )
+            try:
+                summary_payload = summarize_news_to_korean(n, stock_context=u)
+                n.update({
+                    "detailed_summary_ko": summary_payload.get("detailed_summary_ko"),
+                    "investment_implication_ko": summary_payload.get("investment_implication_ko"),
+                    "thesis_impact_ko": summary_payload.get("thesis_impact_ko"),
+                    "confidence_level_ko": summary_payload.get("confidence_level_ko"),
+                    "body_excerpt": summary_payload.get("body_excerpt"),
+                    "key_points_ko": summary_payload.get("key_points_ko"),
+                })
+                summarized += 1
+            except Exception as e:
+                log.debug("[%s] summarize failed: %s", ticker, e)
+
+        db.upsert_news(conn, run_id, news)
+    log.info("[3/12] news ok=%d summarized=%d", sum(1 for v in news_map.values() if v), summarized)
     return news_map
 
 
