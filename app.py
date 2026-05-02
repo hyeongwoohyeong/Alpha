@@ -2153,18 +2153,20 @@ def render_alpha_score_section(alpha: dict | None):
     # 점수 가이드 expander
     with st.expander("Alpha Score 판정 기준 보기", expanded=False):
         st.markdown(
-            "**95~100** Exceptional Candidate — 최우선 정밀 검토 후보\n\n"
-            "**90~94** High Conviction Candidate — 강한 비중 후보로 검토 가능\n\n"
-            "**80~89** Research Now — 적극 리서치 후보\n\n"
-            "**70~79** Watchlist / Wait for Better Entry — 관찰 / 진입 시점 대기\n\n"
-            "**60~69** Need Thesis Check — Thesis 검증 필요\n\n"
-            "**50~59** Low Priority — 현재 우선순위 낮음\n\n"
-            "**0~49** Avoid / Not Enough Evidence — 회피 또는 근거 부족\n\n"
+            "**88~100** Exceptional Candidate — 최우선 정밀 검토 후보\n\n"
+            "**80~87** High Conviction Candidate — 강한 비중 후보로 검토 가능\n\n"
+            "**70~79** Research Now — 적극 리서치 후보\n\n"
+            "**62~69** Watchlist / Wait for Better Entry — 관찰 / 진입 시점 대기\n\n"
+            "**54~61** Need Thesis Check — Thesis 검증 필요\n\n"
+            "**45~53** Low Priority — 현재 우선순위 낮음\n\n"
+            "**0~44** Avoid / Not Enough Evidence — 회피 또는 근거 부족\n\n"
             "---\n\n"
             "Alpha Score 는 **자동 매수 추천** 이 아니라 Alpha 로직상 리서치 우선순위와 "
-            "투자 매력도를 정량화한 보조 지표입니다. 95점 이상도 \"무조건 매수\"가 아닌 "
+            "투자 매력도를 정량화한 보조 지표입니다. 88점 이상도 \"무조건 매수\"가 아닌 "
             "\"최우선 정밀 검토\" 의미이며, 실제 매수 전 valuation / 포지션 사이징 / "
-            "리스크 체크가 필요합니다."
+            "리스크 체크가 필요합니다.\n\n"
+            "8 컴포넌트 중 일부 (가격 / 이벤트 / 리스크) 는 데이터 부족 시 중립 50 으로 "
+            "fallback 되는 구조 특성상, 80+ 도 매우 강하게 정렬된 후보로 봐야 합니다."
         )
     st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 

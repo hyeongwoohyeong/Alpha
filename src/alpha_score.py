@@ -64,13 +64,16 @@ LABELS_KO: dict[str, str] = {
 # Rating 매핑 — Alpha Score → 한국어 라벨 + 영어 라벨
 # ---------------------------------------------------------------------------
 
+# Rating 임계값 — 실제 정량 데이터 기반 분포에 맞춰 재조정.
+# 8 컴포넌트 중 일부가 항상 50 (중립 fallback) 으로 채워지는 구조 특성상,
+# 80+ 점수는 Exceptional 후보가 아니라 "정렬된 매우 강한 후보" 로 보는 게 적절.
 RATING_TIERS = [
-    (95, "Exceptional Candidate", "최우선 정밀 검토 후보"),
-    (90, "High Conviction Candidate", "강한 비중 후보로 검토 가능"),
-    (80, "Research Now", "적극 리서치 후보"),
-    (70, "Watchlist / Wait for Better Entry", "관찰 / 진입 시점 대기"),
-    (60, "Need Thesis Check", "Thesis 검증 필요"),
-    (50, "Low Priority", "현재 우선순위 낮음"),
+    (88, "Exceptional Candidate", "최우선 정밀 검토 후보"),
+    (80, "High Conviction Candidate", "강한 비중 후보로 검토 가능"),
+    (70, "Research Now", "적극 리서치 후보"),
+    (62, "Watchlist / Wait for Better Entry", "관찰 / 진입 시점 대기"),
+    (54, "Need Thesis Check", "Thesis 검증 필요"),
+    (45, "Low Priority", "현재 우선순위 낮음"),
     (0, "Avoid / Not Enough Evidence", "회피 또는 근거 부족"),
 ]
 
@@ -208,7 +211,20 @@ def calculate_alpha_score(
 
     # 가중합
     alpha_raw = sum(components[k] * w for k, w in WEIGHTS.items())
-    alpha = round(alpha_raw, 1)
+
+    # 큐레이션 보정 — 종목 고유 thesis + Earnings Quality + Moat 가 모두 강하면 +3
+    # (8 컴포넌트 중 가격 / 이벤트 / 리스크가 항상 중립 50 으로 끌어내리는 구조 보정)
+    curated_bonus = 0.0
+    if (
+        eq
+        and eq.get("is_curated")
+        and (eq.get("earnings_durability_score") or 0) >= 70
+        and components.get("moat_lockin", 50) >= 65
+    ):
+        curated_bonus = 3.0
+
+    alpha_raw += curated_bonus
+    alpha = round(min(100.0, alpha_raw), 1)
 
     # Data Confidence
     is_curated_eq = bool(eq.get("is_curated"))
@@ -308,14 +324,15 @@ def generate_alpha_score_interpretation(
             "다른 후보를 우선 검토하는 편이 적절합니다."
         )
 
-    # 큐레이션 / Bottleneck 추가 컨텍스트
+    # 큐레이션 / Bottleneck 추가 컨텍스트 — 한 단락 전체 노출 (잘라내지 않음)
     if eq and eq.get("is_curated") and eq.get("alpha_judgment"):
-        # Earnings Quality 큐레이션이 있으면 그 한 단락에서 핵심 1줄 추출 (앞 100자)
         aj = (eq.get("alpha_judgment") or "").strip()
         if aj:
-            parts.append(aj[:140] + ("…" if len(aj) > 140 else ""))
+            parts.append(aj)
     elif bn and bn.get("alpha_judgment"):
-        parts.append((bn.get("alpha_judgment") or "")[:140])
+        bj = (bn.get("alpha_judgment") or "").strip()
+        if bj:
+            parts.append(bj)
 
     # Provisional / Confidence 안내
     if is_provisional:
