@@ -78,7 +78,7 @@ def _news_relevance_score(news_items: list[dict[str, Any]]) -> tuple[float, str,
 
 def _financial_quality_score(md: dict[str, Any]) -> float:
     """간단 정량 quality proxy 0~100. NaN 은 50 (중립)."""
-    rev_growth = safe_float(md.get("revenue_growth_yoy"))
+    rev_growth = safe_float(md.get("revenue_growth") or md.get("revenue_growth_yoy"))
     roe = safe_float(md.get("roe"))
     fcf_yield = safe_float(md.get("fcf_yield"))
     op_margin = safe_float(md.get("operating_margin"))
@@ -99,7 +99,7 @@ def _risk_penalty(meta: dict[str, Any], md: dict[str, Any], news: list[dict[str,
     """리스크 페널티 0~30 (큰 값일수록 위험)."""
     pen = 0.0
     # 1년 -50% 이하 — 파괴적 trend
-    ret_1y = safe_float(md.get("return_1y"))
+    ret_1y = safe_float(md.get("1y_return") or md.get("return_1y"))
     if ret_1y is not None and ret_1y < -0.50:
         pen += 12
     # urgent 키워드

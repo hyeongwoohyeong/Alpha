@@ -53,9 +53,9 @@ RISK_KEYWORDS_NAME = (
 def passes_universe_filter(meta: dict[str, Any], md: dict[str, Any]) -> bool:
     """기본 필터.
 
-    - market_cap >= $300M
-    - 평균 거래대금 >= $5M (current_price * avg_volume_20d 사용)
-    - 데이터 누락 종목 제외
+    - market_cap >= $300M (있을 때만 — 없으면 wide_universe.csv 의 tier 로 fallback)
+    - 평균 거래대금 >= $5M (current_price * avg_volume_20d)
+    - 가격 >= $1 (penny stock 제외)
     - SPAC / warrant / preferred 등 이름 키워드 제외
     """
     if not md or not md.get("available"):
@@ -66,15 +66,33 @@ def passes_universe_filter(meta: dict[str, Any], md: dict[str, Any]) -> bool:
         if kw in name:
             return False
 
-    mcap = safe_float(md.get("market_cap"))
     price = safe_float(md.get("current_price"))
-    avg_vol = safe_float(md.get("avg_volume_20d") or md.get("avg_volume"))
-    if mcap is None or mcap < MIN_MARKET_CAP:
-        return False
+    # market_data 는 avg_volume_30d 로 저장 — fallback 도 같이
+    avg_vol = safe_float(
+        md.get("avg_volume_30d")
+        or md.get("avg_volume_20d")
+        or md.get("avg_volume")
+    )
+
+    # 가격 / 유동성 체크 — 항상 강제
     if price is None or price <= 1.0:
         return False
     if avg_vol is None or (price * avg_vol) < MIN_AVG_DOLLAR_VOLUME:
         return False
+
+    # 시총 체크 — yfinance 가 batch download 에서 안 줄 때가 많아 fallback 처리
+    mcap = safe_float(md.get("market_cap"))
+    if mcap is not None:
+        if mcap < MIN_MARKET_CAP:
+            return False
+    else:
+        # wide_universe.csv 의 market_cap_tier 로 fallback (large / mid / small)
+        tier = (meta.get("market_cap_tier") or "").lower()
+        if tier == "small":
+            # small-cap 은 시총 정보 없으면 보수적으로 제외
+            return False
+        # large / mid 또는 미지정 → 가격*거래량 통과했으면 허용
+
     return True
 
 
@@ -151,6 +169,24 @@ def _civilization_theme_match(meta: dict[str, Any]) -> tuple[str | None, float]:
 # 큐별 시그널 / 점수 계산
 # ---------------------------------------------------------------------------
 
+def _md_get(md: dict, *keys, default=None):
+    """여러 후보 키에서 첫 non-None 값 반환 (field 이름 다양성 흡수)."""
+    for k in keys:
+        v = md.get(k)
+        if v is not None:
+            return v
+    return default
+
+
+def _vol_ratio(md: dict) -> float | None:
+    """현재 거래량 vs 평균 거래량 비율."""
+    cur = safe_float(md.get("volume"))
+    avg = safe_float(_md_get(md, "avg_volume_30d", "avg_volume_20d", "avg_volume"))
+    if cur is None or avg is None or avg <= 0:
+        return None
+    return cur / avg
+
+
 def _score_dislocation(meta: dict[str, Any], md: dict[str, Any]) -> dict | None:
     """Quality Dislocation 큐.
 
@@ -166,12 +202,12 @@ def _score_dislocation(meta: dict[str, Any], md: dict[str, Any]) -> dict | None:
     if not (0.20 <= dd_pct <= 0.45):
         return None
 
-    ret_1y = safe_float(md.get("return_1y"))
+    ret_1y = safe_float(_md_get(md, "1y_return", "return_1y"))
     if ret_1y is not None and ret_1y < -0.50:
         # value trap penalty — 너무 길게 빠진 것은 제외
         return None
 
-    rev_growth = safe_float(md.get("revenue_growth_yoy"))
+    rev_growth = safe_float(_md_get(md, "revenue_growth", "revenue_growth_yoy"))
     roe = safe_float(md.get("roe"))
 
     # 점수: dislocation 자체 강도 + quality proxy
@@ -214,8 +250,8 @@ def _score_earnings(meta: dict[str, Any], md: dict[str, Any]) -> dict | None:
         - 매출 성장률 가속 (rev_growth_yoy > 5%) 시 가산
     """
     ret_1d = safe_float(md.get("daily_return"))
-    ret_5d = safe_float(md.get("return_5d") or md.get("return_1w"))
-    vol_ratio = safe_float(md.get("volume_ratio_20d"))
+    ret_5d = safe_float(_md_get(md, "5d_return", "return_5d", "return_1w"))
+    vol_ratio = _vol_ratio(md)
 
     if ret_1d is None and ret_5d is None:
         return None
@@ -228,7 +264,7 @@ def _score_earnings(meta: dict[str, Any], md: dict[str, Any]) -> dict | None:
     if vol_ratio is None or vol_ratio < 1.5:
         return None
 
-    rev_growth = safe_float(md.get("revenue_growth_yoy"))
+    rev_growth = safe_float(_md_get(md, "revenue_growth", "revenue_growth_yoy"))
 
     # 점수: 움직임 강도 + 거래량 confirmation + 매출 성장 가속
     move_strength = 0.0
@@ -270,11 +306,11 @@ def _score_unusual_volume(meta: dict[str, Any], md: dict[str, Any]) -> dict | No
         - 시총 $500M~$20B 가중치 (mid-small cap 위주)
         - 5D 수익률 절대값 > 8%
     """
-    vol_ratio = safe_float(md.get("volume_ratio_20d"))
+    vol_ratio = _vol_ratio(md)
     if vol_ratio is None or vol_ratio < 3.0:
         return None
 
-    ret_5d = safe_float(md.get("return_5d") or md.get("return_1w"))
+    ret_5d = safe_float(_md_get(md, "5d_return", "return_5d", "return_1w"))
     if ret_5d is not None and abs(ret_5d) < 0.08:
         return None
 
@@ -325,9 +361,9 @@ def _score_civilization(meta: dict[str, Any], md: dict[str, Any]) -> dict | None
     if not label or theme_weight < 0.5:
         return None
 
-    ret_1m = safe_float(md.get("return_1m"))
-    ret_3m = safe_float(md.get("return_3m"))
-    rev_growth = safe_float(md.get("revenue_growth_yoy"))
+    ret_1m = safe_float(_md_get(md, "1m_return", "return_1m"))
+    ret_3m = safe_float(_md_get(md, "3m_return", "return_3m"))
+    rev_growth = safe_float(_md_get(md, "revenue_growth", "revenue_growth_yoy"))
     fcf_yield = safe_float(md.get("fcf_yield"))
 
     base = theme_weight * 50  # 25~50
