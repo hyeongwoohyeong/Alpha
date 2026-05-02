@@ -187,6 +187,71 @@ def _extract_numbers(text: str) -> list[str]:
     return [n.strip() for n in raw if len(n.strip()) >= 2 and not n.strip().isdigit() or len(n.strip()) >= 3][:5]
 
 
+def _shorten_pillar(pillar: str) -> str:
+    """긴 thesis pillar 문장을 자연스러운 단축 명사구로 압축.
+
+    예시
+    ----
+    'AI GPU/CUDA 생태계의 사실상 독점적 카테고리 리더십'
+        → 'AI GPU 카테고리 리더십'
+    'Hyperscaler capex 사이클의 가장 직접적 수혜'
+        → 'Hyperscaler capex 수혜'
+    'AI 학습용 HBM 수요의 직접 수혜 카테고리 리더'
+        → 'HBM 수요 수혜'
+    """
+    if not pillar:
+        return ""
+    text = pillar.strip()
+
+    # 1) 흔한 수식어/부사 제거 (의미 손실 거의 없음)
+    fillers = [
+        "사실상의 ", "사실상 ",
+        "가장 직접적인 ", "가장 직접적 ", "직접적인 ", "직접적 ",
+        "가장 깊은 곳의 ", "가장 깊은 ", "가장 ",
+        "전반적인 ", "전반적 ",
+        "구조적인 ", "구조적 ",
+        "잠재적인 ", "잠재적 ",
+        "근본적인 ", "근본적 ",
+        "본질적인 ", "본질적 ",
+        "장기적인 ", "장기적 ",
+        "단기적인 ", "단기적 ",
+        "독점적인 ", "독점적 ",
+        "지배적인 ", "지배적 ",
+        "압도적인 ", "압도적 ",
+        "안정적인 ", "안정적 ",
+        "지속적인 ", "지속적 ",
+        "최대 ",
+    ]
+    for f in fillers:
+        text = text.replace(f, "")
+
+    # 2) "~의" 로 이어지는 길게 늘어진 형태는 마지막 절만 남기는 편이 자연스럽다
+    #    단, 의미 핵심이 앞에 있을 수 있어 너무 길 때만 적용.
+    if len(text) > 22 and "의 " in text:
+        # 마지막 "의 " 기준으로 잘라 뒤쪽 명사구를 채택
+        head, tail = text.rsplit("의 ", 1)
+        # 앞부분에서 가장 핵심적인 명사 1개 정도는 살린다
+        head_tokens = head.split()
+        if head_tokens:
+            keep = " ".join(head_tokens[:2])  # 앞 1~2 토큰만 유지
+            candidate = f"{keep} {tail}"
+        else:
+            candidate = tail
+        text = candidate.strip()
+
+    # 3) 끝의 군더더기 제거
+    text = text.rstrip(",.·- ")
+
+    # 4) 그래도 너무 길면 ~30자에서 단어 경계로 자름 (말줄임 없이)
+    if len(text) > 32:
+        cut = text[:32]
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        text = cut.rstrip(",.·- ")
+
+    return text.strip()
+
+
 def _is_title_redundant(title: str, summary: str) -> bool:
     """summary 가 title 거의 반복인지 (정보 가치 거의 없는 케이스)."""
     if not summary or not title:
@@ -318,62 +383,114 @@ def _summarize_rule_based(
         confidence = "Low"
 
     pillars = _curated_thesis_pillars(ticker) if ticker else []
+    # 본문이 부족하면 제목에서도 숫자 추출
     numbers = _extract_numbers(summary) if has_real_body else []
+    if not numbers:
+        numbers = _extract_numbers(title)
 
     # ── summary: 한 줄 한국어 ──────────────────────────────────────────
     summary_short = _build_summary_one_liner(
         title, summary, topic_label, headline_phrase, numbers, has_real_body
     )
 
-    # ── key_points: 사용자가 모를만한 인사이트 (불릿 3~5개) ───────────────
+    # ── key_points: 사용자가 모를만한 인사이트 (자연스러운 한국어 문장) ────
+    # 원칙:
+    # - 불릿 기호 / 접두사 제거 (UI 에서 줄바꿈만으로 분리)
+    # - "본문 발췌 부족" / "자동 분류 신뢰도" 같은 메타 안내 제거
+    # - 큐레이션 인용은 자연스럽게 풀어쓰기
+    # - 사용자가 기사 안 눌러도 투자 판단에 도움이 되는 문장
     key_points: list[str] = []
 
-    # 1. thesis pillar 연결 (가장 중요한 인사이트)
-    if pillars and impact in ("Thesis 강화", "Thesis 약화", "리스크 해소", "신규 리스크"):
-        primary = pillars[0]
-        direction = {
-            "Thesis 강화": "강화 가능성",
-            "Thesis 약화": "약화 가능성",
-            "리스크 해소": "기존 리스크 해소",
-            "신규 리스크": "신규 리스크 부각",
-        }[impact]
-        key_points.append(
-            f"투자 논리 \"{primary}\" 관점에서 {direction}"
-        )
-    elif pillars:
-        key_points.append(
-            f"종목의 핵심 thesis: \"{pillars[0]}\" — 이 뉴스가 직접 영향을 주는지 확인 필요"
-        )
+    pillar_short = _shorten_pillar(pillars[0]) if pillars else ""
 
-    # 2. 핵심 숫자
-    if numbers:
-        key_points.append(f"기사에 언급된 핵심 숫자: {', '.join(numbers[:3])}")
+    # 1) impact 별 핵심 인사이트 한 문장
+    if impact == "Thesis 강화":
+        if pillar_short:
+            key_points.append(
+                f"이 보도는 {pillar_short} 흐름을 강화할 수 있는 신호로 해석될 여지가 있습니다."
+            )
+        if numbers:
+            key_points.append(
+                f"기사에서 거론된 핵심 숫자는 {numbers[0]}이며, "
+                "이 흐름이 매출·마진으로 이어지는 시점이 주요 변수입니다."
+            )
+    elif impact == "Thesis 약화":
+        if pillar_short:
+            key_points.append(
+                f"이 보도는 {pillar_short} 논리에 일부 의문을 제기하는 신호로, "
+                "구조적 훼손인지 단기 이벤트인지 분리해서 볼 필요가 있습니다."
+            )
+        if numbers:
+            key_points.append(
+                f"기사에서 거론된 핵심 숫자는 {numbers[0]}으로, "
+                "이 수치의 영속성과 가이던스 변화 여부가 핵심 변수입니다."
+            )
+    elif impact == "리스크 해소":
+        key_points.append(
+            "기존에 부각되던 단기 리스크가 해소되는 흐름으로, "
+            "투자 초점이 본업 실적과 가이던스로 다시 이동할 가능성이 있습니다."
+        )
+        if pillar_short:
+            key_points.append(
+                f"리스크 해소 이후에는 {pillar_short} 가 다시 핵심 변수가 됩니다."
+            )
+    elif impact == "신규 리스크":
+        if pillar_short:
+            key_points.append(
+                f"이 보도는 {pillar_short} 흐름에 새로운 부담을 더할 수 있는 신호로, "
+                "anti-thesis 점검이 우선되는 단계입니다."
+            )
+        else:
+            key_points.append(
+                "이 보도는 새로운 리스크 신호로 해석될 여지가 있어 anti-thesis 점검이 우선됩니다."
+            )
+        if numbers:
+            key_points.append(
+                f"기사에서 거론된 핵심 숫자는 {numbers[0]}이며, "
+                "이 수치가 향후 마진과 가이던스에 미치는 영향이 핵심 변수입니다."
+            )
+    elif impact == "단기 노이즈":
+        key_points.append(
+            "장기 thesis 에 미치는 영향은 제한적이며, 단기 sentiment 측면의 보도로 해석됩니다."
+        )
+    else:
+        # 확인 필요 — pillar 만 가볍게 언급
+        if pillar_short:
+            key_points.append(
+                f"이 보도가 {pillar_short} 흐름에 영향을 주는지가 핵심 점검 포인트입니다."
+            )
+        elif numbers:
+            key_points.append(
+                f"기사에서 거론된 핵심 숫자는 {numbers[0]}이며, 그 의미를 후속 자료로 확인할 필요가 있습니다."
+            )
 
-    # 3. 이벤트 상태가 종료/완료/무산이면 강조 (사용자가 헷갈리기 쉬움)
+    # 2) 이벤트 상태가 종료/완료/무산일 때만 한 줄 (사용자가 헷갈리기 쉬움)
     if status in ("종료", "완료", "무산"):
-        key_points.append(f"이벤트 상태: {status} — 진행 중 이벤트 아님 (재해석 필요)")
-    elif status == "진행 중" and impact != "확인 필요":
-        key_points.append(f"이벤트 진행 중 — 후속 보도와 회사 가이던스 변화가 핵심 catalyst")
-
-    # 4. 추가 thesis pillar 연결 (있으면)
-    if len(pillars) >= 2 and impact in ("Thesis 강화", "Thesis 약화"):
-        key_points.append(f"부차적 영향 가능 thesis: \"{pillars[1]}\"")
-
-    # 5. urgent 신호
-    if urgent:
         key_points.append(
-            "anti-thesis 키워드 포함 — 회계/조사/소송/dilution 등 risk 키워드 감지"
+            f"이 사안은 이미 {status}된 이벤트로, 진행 중 사안으로 오해하지 않도록 주의가 필요합니다."
         )
 
-    # 본문 부족 시
-    if not has_real_body:
-        key_points.append("본문 발췌 부족 — 자동 분류 신뢰도 제한적, 원문 직접 확인 권장")
+    # 3) urgent 강조
+    if urgent and not any("anti-thesis" in k for k in key_points):
+        key_points.append(
+            "회계 / 조사 / 소송 등 risk 키워드가 포함된 보도로, 보도 사실관계와 후속 출처 확인이 필요합니다."
+        )
 
+    # 4) 항목이 너무 적으면 1개라도 보장
     if not key_points:
-        key_points.append(f"이 기사의 thesis 영향은 자동 분류상 \"{impact}\"")
+        if pillar_short:
+            key_points.append(
+                f"이 보도가 {pillar_short} 흐름에 영향을 주는지가 핵심 점검 포인트입니다."
+            )
+        else:
+            key_points.append(
+                "이 보도의 투자적 의미는 후속 보도와 회사 가이던스 변화로 확인할 단계입니다."
+            )
+
+    # 메타 안내 제거: "본문 발췌 부족", "자동 분류 신뢰도", "원문 직접 확인" 등은 모두 제외
 
     # ── investment_implication: 1 문장 ─────────────────────────────────
-    implication = _short_implication(impact, pillars[0] if pillars else "")
+    implication = _short_implication(impact, pillar_short)
 
     return {
         "detailed_summary_ko": summary_short,

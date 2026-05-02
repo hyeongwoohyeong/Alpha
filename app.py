@@ -664,10 +664,14 @@ CUSTOM_CSS = """
         overflow-wrap: break-word;
         min-width: 0;
     }
-    .para-row.kpts-row .bullet {
-        padding: 4px 0;
+    .para-row.kpts-row .kpts-line {
+        padding: 5px 0;
         font-size: 15px;
-        line-height: 1.7;
+        line-height: 1.75;
+        color: #1F2937;
+    }
+    .para-row.kpts-row .kpts-line + .kpts-line {
+        border-top: 1px dashed var(--line);
     }
     @media (max-width: 640px) {
         .para-row.kpts-row {
@@ -2617,14 +2621,15 @@ def render_stock_detail():
             }.get(cls_label_safe, "needs-check")
 
             # 핵심 포인트 (DB에 있으면 표시) — 카드 안 메인 콘텐츠
+            # 불릿 마커 없이 자연스러운 한국어 문장 줄바꿈으로만 표시
             kpts = n.get("key_points_ko") or []
             kpts_html = ""
             if kpts:
                 items = "".join(
-                    f'<div class="bullet"><span class="bullet-num">·</span><span>{p}</span></div>'
+                    f'<div class="kpts-line">{p}</div>'
                     for p in kpts[:5]
                 )
-                # 라벨 + 불릿 리스트는 grid 2열로 정렬 (kpts-row)
+                # 라벨 + 줄단위 본문은 grid 2열로 정렬 (kpts-row)
                 kpts_html = (
                     '<div class="para-row kpts-row">'
                     '<div class="para-label">Key points</div>'
