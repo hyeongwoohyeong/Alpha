@@ -835,8 +835,48 @@ def risk_grade(row: dict[str, Any]) -> str:
 
 def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
     from .earnings_quality import build_earnings_quality, build_strategic_lens
+    from .alpha_score import calculate_alpha_score, reconcile_with_action_tag
+    from .bottleneck import build_bottleneck_thesis
     md = row["market_data"]
     sc = row["scores"]
+
+    # Earnings Quality / Bottleneck — Alpha Score 가 입력으로 사용
+    eq_data = build_earnings_quality(row["ticker"], row)
+
+    # Bottleneck Thesis — meta (sector / industry / name) 보강
+    bn_meta = {
+        "ticker": row["ticker"],
+        "name": row.get("name_en") or row.get("name_ko") or "",
+        "sector": row.get("sector"),
+        "industry": row.get("industry"),
+    }
+    if not (bn_meta["sector"] or bn_meta["industry"]):
+        try:
+            from .universe import load_wide_universe
+            for u in load_wide_universe():
+                if (u.get("ticker") or "").upper() == row["ticker"].upper():
+                    bn_meta["sector"] = u.get("sector")
+                    bn_meta["industry"] = u.get("industry")
+                    bn_meta["name"] = bn_meta["name"] or u.get("name") or ""
+                    break
+        except Exception:
+            pass
+    bn_thesis = build_bottleneck_thesis(row["ticker"], bn_meta, md)
+
+    # Alpha Score 계산 + Action Tag 일관성 보정
+    alpha_result = calculate_alpha_score(
+        ticker=row["ticker"],
+        market_data=md,
+        scores=sc,
+        earnings_quality=eq_data,
+        bottleneck_thesis=bn_thesis,
+        news_agg=row.get("news_agg"),
+    )
+    too_crowded = row.get("action_tag") == "Too Crowded"
+    alpha_result = reconcile_with_action_tag(
+        alpha_result, row.get("action_tag"), too_crowded=too_crowded,
+    )
+
     return {
         "name_kr": display_name(row.get("name_ko", ""), row["ticker"]),
         "ticker": row["ticker"],
@@ -861,8 +901,10 @@ def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
         "anti_thesis": anti_thesis(row),
         "final_judgment": final_judgment(row),
         "research_quality": research_quality(row),
-        "earnings_quality": build_earnings_quality(row["ticker"], row),
+        "earnings_quality": eq_data,
         "strategic_lens": build_strategic_lens(row["ticker"]),
+        "bottleneck_thesis": bn_thesis,
+        "alpha_score": alpha_result,
         # 하위 호환 (UI에서 더 이상 사용하지 않지만 다른 코드가 참조 가능)
         "scenarios": scenarios(row),
         "lens_views": lens_views(row),

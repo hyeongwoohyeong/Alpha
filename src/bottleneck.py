@@ -38,17 +38,22 @@ BOTTLENECK_THEMES: list[tuple[str, float, list[tuple[str, float, list[str]]]]] =
         "AI / 데이터센터 인프라", 0.95,
         [
             ("HBM / Memory 공급", 0.95,
-             ["memory", "dram", "hbm", "nand", "storage"]),
+             ["memory", "dram", "hbm", "nand", "storage", "메모리"]),
             ("Advanced Packaging / 반도체 장비", 0.95,
-             ["semiconductor equipment", "packaging", "wafer", "lithography", "etch", "deposition"]),
+             ["semiconductor equipment", "packaging", "wafer", "lithography",
+              "etch", "deposition", "패키징"]),
             ("Optical Interconnect / 고속 연결", 0.90,
-             ["optical", "interconnect", "fiber", "transceiver", "photonics"]),
+             ["optical", "interconnect", "fiber", "transceiver", "photonics",
+              "광통신", "광 인터커넥트", "aec", "active electrical cable"]),
             ("Networking / Ethernet", 0.85,
-             ["communication equipment", "networking", "ethernet", "switch", "router"]),
+             ["communication equipment", "networking", "ethernet", "switch",
+              "router", "네트워킹", "이더넷"]),
             ("데이터센터 전력 / 냉각", 0.95,
-             ["electrical equipment", "specialty industrial", "thermal", "cooling", "power management"]),
+             ["electrical equipment", "specialty industrial", "thermal",
+              "cooling", "power management", "데이터센터", "냉각", "액침"]),
             ("Power Semiconductor", 0.85,
-             ["power semiconductor", "wide bandgap", "silicon carbide", "gallium nitride"]),
+             ["power semiconductor", "wide bandgap", "silicon carbide",
+              "gallium nitride", "전력 반도체"]),
         ],
     ),
     # ── Space / Aerospace ────────────────────────────────────────────────
@@ -150,16 +155,32 @@ BOTTLENECK_THEMES: list[tuple[str, float, list[tuple[str, float, list[str]]]]] =
 # ---------------------------------------------------------------------------
 
 def identify_bottleneck_themes(meta: dict[str, Any]) -> list[dict[str, Any]]:
-    """wide_universe meta (sector / industry / name) 에서 bottleneck 테마 / 위치 매칭.
+    """wide_universe meta (sector / industry / name) + 큐레이션 thesis_pillars 에서
+    bottleneck 테마 / 위치 매칭.
 
     Returns: [{theme, position, criticality, tailwind, matched_keywords}, ...]
     같은 종목이 여러 테마에 걸리면 모두 반환 — caller 가 가장 강한 매칭만 사용.
+
+    개선: industry 텍스트만으로는 MU (Semiconductors → memory 키워드 미매칭) 같은
+    종목이 잡히지 않는 한계가 있어, curated.thesis_pillars 텍스트도 매칭 소스로 사용.
     """
-    text = " ".join([
-        (meta.get("sector") or "").lower(),
-        (meta.get("industry") or "").lower(),
-        (meta.get("name") or "").lower(),
-    ])
+    text_parts: list[str] = [
+        (meta.get("sector") or ""),
+        (meta.get("industry") or ""),
+        (meta.get("name") or ""),
+    ]
+    # 큐레이션 thesis_pillars 텍스트도 매칭 보강 (Korean / English 모두 포함)
+    ticker = (meta.get("ticker") or "").upper()
+    if ticker:
+        try:
+            from .curated import thesis_pillars as _curated_pillars
+            pillars = _curated_pillars(ticker)
+            if pillars:
+                text_parts.extend(pillars)
+        except Exception:
+            pass
+
+    text = " ".join(p for p in text_parts if p).lower()
     if not text.strip():
         return []
 

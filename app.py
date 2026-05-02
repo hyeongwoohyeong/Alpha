@@ -707,6 +707,81 @@ CUSTOM_CSS = """
         line-height: 1.6;
         margin-bottom: 14px;
     }
+    /* ───────── Alpha Score 카드 ───────── */
+    .alpha-score-card {
+        background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin-bottom: 14px;
+    }
+    .alpha-score-header {
+        display: flex; justify-content: space-between; align-items: baseline;
+        gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .alpha-score-eyebrow {
+        font-size: 13px; font-weight: 700; color: var(--navy);
+        letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .alpha-score-eyebrow-sub {
+        font-size: 12px; color: var(--muted); font-weight: 400; text-transform: none;
+    }
+    .alpha-score-confidence {
+        font-size: 12px; font-weight: 600;
+    }
+    .alpha-score-main {
+        display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+        margin-top: 8px; margin-bottom: 12px;
+    }
+    .alpha-score-value {
+        font-size: 48px; font-weight: 800; line-height: 1;
+    }
+    .alpha-score-denom {
+        font-size: 18px; color: var(--muted); font-weight: 500; margin-left: 4px;
+    }
+    .alpha-score-rating {
+        font-size: 18px; font-weight: 700;
+    }
+    .alpha-score-rating-ko {
+        font-size: 13px; color: var(--muted); font-weight: 500;
+    }
+    .alpha-score-interpretation {
+        font-size: 14px; color: #334155; line-height: 1.7;
+        word-break: keep-all; overflow-wrap: break-word;
+    }
+    /* 8 컴포넌트 horizontal bars */
+    .alpha-comp-grid {
+        display: grid; grid-template-columns: 1fr; gap: 6px;
+        background: #FFFFFF; border: 1px solid var(--line);
+        border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;
+    }
+    @media (min-width: 900px) {
+        .alpha-comp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; }
+    }
+    .alpha-comp-row {
+        display: grid;
+        grid-template-columns: minmax(140px, 1fr) minmax(80px, 2fr) 36px;
+        gap: 10px;
+        align-items: center;
+        padding: 4px 0;
+    }
+    .alpha-comp-label {
+        font-size: 13px; color: var(--text); font-weight: 600;
+    }
+    .alpha-comp-weight {
+        font-size: 11px; color: var(--muted); font-weight: 400;
+        margin-left: 4px;
+    }
+    .alpha-comp-bar-wrap {
+        background: var(--line); height: 8px; border-radius: 4px; overflow: hidden;
+    }
+    .alpha-comp-bar {
+        height: 100%; border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    .alpha-comp-value {
+        font-size: 13px; font-weight: 700; text-align: right;
+    }
     /* ───────── Earnings Quality 8 차원 grid ───────── */
     .eq-grid {
         display: grid;
@@ -1963,6 +2038,118 @@ def _tier_color(tier: str) -> str:
     return "#6B7280"
 
 
+def _alpha_score_color(score: float) -> str:
+    """Alpha Score 점수 → 색상 (네이비 강조 / 70 미만 회색)."""
+    if score >= 90:
+        return "#0F4C75"
+    if score >= 80:
+        return "#1B6FC0"
+    if score >= 70:
+        return "#3B82F6"
+    if score >= 60:
+        return "#6B7280"
+    return "#94A3B8"
+
+
+def render_alpha_score_section(alpha: dict | None):
+    """Alpha Score — 통합 투자 매력도 점수 (종목 상세 최상단)."""
+    if not alpha:
+        return
+
+    score = alpha.get("alpha_score", 50)
+    rating_en = alpha.get("alpha_rating_en", "Low Priority")
+    rating_ko = alpha.get("alpha_rating_ko", "")
+    confidence = alpha.get("data_confidence", "Medium")
+    is_provisional = alpha.get("is_provisional", False)
+    interpretation = alpha.get("interpretation", "")
+    components = alpha.get("components", {}) or {}
+
+    color = _alpha_score_color(score)
+
+    # 헤더 카드 — 점수 + 판정 + Data Confidence
+    confidence_chip_color = {
+        "High": "#1E40AF", "Medium": "#6B7280", "Low": "#B45309",
+    }.get(confidence, "#6B7280")
+
+    provisional_label = " · Provisional" if is_provisional else ""
+
+    st.markdown(
+        '<div class="alpha-score-card">'
+        '<div class="alpha-score-header">'
+        '<div class="alpha-score-eyebrow">Alpha Score'
+        '<span class="alpha-score-eyebrow-sub"> · 통합 투자 매력도</span>'
+        '</div>'
+        '<div class="alpha-score-confidence" style="color:' + confidence_chip_color + ';">'
+        f'Data Confidence: {confidence}{provisional_label}'
+        "</div>"
+        "</div>"
+        '<div class="alpha-score-main">'
+        f'<div class="alpha-score-value" style="color:{color};">{score:.0f}'
+        '<span class="alpha-score-denom">/ 100</span></div>'
+        f'<div class="alpha-score-rating" style="color:{color};">{rating_en}</div>'
+        f'<div class="alpha-score-rating-ko">{rating_ko}</div>'
+        "</div>"
+        f'<div class="alpha-score-interpretation">{interpretation}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 8 컴포넌트 breakdown — horizontal bars
+    label_map_en = {
+        "thesis_strength": "Thesis Strength",
+        "earnings_quality": "Earnings Quality",
+        "moat_lockin": "Moat / Lock-in",
+        "price_opportunity": "Price Opportunity",
+        "event_catalyst": "Event / Catalyst",
+        "industry_bottleneck": "Industry / Bottleneck",
+        "financial_quality": "Financial Quality",
+        "risk_control": "Risk Control",
+    }
+    weight_map = {
+        "thesis_strength": 15, "earnings_quality": 15, "moat_lockin": 15,
+        "price_opportunity": 15, "event_catalyst": 10, "industry_bottleneck": 10,
+        "financial_quality": 10, "risk_control": 10,
+    }
+
+    bar_html = []
+    for key, label in label_map_en.items():
+        v = float(components.get(key, 50))
+        bar_color = _alpha_score_color(v)
+        weight = weight_map.get(key, 10)
+        bar_html.append(
+            f'<div class="alpha-comp-row">'
+            f'<div class="alpha-comp-label">{label}'
+            f'<span class="alpha-comp-weight">{weight}%</span></div>'
+            f'<div class="alpha-comp-bar-wrap">'
+            f'<div class="alpha-comp-bar" style="width:{v:.0f}%; background:{bar_color};"></div>'
+            "</div>"
+            f'<div class="alpha-comp-value" style="color:{bar_color};">{v:.0f}</div>'
+            "</div>"
+        )
+    st.markdown(
+        '<div class="alpha-comp-grid">' + "".join(bar_html) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 점수 가이드 expander
+    with st.expander("Alpha Score 판정 기준 보기", expanded=False):
+        st.markdown(
+            "**95~100** Exceptional Candidate — 최우선 정밀 검토 후보\n\n"
+            "**90~94** High Conviction Candidate — 강한 비중 후보로 검토 가능\n\n"
+            "**80~89** Research Now — 적극 리서치 후보\n\n"
+            "**70~79** Watchlist / Wait for Better Entry — 관찰 / 진입 시점 대기\n\n"
+            "**60~69** Need Thesis Check — Thesis 검증 필요\n\n"
+            "**50~59** Low Priority — 현재 우선순위 낮음\n\n"
+            "**0~49** Avoid / Not Enough Evidence — 회피 또는 근거 부족\n\n"
+            "---\n\n"
+            "Alpha Score 는 **자동 매수 추천** 이 아니라 Alpha 로직상 리서치 우선순위와 "
+            "투자 매력도를 정량화한 보조 지표입니다. 95점 이상도 \"무조건 매수\"가 아닌 "
+            "\"최우선 정밀 검토\" 의미이며, 실제 매수 전 valuation / 포지션 사이징 / "
+            "리스크 체크가 필요합니다."
+        )
+    st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
+
+
 def render_earnings_quality_section(eq: dict | None):
     """Earnings Quality & Moat Assessment 카드 그리드."""
     if not eq:
@@ -2413,6 +2600,9 @@ def render_stock_detail():
             "</div>",
             unsafe_allow_html=True,
         )
+
+    # ================== Alpha Score (통합 투자 매력도) ==================
+    render_alpha_score_section(detail.get("alpha_score"))
 
     # 이 회사는 쉽게 말해
     st.markdown(

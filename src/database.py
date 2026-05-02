@@ -320,6 +320,10 @@ def init_schema(conn: sqlite3.Connection) -> None:
         # stock_research — Earnings Quality / Moat / Strategic Lens
         "ALTER TABLE stock_research ADD COLUMN earnings_quality_json TEXT",
         "ALTER TABLE stock_research ADD COLUMN strategic_lens_json TEXT",
+        # stock_research — Alpha Score 통합 점수
+        "ALTER TABLE stock_research ADD COLUMN alpha_score_json TEXT",
+        # stock_research — Bottleneck Thesis (해당 종목만)
+        "ALTER TABLE stock_research ADD COLUMN bottleneck_thesis_json TEXT",
     )
     for s in _ALTER_STATEMENTS:
         try:
@@ -868,8 +872,9 @@ def upsert_stock_research(
         INSERT INTO stock_research (run_id, date, ticker, easy_explanation, core_thesis,
                                     key_points, key_risks, check_items, anti_thesis,
                                     final_view, research_quality_json, created_at,
-                                    earnings_quality_json, strategic_lens_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    earnings_quality_json, strategic_lens_json,
+                                    alpha_score_json, bottleneck_thesis_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(date, ticker) DO UPDATE SET
             run_id=excluded.run_id,
             easy_explanation=excluded.easy_explanation,
@@ -882,7 +887,9 @@ def upsert_stock_research(
             research_quality_json=excluded.research_quality_json,
             created_at=excluded.created_at,
             earnings_quality_json=excluded.earnings_quality_json,
-            strategic_lens_json=excluded.strategic_lens_json
+            strategic_lens_json=excluded.strategic_lens_json,
+            alpha_score_json=excluded.alpha_score_json,
+            bottleneck_thesis_json=excluded.bottleneck_thesis_json
         """,
         (
             run_id, date_iso, ticker,
@@ -897,6 +904,8 @@ def upsert_stock_research(
             now_iso(),
             dump_json(research.get("earnings_quality")),
             dump_json(research.get("strategic_lens")),
+            dump_json(research.get("alpha_score")),
+            dump_json(research.get("bottleneck_thesis")),
         ),
     )
 

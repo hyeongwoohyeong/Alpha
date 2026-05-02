@@ -118,6 +118,31 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
     # 10. strategic_lens (SWOT / PESTEL / 3C / 3P)
     lens = build_strategic_lens(ticker)
 
+    # 11. bottleneck_thesis (해당 종목만)
+    from .bottleneck import build_bottleneck_thesis
+    bn_meta = {
+        "ticker": ticker,
+        "name": row.get("name_en") or row.get("name_ko") or "",
+        "sector": row.get("sector"),
+        "industry": row.get("industry"),
+    }
+    bn_thesis = build_bottleneck_thesis(ticker, bn_meta, row.get("market_data") or {})
+
+    # 12. alpha_score (8 컴포넌트 통합)
+    from .alpha_score import calculate_alpha_score, reconcile_with_action_tag
+    alpha_result = calculate_alpha_score(
+        ticker=ticker,
+        market_data=row.get("market_data"),
+        scores=row.get("scores"),
+        earnings_quality=eq,
+        bottleneck_thesis=bn_thesis,
+        news_agg=row.get("news_agg"),
+    )
+    too_crowded = row.get("action_tag") == "Too Crowded"
+    alpha_result = reconcile_with_action_tag(
+        alpha_result, row.get("action_tag"), too_crowded=too_crowded,
+    )
+
     return {
         "easy_explanation": easy,
         "core_thesis": core,
@@ -129,6 +154,8 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
         "research_quality": rq,
         "earnings_quality": eq,
         "strategic_lens": lens,
+        "bottleneck_thesis": bn_thesis,
+        "alpha_score": alpha_result,
     }
 
 
