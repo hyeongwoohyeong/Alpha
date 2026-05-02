@@ -707,6 +707,25 @@ CUSTOM_CSS = """
         line-height: 1.6;
         margin-bottom: 14px;
     }
+    /* ───────── Pick Card 의 Alpha Score 배지 (Action Tag 왼쪽) ───────── */
+    .pick-head-right {
+        display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+    }
+    .pick-alpha-badge {
+        display: inline-flex; align-items: baseline; gap: 4px;
+        padding: 4px 10px;
+        border: 1.5px solid var(--line-strong);
+        border-radius: 6px;
+        background: #FFFFFF;
+        line-height: 1;
+    }
+    .pick-alpha-label {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+        text-transform: uppercase; color: inherit; opacity: 0.85;
+    }
+    .pick-alpha-score {
+        font-size: 16px; font-weight: 800;
+    }
     /* ───────── Alpha Score 카드 ───────── */
     .alpha-score-card {
         background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
@@ -2347,6 +2366,36 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
     inv_type = investment_type(row)
     tag = row.get("action_tag", "Watchlist")
 
+    # Alpha Score 배지 — Action Tag 왼쪽에 표시 (사용자 요청)
+    alpha_badge_html = ""
+    try:
+        from src.alpha_score import calculate_alpha_score, reconcile_with_action_tag
+        from src.earnings_quality import build_earnings_quality
+        from src.bottleneck import build_bottleneck_thesis
+        _eq = build_earnings_quality(row["ticker"], row)
+        _bn_meta = {
+            "ticker": row["ticker"],
+            "name": row.get("name_en") or row.get("name_ko") or "",
+            "sector": row.get("sector"),
+            "industry": row.get("industry"),
+        }
+        _bn = build_bottleneck_thesis(row["ticker"], _bn_meta, md)
+        _alpha = calculate_alpha_score(
+            ticker=row["ticker"], market_data=md, scores=row.get("scores"),
+            earnings_quality=_eq, bottleneck_thesis=_bn, news_agg=row.get("news_agg"),
+        )
+        _alpha = reconcile_with_action_tag(_alpha, tag, too_crowded=(tag == "Too Crowded"))
+        _score = _alpha.get("alpha_score", 0)
+        _color = _alpha_score_color(_score)
+        alpha_badge_html = (
+            f'<div class="pick-alpha-badge" style="border-color:{_color}; color:{_color};">'
+            f'<span class="pick-alpha-label">Alpha</span>'
+            f'<span class="pick-alpha-score">{_score:.0f}</span>'
+            "</div>"
+        )
+    except Exception:
+        pass
+
     html = f"""
     <div class="pick">
       <div class="pick-head">
@@ -2354,7 +2403,10 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
           <div class="pick-name">{name}</div>
           <div class="pick-type">{inv_type}</div>
         </div>
-        {render_tag(tag)}
+        <div class="pick-head-right">
+          {alpha_badge_html}
+          {render_tag(tag)}
+        </div>
       </div>
       <div class="pick-divider"></div>
 
