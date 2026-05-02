@@ -289,6 +289,17 @@ def thesis_impact_from(
         return "확인 필요"
     if event_status == "무산":
         return "리스크 해소" if importance_score < 0 else "확인 필요"
+    # "확인 필요" / 그 외: importance_score 만으로도 분류 가능
+    if is_urgent:
+        return "신규 리스크"
+    if importance_score >= 1.5:
+        return "Thesis 강화"
+    if importance_score <= -1.5:
+        return "Thesis 약화"
+    if importance_score >= 0.7:
+        return "Thesis 강화"
+    if importance_score <= -0.7:
+        return "Thesis 약화"
     return "확인 필요"
 
 

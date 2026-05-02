@@ -2501,6 +2501,27 @@ def render_stock_detail():
                         n["thesis_impact_ko"] = row_db["thesis_impact_ko"]
                     if row_db["confidence_level_ko"]:
                         n["confidence_level_ko"] = row_db["confidence_level_ko"]
+                    try:
+                        if row_db["key_points_ko"]:
+                            n["key_points_ko"] = db.load_json(row_db["key_points_ko"], default=[])
+                    except Exception:
+                        pass
+
+            # DB에 요약이 없는 뉴스는 즉석에서 한 번 요약 (UI 첫 진입에서도 자연스럽게)
+            from src.news_summarizer import summarize_news_to_korean
+            stock_ctx = {
+                "ticker": row["ticker"],
+                "name_ko": row.get("name_ko"),
+                "theme": row.get("theme"),
+                "category": row.get("category"),
+            }
+            for n in news_items:
+                if not n.get("detailed_summary_ko"):
+                    try:
+                        s = summarize_news_to_korean(n, stock_context=stock_ctx)
+                        n.update(s)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -2510,16 +2531,8 @@ def render_stock_detail():
             unsafe_allow_html=True,
         )
     else:
-        # 펼치기 상태는 session_state 로 관리 (종목별)
-        expand_key = f"news_expanded::{row['ticker']}"
-        if expand_key not in st.session_state:
-            st.session_state[expand_key] = set()
-        expanded: set = st.session_state[expand_key]
-
-        for i, n in enumerate(news_items):
-            cls_key = (n.get("thesis_impact") or n.get("thesis_impact_ko") or "needs_check")
-            cls_key = cls_key.replace("_", "-").replace(" ", "-")
-            cls_label = n.get("thesis_impact_label") or n.get("thesis_impact_ko") or "확인 필요"
+        for n in news_items:
+            cls_label = n.get("thesis_impact_ko") or n.get("thesis_impact_label") or "확인 필요"
             link = n.get("link") or ""
             title = n.get("title") or "(제목 없음)"
             title_html = (
@@ -2530,24 +2543,25 @@ def render_stock_detail():
             source = n.get("source") or "출처 확인 필요"
             published = n.get("published_at") or "날짜 확인 필요"
 
-            detailed_ko = n.get("detailed_summary_ko") or n.get("summary") or "요약 정보가 제공되지 않습니다."
-            implication = n.get("investment_implication_ko") or n.get("investment_implication") or "추가 정밀 검토 필요"
-            confidence = n.get("confidence_level_ko") or n.get("confidence_level") or n.get("confidence") or "Low"
-
-            nid = n.get("news_id") or f"news_{row['ticker']}_{i}"
-            is_expanded = nid in expanded
-
-            # 카드 표시 (펼침 여부에 따라 detail 길이 조정)
-            if is_expanded:
-                detail_html = detailed_ko
-            else:
-                # 짧게 (앞 200자)
-                detail_html = (
-                    detailed_ko[:200] + ("…" if len(detailed_ko) > 200 else "")
-                )
+            detailed_ko = (
+                n.get("detailed_summary_ko")
+                or n.get("summary")
+                or "요약 정보가 제공되지 않습니다."
+            )
+            implication = (
+                n.get("investment_implication_ko")
+                or n.get("investment_implication")
+                or "추가 정밀 검토 필요"
+            )
+            confidence = (
+                n.get("confidence_level_ko")
+                or n.get("confidence_level")
+                or n.get("confidence")
+                or "Low"
+            )
 
             link_btn = (
-                f'<a class="news-link" href="{link}" target="_blank" rel="noopener noreferrer">기사 보기 →</a>'
+                f'<a class="news-link" href="{link}" target="_blank" rel="noopener noreferrer">기사 원문 보기 →</a>'
                 if link
                 else '<span class="news-link" style="opacity:0.5;">링크 확인 필요</span>'
             )
@@ -2566,6 +2580,21 @@ def render_stock_detail():
                 "확인 필요": "needs-check",
             }.get(cls_label_safe, "needs-check")
 
+            # 핵심 포인트 (DB에 있으면 표시) — 카드 안 메인 콘텐츠
+            kpts = n.get("key_points_ko") or []
+            kpts_html = ""
+            if kpts:
+                items = "".join(
+                    f'<div class="bullet"><span class="bullet-num">·</span><span>{p}</span></div>'
+                    for p in kpts[:5]
+                )
+                kpts_html = (
+                    '<div class="para-row" style="margin-top:8px;">'
+                    '<span class="para-label">Key points</span>'
+                    f'<span class="para-text">{items}</span>'
+                    "</div>"
+                )
+
             st.markdown(
                 '<div class="news-card">'
                 '<div class="news-head">'
@@ -2574,9 +2603,10 @@ def render_stock_detail():
                 "</div>"
                 f'<div class="news-meta">{source} · {published}{confidence_chip}</div>'
                 '<div class="para-row">'
-                '<span class="para-label">상세 요약</span>'
-                f'<span class="para-text">{detail_html}</span>'
+                '<span class="para-label">Summary</span>'
+                f'<span class="para-text">{detailed_ko}</span>'
                 "</div>"
+                f"{kpts_html}"
                 '<div class="para-row">'
                 '<span class="para-label">투자적 의미</span>'
                 f'<span class="para-text">{implication}</span>'
@@ -2585,22 +2615,6 @@ def render_stock_detail():
                 "</div>",
                 unsafe_allow_html=True,
             )
-            # 펼치기/접기 + 뉴스 상세 보기 버튼
-            btn_cols = st.columns([2, 2, 6])
-            with btn_cols[0]:
-                btn_label = "요약 접기" if is_expanded else "요약 펼치기"
-                if st.button(btn_label, key=f"news_toggle_{row['ticker']}_{i}",
-                             use_container_width=True):
-                    if is_expanded:
-                        expanded.discard(nid)
-                    else:
-                        expanded.add(nid)
-                    st.session_state[expand_key] = expanded
-                    st.rerun()
-            with btn_cols[1]:
-                if st.button("상세 보기", key=f"news_detail_{row['ticker']}_{i}",
-                             use_container_width=True):
-                    navigate_to("news_detail", ticker=row["ticker"], news_id=nid)
     st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
     # 리서치 품질 카드 (종합 판단 직전)
