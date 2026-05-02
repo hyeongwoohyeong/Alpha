@@ -58,10 +58,21 @@ jobs:
           git add data/alpha.db
           if git diff --staged --quiet; then
             echo "No DB changes to commit"
-          else
-            git commit -m "chore: daily research $(date -u +'%Y-%m-%d %H:%M UTC')"
-            git push
+            exit 0
           fi
+          git commit -m "chore: daily research $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # 사용자 / 동시 run 의 push 와 충돌 시 rebase 재시도 (최대 5회)
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "push success on try $i"
+              exit 0
+            fi
+            echo "push rejected, rebasing... (try $i)"
+            git pull --rebase origin main || true
+            sleep 2
+          done
+          echo "::warning::push 실패 — alpha.db 는 artifact 로 업로드되어 있습니다"
+          exit 0  # push 실패해도 워크플로우는 성공 처리 (데이터는 artifact 에 있음)
 
       - name: Upload DB artifact (백업)
         uses: actions/upload-artifact@v4
