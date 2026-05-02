@@ -986,6 +986,237 @@ def anti_thesis_specific(ticker: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# 종목별 핵심 논쟁 (Core Debate) — 종합 판단 / news_summarizer 등이 참조
+# 한 줄짜리 정수 — "이 종목의 매수 판단이 무엇으로 갈리는가"
+# ---------------------------------------------------------------------------
+
+CORE_DEBATE_KO: dict[str, str] = {
+    "NVDA": "AI 인프라 점유율 지속 vs. 고객 자체칩(ASIC) 확산 + 수출 규제",
+    "AVGO": "AI ASIC 신규 성장축의 매출 가시성 vs. VMware 통합 비용",
+    "AMD": "MI 시리즈 데이터센터 GPU 의 NVDA 대안 채택 가속 vs. 마진 압박",
+    "MU": "HBM 점유율 + 메모리 사이클 회복 vs. 재고 누적 재발",
+    "TSM": "AI 사이클 수혜 + 가격결정력 vs. 지정학 리스크",
+    "ANET": "AI 클러스터 ethernet 채택률 vs. NVDA InfiniBand 와의 경쟁",
+    "CRDO": "AEC 점유율 + 광통신 확장 vs. optical 빠른 대체",
+    "ALAB": "PCIe / CXL 표준 선도 우위 vs. 고객 집중도",
+    "CLS": "AI 서버 ODM 매출 가속 vs. EMS 정체성 한계",
+    "VRT": "데이터센터 전력 / 냉각 backlog vs. capex 사이클 둔화",
+    "ETN": "AI / 전기화 동시 수혜 vs. 산업 사이클 변동",
+    "CEG": "PPA 단가 상승 + AI 데이터센터 신규 수주 vs. 전력 도매가 변동",
+    "VST": "AI 신규 수요 가시성 vs. 천연가스 가격 변동",
+    "CCJ": "원전 회귀 + 우라늄 가격 상승 vs. 공급 측 변동",
+    "AXON": "Public Safety OS 전환 (소프트웨어 매출 비중) vs. 고밸류 부담",
+    "PLTR": "상업용 매출 가속 + AIP 채택 vs. 정부 의존도 + 고밸류",
+    "LMT": "F-35 수주 / 무기 현대화 vs. 예산 우선순위 변화",
+    "NOC": "B-21 양산 가시성 vs. 비용 / 일정 지연",
+    "RTX": "민항기 회복 + 방산 수주 vs. GTF 엔진 리콜 비용",
+    "HII": "함정 capacity 확장 사이클 vs. 인건비 / 자재비 부담",
+    "RKLB": "Neutron 개발 진척 vs. 발사 실패 / 현금 소진",
+    "LUNR": "NASA Artemis 수주 vs. 미션 실패 리스크",
+    "TMDX": "장기이식 OCS 채택 확대 vs. procedure 정체",
+    "ISRG": "다빈치 5 채택 + procedure 성장 vs. 고밸류 부담",
+    "NTRA": "Signatera 수가 수렴 vs. 검사 volume 정체",
+    "TMO": "본업 매출 회복 vs. 환율 / 코로나 base 효과 부재",
+    "DHR": "바이오프로세싱 수주 회복 vs. 재고 사이클 장기화",
+    "NFLX": (
+        "Warner Bros. M&A 리스크 해소 후 광고 요금제 / FCF 정상 궤도 복귀 vs. "
+        "콘텐츠 투자 효율 / churn"
+    ),
+    "META": (
+        "AI CAPEX 의 증분 ROIC — AI 투자가 광고 노출 수 / 단가 / ROI 개선으로 "
+        "회수되는가 vs. FCF 훼손과 multiple 압박"
+    ),
+    "AMZN": "AWS AI 가속 + retail margin 회복 vs. AI 투자 부담",
+    "MSFT": "Azure AI 매출 가속 vs. CAPEX 회수 속도",
+    "GOOGL": "Cloud 흑자 전환 + Gemini vs. 검색 광고 AI 잠식",
+    "SHOP": "GMV 성장 + Subscription 매출 vs. take-rate 압박",
+    "MELI": "라틴아메리카 e-commerce + 핀테크 가속 vs. 신용 사업 연체율",
+    "TSLA": "자동차 마진 회복 vs. Robotaxi / FSD / Optimus 옵션 가치 검증",
+    "PYPL": "Take-rate 안정화 + Branded checkout 회복 vs. Apple Pay 경쟁",
+    "UBER": "FCF 가속 + 광고 매출 비중 상승 vs. Robotaxi 사업 모델 변화",
+    "ABNB": "ADR 안정 + 신규 시장 vs. 단기임대 규제 강화",
+    "BKNG": "Take-rate 안정 + connected trip 확장 vs. 환율 / 경쟁",
+    "SPOT": "가격 인상 후 churn 안정 + 광고 매출 vs. 콘텐츠 투자 효율",
+    "SBUX": "신규 CEO operational reset + 미국 SSS 회복 vs. 중국 부진",
+    "DIS": "Disney+ OPM 개선 + 박스오피스 회복 vs. 콘텐츠 투자 효율",
+}
+
+
+def core_debate(ticker: str) -> str | None:
+    return CORE_DEBATE_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# 종목별 가치평가 컨텍스트 — Forward PER 등 multiple 해석을 종목별 논쟁과 연결
+# ---------------------------------------------------------------------------
+
+VALUATION_CONTEXT_KO: dict[str, str] = {
+    "META": (
+        "Meta 는 Forward PER 기준 대형 플랫폼 평균 대비 부담이 낮아 보일 수 있으나, "
+        "이는 AI CAPEX 확대에 따른 FCF 둔화와 증분 ROIC 불확실성이 반영된 결과로 해석할 수 "
+        "있습니다. 단순 저평가로 보기보다는, 광고 매출 성장과 FCF 방어가 확인될 경우 "
+        "multiple 회복 여지가 있는 Quality Dislocation 구간으로 보는 것이 적절합니다."
+    ),
+    "NFLX": (
+        "Netflix 는 글로벌 OTT 카테고리 리더로서 Forward PER 프리미엄이 형성돼 있습니다. "
+        "Warner Bros. 관련 M&A 리스크 해소 이후 multiple 의 핵심 변수는 광고 요금제 매출 "
+        "성장률과 FCF margin 확장입니다. 콘텐츠 투자비 대비 가입자 / 시청 효율이 유지된다면 "
+        "현재 multiple 이 정당화됩니다."
+    ),
+    "NVDA": (
+        "NVDA 는 데이터센터 매출 가속에 따라 Forward PER 가 빠르게 정상화되는 구간입니다. "
+        "Multiple 부담보다는 'AI 사이클이 몇 분기 더 갈 수 있는가' 와 '자체칩 잠식 속도' 가 "
+        "valuation 의 핵심 변수입니다."
+    ),
+    "AXON": (
+        "Axon 은 소프트웨어 전환 thesis 에 의해 SaaS 멀티플이 부여되는 구간으로, EV/Revenue "
+        "기준 부담이 큽니다. 소프트웨어 매출 비중과 Net retention 이 multiple 정당화의 핵심 "
+        "변수이며, 하드웨어 매출 둔화가 동반되면 derating 위험이 커집니다."
+    ),
+    "CRDO": (
+        "Credo 는 AI 인터커넥트 카테고리 진입 구간으로, EV/Revenue 기준 high growth multiple "
+        "이 부여돼 있습니다. AEC + 광통신 매출 가속이 확인되면 multiple 정당화가 가능하나, "
+        "고객 집중도가 높아 발주 변동성이 valuation 의 핵심 변수입니다."
+    ),
+    "PLTR": (
+        "Palantir 는 정부 + AIP 결합 가속에 SaaS / AI 멀티플이 동시 적용되는 구조로, "
+        "Forward EV/Revenue 가 매우 높습니다. 상업용 매출 성장 가속이 확인되지 않으면 multiple "
+        "재평가 압박이 클 수 있습니다."
+    ),
+    "VST": (
+        "Vistra 는 텍사스 발전 사업의 안정 cash flow + AI 신규 수요 옵션이 결합된 valuation "
+        "구조입니다. AI PPA 신규 수주가 확인될 때마다 multiple 이 한 단계씩 재평가되는 "
+        "구간입니다."
+    ),
+    "CEG": (
+        "Constellation Energy 는 무탄소 전력 + 데이터센터 PPA 수혜로 utility 평균 대비 "
+        "multiple 이 높게 형성돼 있습니다. PPA 단가 상승 / 신규 capacity 가시성이 multiple "
+        "정당화의 핵심 변수입니다."
+    ),
+    "TSLA": (
+        "Tesla 는 자동차 사업 P/E 와 자율주행 / Energy / Optimus 옵션 가치가 합쳐진 sum-of-the-"
+        "parts multiple 구조입니다. 자동차 마진 회복 vs. Robotaxi 진척이 multiple 의 양 갈래 "
+        "변수입니다."
+    ),
+}
+
+
+def valuation_context(ticker: str) -> str | None:
+    return VALUATION_CONTEXT_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# 종목별 재무 컨텍스트 — OPM / FCF / CAPEX 같은 종목별 점검 포인트
+# ---------------------------------------------------------------------------
+
+FINANCIAL_CONTEXT_KO: dict[str, str] = {
+    "META": (
+        "Meta 는 Family of Apps 광고 사업이 40%대 영업이익률을 유지하며 강한 영업레버리지를 "
+        "보여주고 있습니다. 다만 향후 AI CAPEX 확대가 감가상각비와 FCF 에 미치는 영향이 커질 "
+        "수 있어, 매출 성장률뿐 아니라 FCF margin 과 OPM 방어 여부를 함께 점검해야 합니다."
+    ),
+    "NFLX": (
+        "Netflix 는 콘텐츠 투자비 대비 매출 / 가입자 효율이 본업의 핵심 지표이며, FCF 가 "
+        "정상 궤도로 진입한 이후 자사주 매입 여력이 multiple 의 한 축입니다. 광고 요금제 "
+        "매출 성장 속도가 FCF margin 확장 여부의 핵심 변수입니다."
+    ),
+    "NVDA": (
+        "NVDA 는 데이터센터 매출이 전체 매출의 절대 비중을 차지하며, gross margin 75% 수준의 "
+        "강한 수익성을 유지 중입니다. 자체칩 / 수출 규제 영향이 본격화되면 마진 압박 가능성 "
+        "이 핵심 변수입니다."
+    ),
+    "AXON": (
+        "Axon 은 하드웨어(테이저 / 카메라) 와 소프트웨어(Evidence Cloud) 매출 비중 변화가 "
+        "OPM 에 직접 영향을 줍니다. 소프트웨어 매출 비중 상승이 마진 확장의 핵심 변수입니다."
+    ),
+    "CRDO": (
+        "Credo 는 매출 성장이 빠른 high-growth 단계로, gross margin 추세와 R&D 비중 변화가 "
+        "수익성 가시성의 핵심입니다. 광통신 인수 통합 비용 / 시너지 인식 시점이 OPM 변동 "
+        "요인입니다."
+    ),
+    "VST": (
+        "Vistra 는 발전 사업의 EBITDA 가 핵심 수익 지표이며, AI PPA 단가 상승이 EBITDA 가시성 "
+        "확장의 핵심 변수입니다. 천연가스 가격 변동 영향도 함께 봐야 합니다."
+    ),
+    "CEG": (
+        "Constellation Energy 는 PPA 단가 + capacity factor 가 EBITDA 의 두 축입니다. AI "
+        "데이터센터 PPA 수주 시점에 따라 EBITDA 가시성이 단계적으로 확장됩니다."
+    ),
+    "PLTR": (
+        "Palantir 는 매출 성장 + Operating margin 확장이 동시에 진행되는 구간으로, Rule of 40 "
+        "기준이 Forward 멀티플 정당화의 기준점입니다. 상업용 매출 성장 가속과 마진 확장이 "
+        "동반돼야 multiple 유지가 가능합니다."
+    ),
+}
+
+
+def financial_context(ticker: str) -> str | None:
+    return FINANCIAL_CONTEXT_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# 종목별 종합 판단 (Final View) — 매수 / 보유 / 관망 판단의 중심 논리
+# ---------------------------------------------------------------------------
+
+FINAL_VIEW_KO: dict[str, str] = {
+    "META": (
+        "현 시점에서 Meta 는 단순 성장주가 아니라 AI CAPEX 의 증분 ROIC 를 검증해야 하는 "
+        "Quality Dislocation 후보로 분류됩니다. 본업 광고 플랫폼의 매출 성장과 영업이익률은 "
+        "여전히 견조하지만, 시장은 2026년 CAPEX 가이던스 상향이 FCF 와 valuation 에 미칠 "
+        "영향을 우려하고 있습니다. 따라서 매수 판단의 핵심은 AI 투자가 광고 노출 수 / 광고 단가 "
+        "/ 광고주 ROI 개선으로 이어져 FCF 를 방어할 수 있는지 여부입니다. 이 증거가 확인되면 "
+        "현재 주가 조정은 기회가 될 수 있지만, CAPEX 증가가 이익률과 현금흐름을 구조적으로 "
+        "훼손한다면 단순 과매도로 보기 어렵습니다."
+    ),
+    "NFLX": (
+        "현 시점에서 Netflix 는 Warner Bros. 관련 대형 M&A 리스크가 해소된 이후 투자 초점이 "
+        "다시 본업으로 이동한 Quality Dislocation 후보입니다. 매수 판단의 핵심은 "
+        "(1) 광고 요금제 매출 성장률, (2) FCF margin 확장, (3) 콘텐츠 투자비 대비 가입자 / 시청 "
+        "효율 유지 여부입니다. 본업 지표가 견조하게 확인되면 multiple 회복 여지가 큽니다."
+    ),
+    "NVDA": (
+        "현 시점에서 NVDA 는 단순 momentum 추격이 아니라 'AI 사이클 지속 가능성' 과 '자체칩 / "
+        "수출 규제 잠식' 의 균형으로 보는 단계입니다. 데이터센터 매출 가시성과 hyperscaler "
+        "CAPEX revision 이 매수 판단의 핵심이며, hyperscaler 자체칩 확대 속도가 가장 큰 "
+        "anti-thesis 입니다."
+    ),
+    "AXON": (
+        "Axon 은 Public Safety OS 로의 전환 (하드웨어 → 소프트웨어 + AI) 이 핵심 thesis 인 "
+        "구간입니다. 매수 판단의 핵심은 소프트웨어 매출 비중과 Evidence Cloud Net retention "
+        "이며, B2G 예산 사이클과 고밸류 부담이 anti-thesis 의 두 축입니다."
+    ),
+    "CRDO": (
+        "Credo 는 AI 인터커넥트 카테고리에서 AEC + 광통신 확장 가능성을 검증해야 하는 high-"
+        "growth 단계입니다. 매수 판단의 핵심은 hyperscaler 매출 비중 변화와 광통신 인수 시너지 "
+        "인식 시점이며, 고객 집중도가 가장 큰 anti-thesis 입니다."
+    ),
+    "PLTR": (
+        "Palantir 는 정부 부문 안정성 + 상업용 AIP 채택 가속이 결합된 high-growth 단계로, "
+        "매수 판단의 핵심은 상업용 매출 성장률과 Operating margin 확장 동시 달성 여부입니다. "
+        "고밸류 부담이 가장 큰 anti-thesis 입니다."
+    ),
+    "VST": (
+        "Vistra 는 텍사스 발전 사업의 안정 cash flow 위에 AI 신규 수요 옵션이 결합된 종목입니다. "
+        "매수 판단의 핵심은 AI 데이터센터 PPA 신규 수주이며, 천연가스 가격 변동성이 "
+        "anti-thesis 의 한 축입니다."
+    ),
+    "CEG": (
+        "Constellation Energy 는 무탄소 전력 + AI 데이터센터 PPA 수혜의 직접 수혜 종목으로, "
+        "매수 판단의 핵심은 PPA 단가 상승 추세와 신규 capacity 가시성입니다."
+    ),
+    "TSLA": (
+        "Tesla 는 자동차 본업 마진과 자율주행 / Energy / Optimus 옵션의 균형이 핵심인 종목입니다. "
+        "매수 판단의 핵심은 자동차 마진 회복과 Robotaxi 진척의 가시성이며, 한쪽이 약화되면 "
+        "multiple 재평가 압박이 즉시 발생합니다."
+    ),
+}
+
+
+def final_view_curated(ticker: str) -> str | None:
+    return FINAL_VIEW_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
 # 분류 라벨
 # ---------------------------------------------------------------------------
 

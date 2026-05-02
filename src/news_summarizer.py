@@ -931,6 +931,19 @@ def _summarize_rule_based(
 
     impact = thesis_impact_from(status, score, urgent, staleness)
 
+    # 양면 (Two-sided) 이벤트 감지 — CAPEX 가이던스 상향 + 주가 하락 같은 케이스
+    # 시장 반응이 긍정 키워드와 어긋나는 경우 "확인 필요" 로 보수적 분류
+    txt_low = (title + " " + summary).lower()
+    capex_keywords = ("capex", "spending forecast", "ai spending",
+                       "raises forecast", "investment plan", "capital expenditure")
+    negative_reaction = ("sinks", "falls", "drops", "tumbles", "plunges", "slumps",
+                          "selloff", "concerns", "worries")
+    has_capex = any(k in txt_low for k in capex_keywords)
+    has_negative_reaction = any(k in txt_low for k in negative_reaction)
+    if has_capex and has_negative_reaction and impact == "Thesis 강화":
+        # 양면 신호 — 단순 강화 분류는 부적절
+        impact = "확인 필요"
+
     # Confidence — 본문 가용성을 1차 기준으로
     if content_availability == "Full Text" and src_q == "High" and staleness in ("fresh", "aging"):
         confidence = "High"

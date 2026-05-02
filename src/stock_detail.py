@@ -14,14 +14,21 @@ from .brief_generator import (
     key_risk,
 )
 from .curated import (
+    anti_thesis_specific as _curated_anti_thesis,
     company_type as _curated_company_type,
+    core_debate as _curated_core_debate,
+    core_kpis as _curated_core_kpis,
     event_classification_label,
+    final_view_curated as _curated_final_view,
+    financial_context as _curated_financial_context,
+    investment_thesis as _curated_investment_thesis,
     key_metrics as _curated_key_metrics,
     parse_event_date,
     price_interpretation as _curated_price_interpretation,
     recent_events as _curated_recent_events,
     simple_explanation as _curated_simple_explanation,
     thesis_pillars as _curated_thesis_pillars,
+    valuation_context as _curated_valuation_context,
 )
 from .event_processor import (
     aggregate_source_quality,
@@ -111,7 +118,9 @@ def valuation_comparison(
     ]
     peer_avg = _avg_filtered([v for v in peer_vals if v is not None])
 
-    interp = _valuation_interpretation(company_v, industry_avg, peer_avg, metric)
+    interp = _valuation_interpretation(
+        company_v, industry_avg, peer_avg, metric, ticker=row.get("ticker"),
+    )
     return {
         "metric": metric,
         "company": company_v,
@@ -126,7 +135,15 @@ def _valuation_interpretation(
     industry: float | None,
     peer: float | None,
     metric: str,
+    ticker: str | None = None,
 ) -> str:
+    # 1) 큐레이션 valuation context 우선
+    if ticker:
+        ctx = _curated_valuation_context(ticker)
+        if ctx:
+            return ctx
+
+    # 2) 일반 비교 fallback
     if company is None or company <= 0:
         return f"동사의 {metric} 데이터가 부족하여 정밀 검토가 필요합니다."
     if industry is None and peer is None:
@@ -139,17 +156,17 @@ def _valuation_interpretation(
         return f"동사의 {metric}는 {company:.1f}배 수준입니다."
     if ratio > 1.2:
         return (
-            f"동사는 {metric} 기준 산업/Peer 평균 대비 프리미엄에 거래되고 있습니다. "
-            "영업이익률, 매출 성장률, FCF 마진의 정합성을 함께 점검할 필요가 있습니다."
+            f"동사는 {metric} 기준 산업 / Peer 평균 대비 프리미엄에 거래되고 있습니다. "
+            "프리미엄의 근거 (성장률, 마진, FCF) 가 유지되는지 점검이 필요합니다."
         )
     if ratio < 0.8:
         return (
-            f"동사는 {metric} 기준 산업/Peer 평균 대비 디스카운트 영역에 위치하고 있습니다. "
-            "디스카운트 사유와 thesis 훼손 여부 확인이 우선 과제입니다."
+            f"동사는 {metric} 기준 산업 / Peer 평균 대비 디스카운트 영역에 위치합니다. "
+            "디스카운트 사유 (성장 둔화 / 마진 압박 / 일회성 이벤트) 분리 판단이 우선입니다."
         )
     return (
-        f"동사는 {metric} 기준 산업/Peer 평균과 유사한 수준에서 거래되고 있으며, "
-        "Multiple과 추정치 방향성의 정합성을 함께 점검할 단계입니다."
+        f"동사는 {metric} 기준 산업 / Peer 평균과 유사한 수준에서 거래되고 있어, "
+        "Multiple 과 추정치 방향성의 정합성을 같이 점검할 단계입니다."
     )
 
 
@@ -302,50 +319,55 @@ def chart_event_markers(row: dict[str, Any]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def core_thesis_full(row: dict[str, Any]) -> str:
-    md = row.get("market_data") or {}
-    sc = row.get("scores") or {}
+    """핵심 투자 논리.
+
+    우선순위:
+        1) 큐레이션 INVESTMENT_THESIS_KO 한 단락 (종목별 고유 사업/thesis)
+        2) CORE_DEBATE_KO + thesis_pillars 합성
+        3) action_tag 기반 일반 fallback (구 템플릿)
+    """
+    ticker = row["ticker"]
+    name = display_name(row.get("name_ko", ""), ticker)
+
+    # 1) 종목 고유 thesis 한 단락이 있으면 그걸 그대로 사용
+    thesis = _curated_investment_thesis(ticker)
+    if thesis:
+        debate = _curated_core_debate(ticker)
+        if debate:
+            return f"{thesis}\n\n핵심 논쟁: {debate}"
+        return thesis
+
+    # 2) thesis_pillars + core_debate 로 합성
+    pillars = _curated_thesis_pillars(ticker)
+    debate = _curated_core_debate(ticker)
+    if pillars or debate:
+        parts: list[str] = []
+        if pillars:
+            parts.append(
+                f"{name} 의 핵심 투자 축은 다음과 같습니다 — "
+                + " / ".join(pillars[:3]) + "."
+            )
+        if debate:
+            parts.append(f"매수 / 보유 판단의 핵심 논쟁은 \"{debate}\" 입니다.")
+        return " ".join(parts)
+
+    # 3) Fallback — action_tag 기반 일반 문구 (큐레이션 미등록 종목)
+    tag = row.get("action_tag", "Watchlist")
     cat = category_label_ko(row.get("category", ""))
     theme = theme_label_ko(row.get("theme", ""))
-    name = display_name(row.get("name_ko", ""), row["ticker"])
-    tag = row.get("action_tag", "Watchlist")
-
     base = f"{name}는 {cat} / {theme} 카테고리에 속한 종목입니다."
-
     if tag == "Quality Dislocation":
         return (
             base
-            + " 카테고리 리더로서의 thesis는 유효하나 최근 단기 이벤트로 주가 조정이 발생한 구간으로, "
-            "thesis 훼손 여부 확인 시 중장기 Re-rating 여지가 존재합니다."
+            + " 단기 이벤트로 주가 조정이 발생한 구간으로, "
+            "thesis 훼손 여부 확인 후 중장기 re-rating 여지를 점검할 단계입니다. "
+            "(종목 고유 큐레이션 미등록 — 일반 분류 기반 해석)"
         )
-    if tag == "Research Now":
-        return (
-            base
-            + " 카테고리 catalyst와 종목별 Momentum이 동시에 살아있는 구간으로, "
-            "투자 논리와 anti-thesis를 함께 정리한 뒤 분할 진입 영역을 정의할 단계입니다."
-        )
-    if tag == "Wait for Entry":
-        return (
-            base
-            + " 테마 적합도는 유효하나 단기 valuation 부담이 확대된 구간으로, "
-            "조정 시 entry 영역의 사전 정의가 필요합니다."
-        )
-    if tag == "Too Crowded":
-        return (
-            base
-            + " 시장 컨센서스가 강하게 형성된 구간으로, multiple과 expectation 정합성 확인 후 "
-            "trim/유지 여부를 판단할 단계입니다."
-        )
-    if tag == "Need Thesis Check":
-        return (
-            base
-            + " 주가 하락 폭이 확대된 구간으로, 단기 이벤트 vs 구조적 훼손을 분리 판단해야 하는 단계입니다."
-        )
-    if tag == "Avoid":
-        return (
-            base
-            + " 회계·조사·dilution 등 risk 키워드가 포함된 구간으로, anti-thesis 점검과 1차 자료 확인이 우선 과제입니다."
-        )
-    return base + " 카테고리 catalyst와 종목별 catalyst를 함께 모니터링할 단계입니다."
+    return (
+        base
+        + " 종목 고유 thesis 큐레이션이 아직 등록되지 않은 단계로, "
+        "카테고리 catalyst 와 회사 가이던스 변화를 함께 점검할 필요가 있습니다."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -423,26 +445,36 @@ def key_points_bullets(row: dict[str, Any]) -> list[str]:
 
 
 def key_risks_bullets(row: dict[str, Any]) -> list[str]:
+    """주요 리스크.
+
+    우선순위:
+        1) 큐레이션 ANTI_THESIS_KO (종목 고유 anti-thesis)
+        2) 시장 데이터 / 뉴스 기반 자동 생성 (fallback)
+
+    내부 점수 ("리스크 점수가 50 이상" 같은 메타 문구) 는 화면에 노출하지 않는다.
+    """
+    ticker = row["ticker"]
+    specific = _curated_anti_thesis(ticker)
+    if specific:
+        return list(specific[:5])
+
     md = row.get("market_data") or {}
-    sc = row.get("scores") or {}
     na = row.get("news_agg") or {}
     bits: list[str] = []
 
     if na.get("urgent"):
-        bits.append("최근 뉴스에 회계·조사·dilution 등 risk 키워드가 포함되어 있어 anti-thesis 점검이 필요합니다.")
+        bits.append("최근 뉴스에 회계 / 조사 / dilution 등 risk 키워드가 포함되어 anti-thesis 점검이 필요합니다.")
     if na.get("negative"):
         bits.append("최근 뉴스 톤이 부정적으로 형성되어 단기 sentiment 부담이 확대된 구간입니다.")
     pe = md.get("forward_pe") or md.get("trailing_pe")
     if pe and pe > 50:
-        bits.append(f"forward/trailing PE {pe:.1f}x 수준의 valuation 부담이 multiple 변동성을 확대시킬 수 있습니다.")
+        bits.append(f"Forward / trailing PE {pe:.1f}x 수준의 valuation 부담이 multiple 변동성을 확대시킬 수 있습니다.")
     r6m = md.get("6m_return")
     if r6m and r6m > 0.6:
-        bits.append(f"최근 6개월 {fmt_pct(r6m)} 상승으로 expectation이 높은 구간이며 Too Crowded 전환 가능성이 있습니다.")
+        bits.append(f"최근 6개월 {fmt_pct(r6m)} 상승으로 expectation 이 높은 구간 — 단기 차익실현 압박 가능성.")
     dd = md.get("drawdown_from_52w_high")
     if dd is not None and -dd > 0.40:
-        bits.append(f"52주 고점 대비 {fmt_pct(-(-dd))} 조정으로 구조적 thesis 훼손 가능성을 점검해야 합니다.")
-    if (sc.get("risk") or 0) >= 50:
-        bits.append("리스크 점수가 50 이상으로 anti-thesis 우선 점검이 필요한 단계입니다.")
+        bits.append(f"52주 고점 대비 {fmt_pct(-(-dd))} 조정으로 구조적 thesis 훼손 가능성 점검 필요.")
     om = md.get("operating_margin")
     if om is not None and om < 0:
         bits.append("영업이익이 적자 구간으로 cash burn 및 dilution 리스크가 존재합니다.")
@@ -452,6 +484,17 @@ def key_risks_bullets(row: dict[str, Any]) -> list[str]:
 
 
 def check_items_bullets(row: dict[str, Any]) -> list[str]:
+    """확인 필요 사항.
+
+    우선순위:
+        1) 큐레이션 CORE_KPIS_KO (종목 고유 KPI)
+        2) theme 기반 일반 fallback
+    """
+    ticker = row["ticker"]
+    specific = _curated_core_kpis(ticker)
+    if specific:
+        return list(specific[:6])
+
     theme = row.get("theme", "")
     by_theme: dict[str, list[str]] = {
         "ai_semiconductor": [
@@ -648,14 +691,25 @@ def lens_views(row: dict[str, Any]) -> list[dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 def anti_thesis(row: dict[str, Any]) -> list[str]:
+    """Anti-Thesis — 종목 고유 리스크 목록.
+
+    우선순위:
+        1) 큐레이션 ANTI_THESIS_KO (종목 고유)
+        2) theme 기반 일반 fallback
+    """
+    ticker = row["ticker"]
+    specific = _curated_anti_thesis(ticker)
+    if specific:
+        return list(specific[:5])
+
     bits: list[str] = [
-        "operating margin이 두 분기 연속 하락 전환되는 경우",
+        "Operating margin 이 두 분기 연속 하락 전환되는 경우",
         "주요 가이던스가 컨센서스 대비 하향되는 경우",
-        "뉴스 흐름에 회계·조사·dilution 등 risk 키워드가 등장하는 경우",
+        "뉴스 흐름에 회계 / 조사 / dilution 등 risk 키워드가 등장하는 경우",
     ]
     theme = row.get("theme", "")
     if theme == "ai_semiconductor":
-        bits.append("hyperscaler capex revision이 둔화로 전환되는 경우")
+        bits.append("Hyperscaler capex revision 이 둔화로 전환되는 경우")
     if theme == "public_safety":
         bits.append("소프트웨어 매출 비중 정체 또는 attach rate 하락이 확인되는 경우")
     if theme == "data_center_power":
@@ -670,8 +724,39 @@ def anti_thesis(row: dict[str, Any]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def final_judgment(row: dict[str, Any]) -> str:
-    name = display_name(row.get("name_ko", ""), row["ticker"])
+    """종합 판단.
+
+    우선순위:
+        1) 큐레이션 FINAL_VIEW_KO (종목 고유 매수 / 보유 / 관망 논리)
+        2) CORE_DEBATE_KO + action_tag 합성
+        3) action_tag 기반 일반 fallback
+    """
+    ticker = row["ticker"]
+    name = display_name(row.get("name_ko", ""), ticker)
     tag = row.get("action_tag", "Watchlist")
+
+    # 1) 큐레이션 final view 우선
+    cur_view = _curated_final_view(ticker)
+    if cur_view:
+        return cur_view
+
+    # 2) CORE_DEBATE + action_tag 합성
+    debate = _curated_core_debate(ticker)
+    if debate:
+        tag_phrase = {
+            "Research Now": "지금 정밀 리서치를 시작할 단계",
+            "Quality Dislocation": "주가 조정 구간 — Quality Dislocation 후보",
+            "Wait for Entry": "단기 valuation 부담 — 진입 영역의 사전 정의 필요",
+            "Too Crowded": "컨센서스 과열 구간 — Multiple 정합성 점검 단계",
+            "Need Thesis Check": "Thesis 훼손 가능성 점검 단계",
+            "Avoid": "Risk 키워드 점검 후 신규 진입 보류 권고",
+        }.get(tag, "관찰 후보")
+        return (
+            f"현 시점에서 {name} 는 {tag_phrase} 입니다. 매수 / 보유 판단의 핵심 논쟁은 "
+            f"\"{debate}\" 이며, 이 논쟁의 양 갈래 시그널을 함께 추적할 단계입니다."
+        )
+
+    # 3) Fallback — 일반 action_tag 기반
     cat = category_label_ko(row.get("category", ""))
     md = row.get("market_data") or {}
     pe = md.get("forward_pe") or md.get("trailing_pe")
