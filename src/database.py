@@ -317,6 +317,9 @@ def init_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE news_raw ADD COLUMN key_points_ko TEXT",  # legacy: JSON list
         "ALTER TABLE news_raw ADD COLUMN follow_up_items_ko TEXT",  # JSON list
         "ALTER TABLE news_raw ADD COLUMN content_availability TEXT",
+        # stock_research — Earnings Quality / Moat / Strategic Lens
+        "ALTER TABLE stock_research ADD COLUMN earnings_quality_json TEXT",
+        "ALTER TABLE stock_research ADD COLUMN strategic_lens_json TEXT",
     )
     for s in _ALTER_STATEMENTS:
         try:
@@ -864,8 +867,9 @@ def upsert_stock_research(
         """
         INSERT INTO stock_research (run_id, date, ticker, easy_explanation, core_thesis,
                                     key_points, key_risks, check_items, anti_thesis,
-                                    final_view, research_quality_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    final_view, research_quality_json, created_at,
+                                    earnings_quality_json, strategic_lens_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(date, ticker) DO UPDATE SET
             run_id=excluded.run_id,
             easy_explanation=excluded.easy_explanation,
@@ -876,7 +880,9 @@ def upsert_stock_research(
             anti_thesis=excluded.anti_thesis,
             final_view=excluded.final_view,
             research_quality_json=excluded.research_quality_json,
-            created_at=excluded.created_at
+            created_at=excluded.created_at,
+            earnings_quality_json=excluded.earnings_quality_json,
+            strategic_lens_json=excluded.strategic_lens_json
         """,
         (
             run_id, date_iso, ticker,
@@ -889,6 +895,8 @@ def upsert_stock_research(
             research.get("final_view"),
             dump_json(research.get("research_quality")),
             now_iso(),
+            dump_json(research.get("earnings_quality")),
+            dump_json(research.get("strategic_lens")),
         ),
     )
 

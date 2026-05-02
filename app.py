@@ -707,6 +707,107 @@ CUSTOM_CSS = """
         line-height: 1.6;
         margin-bottom: 14px;
     }
+    /* ───────── Earnings Quality 8 차원 grid ───────── */
+    .eq-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (min-width: 1100px) {
+        .eq-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .eq-dim-card {
+        background: #FFFFFF;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 14px;
+    }
+    .eq-dim-head {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+    }
+    .eq-dim-label {
+        font-size: 14px; font-weight: 600; color: var(--text);
+    }
+    .eq-dim-sub { font-size: 12px; color: var(--muted); font-weight: 400; }
+    .eq-dim-comment {
+        font-size: 13px; line-height: 1.65; color: #334155;
+        word-break: keep-all; overflow-wrap: break-word;
+    }
+    /* ───────── Moat Map ───────── */
+    .moat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    @media (min-width: 900px) {
+        .moat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .moat-cell {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 8px;
+        background: #F8FAFC;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+    .moat-label {
+        font-weight: 600; color: var(--text); flex: 1;
+    }
+    .moat-sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+    /* ───────── Strategic Lens — SWOT / PESTEL / 3C / 3P ───────── */
+    .lens-grid {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 12px;
+    }
+    @media (min-width: 900px) {
+        .lens-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .lens-card {
+        background: #FFFFFF;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 16px;
+    }
+    .lens-card-title {
+        font-size: 14px; font-weight: 700; color: var(--navy);
+        letter-spacing: 0.04em;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--line);
+    }
+    .lens-swot-grid {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+    }
+    .lens-swot-cell { padding: 4px; }
+    .lens-swot-label {
+        font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+        display: inline-block; margin-bottom: 6px;
+    }
+    .lens-swot-label.strength { background: #DBEAFE; color: #1E40AF; }
+    .lens-swot-label.weakness { background: #FEE2E2; color: #991B1B; }
+    .lens-swot-label.opportunity { background: #DCFCE7; color: #166534; }
+    .lens-swot-label.threat { background: #FEF3C7; color: #92400E; }
+    .lens-row {
+        display: grid;
+        grid-template-columns: 110px minmax(0, 1fr);
+        gap: 10px;
+        padding: 4px 0;
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .lens-row-label {
+        font-weight: 600; color: var(--navy);
+    }
+    .lens-row-text {
+        color: #334155;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+    }
     @media (max-width: 640px) {
         .para-row.kpts-row {
             grid-template-columns: 1fr;
@@ -1834,6 +1935,215 @@ def render_price_chart(row: dict[str, Any]):
         st.info(f"차트 렌더링 실패: {e}")
 
 
+def _rating_chip_class(rating: str) -> str:
+    """등급 → CSS chip 클래스 매핑."""
+    r = (rating or "").lower()
+    if "strong" in r:
+        return "chip-strengthen"
+    if "rising risk" in r or "risk" in r:
+        return "chip-new-risk"
+    if "weak" in r:
+        return "chip-weaken"
+    if "medium" in r:
+        return "chip-noise"
+    return "chip-needs-check"
+
+
+def _tier_color(tier: str) -> str:
+    if tier == "Very Strong":
+        return "#0F4C75"   # 진한 네이비
+    if tier == "Strong":
+        return "#1B6FC0"
+    if tier == "Moderate":
+        return "#6B7280"
+    if tier == "Weak":
+        return "#B45309"
+    if tier == "High Risk":
+        return "#B91C1C"
+    return "#6B7280"
+
+
+def render_earnings_quality_section(eq: dict | None):
+    """Earnings Quality & Moat Assessment 카드 그리드."""
+    if not eq:
+        return
+
+    score = eq.get("earnings_durability_score", 0)
+    tier = eq.get("earnings_durability_tier", "Moderate")
+    color = _tier_color(tier)
+    is_curated = eq.get("is_curated", False)
+
+    st.markdown(
+        '<div class="section-title">Earnings Quality & Moat Assessment'
+        '<span style="font-size:13px; color:var(--muted); margin-left:8px;">이익의 질 및 해자 분석</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # 상단 — Earnings Durability Score 배지
+    note = "" if is_curated else (
+        '<div style="font-size:12px; color:var(--muted); margin-top:4px;">'
+        '※ 큐레이션 미등록 종목 — 8 차원 모두 "확인 필요" 로 표시됩니다.'
+        "</div>"
+    )
+    st.markdown(
+        '<div class="card" style="margin-bottom:14px;">'
+        '<div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">'
+        f'<div style="font-size:14px; color:var(--muted);">Earnings Durability Score</div>'
+        f'<div style="font-size:28px; font-weight:700; color:{color};">{score}</div>'
+        f'<div style="font-size:14px; color:{color}; font-weight:600;">/ {tier}</div>'
+        "</div>"
+        f"{note}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 8 차원 — 4 열 grid (모바일에서는 1 열로 자연 폴백)
+    dims = eq.get("dimensions", {})
+    cards_html = []
+    for key, dim in dims.items():
+        rating = dim.get("rating", "확인 필요")
+        chip_cls = _rating_chip_class(rating)
+        label_en = dim.get("label_en", key)
+        label_ko = dim.get("label_ko", "")
+        comment = dim.get("comment", "")
+        cards_html.append(
+            f'<div class="eq-dim-card">'
+            f'<div class="eq-dim-head">'
+            f'<span class="eq-dim-label">{label_en}<span class="eq-dim-sub"> · {label_ko}</span></span>'
+            f'<span class="chip {chip_cls}">{rating}</span>'
+            "</div>"
+            f'<div class="eq-dim-comment">{comment}</div>'
+            "</div>"
+        )
+    st.markdown(
+        '<div class="eq-grid">' + "".join(cards_html) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Moat Map — 7 항목 compact matrix
+    moat = eq.get("moat_map", {})
+    moat_cards = []
+    for key, m in moat.items():
+        rating = m.get("rating", "확인 필요")
+        chip_cls = _rating_chip_class(rating)
+        label_en = m.get("label_en", key)
+        label_ko = m.get("label_ko", "")
+        moat_cards.append(
+            f'<div class="moat-cell">'
+            f'<div class="moat-label">{label_en}<span class="moat-sub"> · {label_ko}</span></div>'
+            f'<span class="chip {chip_cls}">{rating}</span>'
+            "</div>"
+        )
+    st.markdown(
+        '<div class="section-title" style="font-size:15px; margin-top:16px;">Moat Map</div>'
+        '<div class="moat-grid">' + "".join(moat_cards) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Alpha Judgment
+    judgment = eq.get("alpha_judgment", "")
+    if judgment:
+        st.markdown(
+            '<div class="judgment-card" style="margin-top:14px;">'
+            '<div class="judgment-eyebrow">Alpha Judgment — 종합 판단</div>'
+            f'<div class="judgment-body">{judgment}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
+
+
+def render_strategic_lens_section(lens: dict | None):
+    """Strategic Lens — SWOT / PESTEL / 3C / 3P 2x2 카드."""
+    if not lens:
+        return
+
+    st.markdown(
+        '<div class="section-title">Strategic Lens'
+        '<span style="font-size:13px; color:var(--muted); margin-left:8px;">전략적 관점 분석</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    swot = lens.get("swot", {}) or {}
+    pestel = lens.get("pestel", {}) or {}
+    three_c = lens.get("three_c", {}) or {}
+    three_p = lens.get("three_p", {}) or {}
+
+    def _bul(items: list[str]) -> str:
+        items = items or []
+        if not items:
+            return '<div style="color:var(--muted);">확인 필요</div>'
+        return "".join(
+            f'<div style="font-size:14px; line-height:1.7; padding:2px 0;">• {x}</div>'
+            for x in items
+        )
+
+    # SWOT card
+    swot_html = (
+        '<div class="lens-card">'
+        '<div class="lens-card-title">SWOT</div>'
+        '<div class="lens-swot-grid">'
+        '<div class="lens-swot-cell"><div class="lens-swot-label strength">Strength</div>'
+        f'{_bul(swot.get("strength"))}</div>'
+        '<div class="lens-swot-cell"><div class="lens-swot-label weakness">Weakness</div>'
+        f'{_bul(swot.get("weakness"))}</div>'
+        '<div class="lens-swot-cell"><div class="lens-swot-label opportunity">Opportunity</div>'
+        f'{_bul(swot.get("opportunity"))}</div>'
+        '<div class="lens-swot-cell"><div class="lens-swot-label threat">Threat</div>'
+        f'{_bul(swot.get("threat"))}</div>'
+        "</div></div>"
+    )
+
+    # PESTEL — 6 항목 1줄씩
+    def _row(label: str, val: str) -> str:
+        return (
+            '<div class="lens-row">'
+            f'<span class="lens-row-label">{label}</span>'
+            f'<span class="lens-row-text">{val}</span>'
+            "</div>"
+        )
+
+    pestel_html = (
+        '<div class="lens-card">'
+        '<div class="lens-card-title">PESTEL</div>'
+        + _row("Political", pestel.get("political", "확인 필요"))
+        + _row("Economic", pestel.get("economic", "확인 필요"))
+        + _row("Social", pestel.get("social", "확인 필요"))
+        + _row("Technological", pestel.get("technological", "확인 필요"))
+        + _row("Environmental", pestel.get("environmental", "확인 필요"))
+        + _row("Legal", pestel.get("legal", "확인 필요"))
+        + "</div>"
+    )
+
+    three_c_html = (
+        '<div class="lens-card">'
+        '<div class="lens-card-title">3C</div>'
+        + _row("Company", three_c.get("company", "확인 필요"))
+        + _row("Customer", three_c.get("customer", "확인 필요"))
+        + _row("Competitor", three_c.get("competitor", "확인 필요"))
+        + "</div>"
+    )
+
+    three_p_html = (
+        '<div class="lens-card">'
+        '<div class="lens-card-title">3P</div>'
+        + _row("Product", three_p.get("product", "확인 필요"))
+        + _row("Pricing", three_p.get("pricing", "확인 필요"))
+        + _row("Positioning", three_p.get("positioning", "확인 필요"))
+        + "</div>"
+    )
+
+    st.markdown(
+        '<div class="lens-grid">'
+        + swot_html + pestel_html + three_c_html + three_p_html
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
+
+
 def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
     md = row["market_data"]
     name = display_name(row.get("name_ko", ""), row["ticker"])
@@ -2121,6 +2431,12 @@ def render_stock_detail():
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # ================== Earnings Quality & Moat Assessment ==================
+    render_earnings_quality_section(detail.get("earnings_quality"))
+
+    # ================== Strategic Lens ==================
+    render_strategic_lens_section(detail.get("strategic_lens"))
 
     # ================== 장기 주가 흐름 (이동: 핵심 투자 논리 직후) ==================
     st.markdown(

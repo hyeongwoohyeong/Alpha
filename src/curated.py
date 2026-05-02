@@ -1217,6 +1217,490 @@ def final_view_curated(ticker: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Earnings Quality & Moat Assessment — 종목별 8 차원 평가
+# 각 차원 = {"rating": "Strong|Medium|Weak|Risk|Rising Risk|확인 필요", "comment": "..."}
+# 등급은 Tailwind 색상 매핑을 위해 일관된 표기 사용.
+# ---------------------------------------------------------------------------
+
+EARNINGS_QUALITY_KO: dict[str, dict[str, dict[str, str]]] = {
+    "META": {
+        "customer_diversification": {
+            "rating": "Strong",
+            "comment": "전 세계 광고주와 31억+ 일간 활성 사용자로 매출이 분산되어 있으며, 특정 고객 의존도는 낮습니다.",
+        },
+        "recurring_revenue": {
+            "rating": "Medium~Strong",
+            "comment": "계약형 구독 매출은 아니지만, 광고주가 성과 기반으로 반복 집행하는 구조로 매출 예측 가능성은 높습니다.",
+        },
+        "lock_in": {
+            "rating": "Strong",
+            "comment": "광고주의 캠페인 데이터 / pixel / Custom Audience 가 누적될수록 전환비용이 커지며, 사용자는 강한 네트워크 효과로 lock-in.",
+        },
+        "pricing_power": {
+            "rating": "Medium~Strong",
+            "comment": "광고 ROI 가 유지되는 한 광고 단가 인상 여력이 있으나, 광고주 ROAS 압박 시 즉각 가격 조정에 노출됩니다.",
+        },
+        "margin_quality": {
+            "rating": "Strong",
+            "comment": "Family of Apps 영업이익률 40% 대 — 플랫폼 scale advantage 가 만든 구조적 마진.",
+        },
+        "cash_conversion": {
+            "rating": "Medium",
+            "comment": "FCF 전환은 우수하나 AI CAPEX 확대로 감가상각비 증가 → 향후 FCF margin 압박 가능성.",
+        },
+        "capital_intensity": {
+            "rating": "Rising Risk",
+            "comment": "과거 asset-light 광고 플랫폼이었으나, 2026년 AI CAPEX 가이던스 $125~145B 로 자본집약도가 빠르게 상승.",
+        },
+        "incremental_roic": {
+            "rating": "확인 필요",
+            "comment": "AI CAPEX 1 달러가 광고 노출 수 / 단가 / 광고주 ROI 개선으로 회수되는지가 향후 multiple 의 핵심 변수.",
+        },
+    },
+    "NFLX": {
+        "customer_diversification": {
+            "rating": "Strong",
+            "comment": "전 세계 2.6억+ 유료 가입자 + 광고 요금제 광고주로 매출이 분산. 특정 고객 의존도 낮음.",
+        },
+        "recurring_revenue": {
+            "rating": "Strong",
+            "comment": "월 / 연 단위 구독 모델로 매출 예측 가능성이 매우 높습니다.",
+        },
+        "lock_in": {
+            "rating": "Medium",
+            "comment": "콘텐츠 라이브러리와 추천 알고리즘에 익숙해진 가입자의 churn cost 는 있으나, 가격 인상 시 일부 churn 발생 여지.",
+        },
+        "pricing_power": {
+            "rating": "Medium~Strong",
+            "comment": "최근 가격 인상 후 churn 안정 — 글로벌 콘텐츠 평균 단가 대비 가격 결정력 일정 수준 확보.",
+        },
+        "margin_quality": {
+            "rating": "Strong",
+            "comment": "콘텐츠 투자비 대비 가입자 / 시청 시간 효율 개선이 영업이익률 확장의 핵심 — 본업 마진 추세 견조.",
+        },
+        "cash_conversion": {
+            "rating": "Strong",
+            "comment": "FCF 가 정상 궤도로 진입한 이후 자사주 매입 여력 확대 — 회계 이익과 현금흐름 정합성 양호.",
+        },
+        "capital_intensity": {
+            "rating": "Medium",
+            "comment": "콘텐츠 투자비가 본업 capex 의 핵심 — peak 를 지나 정상화 흐름이나 여전히 큼.",
+        },
+        "incremental_roic": {
+            "rating": "Strong",
+            "comment": "콘텐츠 1 달러가 글로벌 가입자 수 / 시청 시간으로 회수되는 효율은 동종 플랫폼 중 최상위권.",
+        },
+    },
+    "NVDA": {
+        "customer_diversification": {
+            "rating": "Weak",
+            "comment": "Hyperscaler 4-5 곳이 데이터센터 매출의 대부분 — 고객 집중도 매우 높음.",
+        },
+        "recurring_revenue": {
+            "rating": "Medium",
+            "comment": "GPU 매출은 단발성이지만 hyperscaler CAPEX 사이클에 의해 분기별 반복 매출 패턴 형성.",
+        },
+        "lock_in": {
+            "rating": "Strong",
+            "comment": "CUDA 생태계 lock-in 이 매우 강함 — 개발자 / 워크로드 마이그레이션 비용이 자체칩 채택의 가장 큰 진입 장벽.",
+        },
+        "pricing_power": {
+            "rating": "Strong",
+            "comment": "AI 데이터센터 GPU 의 사실상 독점 — gross margin 75% 수준이 가격 결정력의 직접 증거.",
+        },
+        "margin_quality": {
+            "rating": "Strong",
+            "comment": "Gross margin 75% / Operating margin 60% 대 — 카테고리 리더 프리미엄.",
+        },
+        "cash_conversion": {
+            "rating": "Strong",
+            "comment": "Net Income 대비 FCF 전환율 매우 높음 — SBC 비중도 통제된 수준.",
+        },
+        "capital_intensity": {
+            "rating": "Medium",
+            "comment": "팹리스 모델 — 직접 capex 부담은 제한적. TSMC capacity 확보 비용이 핵심 변수.",
+        },
+        "incremental_roic": {
+            "rating": "Strong",
+            "comment": "Rubin / Blackwell 신규 출시 사이클이 데이터센터 매출 증분으로 직접 이어지는 구조 — 증분 ROIC 매우 높음.",
+        },
+    },
+    "AXON": {
+        "customer_diversification": {
+            "rating": "Medium",
+            "comment": "미국 / 글로벌 경찰서 + 일부 연방기관으로 분산되나, 미국 B2G 매출 비중 높음.",
+        },
+        "recurring_revenue": {
+            "rating": "Strong",
+            "comment": "Evidence Cloud 구독 매출 + 5~10 년 장기 계약 — 반복매출 구조가 thesis 의 핵심.",
+        },
+        "lock_in": {
+            "rating": "Strong",
+            "comment": "경찰 워크플로우 (증거 / 수사보고서) 에 깊게 통합 — 데이터 마이그레이션 비용 매우 높음.",
+        },
+        "pricing_power": {
+            "rating": "Medium~Strong",
+            "comment": "테이저 / 카메라는 경쟁 있으나 Evidence Cloud + AI 리포팅은 사실상 표준 — 가격 인상 여력 확보.",
+        },
+        "margin_quality": {
+            "rating": "Medium~Strong",
+            "comment": "소프트웨어 매출 비중 상승에 따라 gross margin / operating margin 동반 확장 중.",
+        },
+        "cash_conversion": {
+            "rating": "Medium",
+            "comment": "FCF 양호하나 SaaS 전환기 — 매출 인식과 cash 회수의 timing 차이가 일부 존재.",
+        },
+        "capital_intensity": {
+            "rating": "Medium",
+            "comment": "하드웨어 (테이저) 에 일정 capex 필요 — SaaS 비중 확대로 자본집약도는 점진 감소.",
+        },
+        "incremental_roic": {
+            "rating": "Strong",
+            "comment": "Evidence Cloud 신규 채택 1 건이 평균 5~10 년 ARR 로 회수 — 증분 ROIC 매우 높음.",
+        },
+    },
+    "CRDO": {
+        "customer_diversification": {
+            "rating": "Weak",
+            "comment": "Hyperscaler 2-3 곳이 매출의 60%+ — 고객 집중도 높음.",
+        },
+        "recurring_revenue": {
+            "rating": "Weak~Medium",
+            "comment": "AEC / 광통신 제품 단발 매출 — design-in 후에는 반복 발주이지만 본질적 구독 매출 아님.",
+        },
+        "lock_in": {
+            "rating": "Medium",
+            "comment": "Design-in 이후 BOM 변경 비용 존재 — 다만 광통신 대체재 등장 시 빠른 전환 가능.",
+        },
+        "pricing_power": {
+            "rating": "Medium",
+            "comment": "AEC 카테고리 내 경쟁 여전 — gross margin 추세가 가격 결정력의 가장 좋은 증거.",
+        },
+        "margin_quality": {
+            "rating": "Medium",
+            "comment": "High-growth 단계 — gross margin 추세 / R&D 비중 변화 점검 필요.",
+        },
+        "cash_conversion": {
+            "rating": "확인 필요",
+            "comment": "성장 투자 단계 — FCF 가시성 데이터 부족, 추가 리서치 필요.",
+        },
+        "capital_intensity": {
+            "rating": "Medium",
+            "comment": "팹리스 — 직접 capex 부담 제한적. 광통신 인수 통합 비용이 단기 변수.",
+        },
+        "incremental_roic": {
+            "rating": "확인 필요",
+            "comment": "광통신 인수 시너지 인식 시점이 불확실 — 신규 매출 1 달러의 회수 효율은 후속 분기에 확인.",
+        },
+    },
+}
+
+
+def earnings_quality(ticker: str) -> dict[str, dict[str, str]] | None:
+    return EARNINGS_QUALITY_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# Moat Map — 7 종목별 해자 차원
+# ---------------------------------------------------------------------------
+
+MOAT_MAP_KO: dict[str, dict[str, str]] = {
+    "META": {
+        "network_effect": "Strong",
+        "switching_cost": "Medium",
+        "scale_advantage": "Strong",
+        "brand": "Strong",
+        "data_advantage": "Strong",
+        "regulatory_barrier": "Weak",
+        "cost_advantage": "Medium",
+    },
+    "NFLX": {
+        "network_effect": "Medium",
+        "switching_cost": "Medium",
+        "scale_advantage": "Strong",
+        "brand": "Strong",
+        "data_advantage": "Strong",
+        "regulatory_barrier": "Weak",
+        "cost_advantage": "Medium",
+    },
+    "NVDA": {
+        "network_effect": "Strong",
+        "switching_cost": "Strong",
+        "scale_advantage": "Strong",
+        "brand": "Strong",
+        "data_advantage": "Medium",
+        "regulatory_barrier": "Medium",
+        "cost_advantage": "Strong",
+    },
+    "AXON": {
+        "network_effect": "Medium",
+        "switching_cost": "Strong",
+        "scale_advantage": "Medium",
+        "brand": "Strong",
+        "data_advantage": "Strong",
+        "regulatory_barrier": "Medium~Strong",
+        "cost_advantage": "Medium",
+    },
+    "CRDO": {
+        "network_effect": "Weak",
+        "switching_cost": "Medium",
+        "scale_advantage": "Medium",
+        "brand": "Medium",
+        "data_advantage": "Weak",
+        "regulatory_barrier": "Weak",
+        "cost_advantage": "확인 필요",
+    },
+}
+
+
+def moat_map(ticker: str) -> dict[str, str] | None:
+    return MOAT_MAP_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# Alpha Judgment — Earnings Quality 섹션 종합 판단 (한 단락)
+# ---------------------------------------------------------------------------
+
+ALPHA_JUDGMENT_KO: dict[str, str] = {
+    "META": (
+        "Meta 의 본업 이익의 질은 매우 높습니다. 고객군은 전 세계 광고주로 분산되어 있고, "
+        "광고 플랫폼의 scale advantage 와 data advantage 는 강력합니다. 다만 AI CAPEX 확대가 "
+        "과거 asset-light 플랫폼의 FCF 전환율을 낮출 수 있어, 향후 핵심은 AI 투자가 광고 효율과 "
+        "증분 ROIC 로 회수되는지 여부입니다."
+    ),
+    "NFLX": (
+        "Netflix 의 이익의 질은 구독 기반 반복매출과 가격 결정력에 기반합니다. 콘텐츠 투자비가 "
+        "크다는 점은 부담이나, 글로벌 플랫폼 규모와 추천 알고리즘, 광고 요금제 확장성을 감안하면 "
+        "FCF 개선 여지가 존재합니다. 핵심은 가격 인상과 콘텐츠 효율이 churn 없이 유지되는지 "
+        "여부입니다."
+    ),
+    "NVDA": (
+        "NVDA 의 이익의 질은 CUDA 생태계 lock-in + GPU 사실상 독점에 기반한 매우 강한 가격 "
+        "결정력에 있습니다. 다만 hyperscaler 자체칩 / 수출 규제가 진행되면 점유율 잠식 위험 "
+        "이 anti-thesis 의 두 축이며, 증분 ROIC 가 다음 사이클에서도 유지되는지가 multiple "
+        "유지의 핵심입니다."
+    ),
+    "AXON": (
+        "Axon 은 하드웨어 장비업체에서 공공안전 소프트웨어 플랫폼으로 전환될수록 이익의 질이 "
+        "개선될 수 있습니다. Evidence Cloud 와 AI 리포팅이 경찰 워크플로우에 깊게 들어갈 경우 "
+        "lock-in 과 반복매출성이 강화됩니다. 다만 B2G 예산 사이클과 높은 valuation 은 주요 "
+        "점검 사항입니다."
+    ),
+    "CRDO": (
+        "Credo 는 AI 인터커넥트 카테고리 진입 단계로, 본업 이익의 질은 hyperscaler 주문 강도에 "
+        "의해 결정됩니다. 고객 집중도와 광 / 구리 전환 속도가 thesis 의 양 갈래 변수이며, "
+        "광통신 인수 시너지 인식 시점에 따라 multiple 정당화 여부가 결정됩니다."
+    ),
+}
+
+
+def alpha_judgment(ticker: str) -> str | None:
+    return ALPHA_JUDGMENT_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
+# Strategic Lens — SWOT / PESTEL / 3C / 3P (5 핵심 종목 풀, 나머지는 fallback)
+# ---------------------------------------------------------------------------
+
+STRATEGIC_LENS_KO: dict[str, dict[str, dict[str, str | list[str]]]] = {
+    "META": {
+        "swot": {
+            "strength": [
+                "글로벌 31억+ 사용자 기반과 광고 데이터",
+                "40%대 영업이익률을 유지하는 Family of Apps",
+            ],
+            "weakness": [
+                "AI CAPEX 확대에 따른 FCF 부담",
+                "Reality Labs 적자 지속",
+            ],
+            "opportunity": [
+                "AI 추천 알고리즘을 통한 광고 효율 개선",
+                "WhatsApp / Business Messaging 수익화",
+            ],
+            "threat": [
+                "개인정보 및 광고 규제",
+                "TikTok / YouTube / Amazon Ads 와의 경쟁",
+            ],
+        },
+        "pestel": {
+            "political": "미국·유럽의 빅테크 규제 및 플랫폼 책임 논쟁",
+            "economic": "광고 경기와 금리 수준에 민감",
+            "social": "소셜미디어 사용 행태와 청소년 보호 이슈",
+            "technological": "AI 추천 알고리즘 / 생성형 AI / AR / XR 인터페이스",
+            "environmental": "AI 데이터센터 전력 사용량 증가",
+            "legal": "개인정보 / 반독점 / 콘텐츠 규제",
+        },
+        "three_c": {
+            "company": "글로벌 attention 과 광고 타기팅 인프라를 보유",
+            "customer": "광고주, 소상공인, 브랜드 광고주가 주요 고객",
+            "competitor": "Google / YouTube / TikTok / Amazon Ads / Snap",
+        },
+        "three_p": {
+            "product": "Instagram / Facebook / WhatsApp / Messenger / Meta AI",
+            "pricing": "광고 ROI 가 유지되는 한 광고 단가 상승 가능",
+            "positioning": "글로벌 소셜 광고 플랫폼 최상위권",
+        },
+    },
+    "NFLX": {
+        "swot": {
+            "strength": [
+                "글로벌 2.6억+ 유료 가입자 + 추천 알고리즘",
+                "오리지널 콘텐츠 IP 와 글로벌 제작 capacity",
+            ],
+            "weakness": [
+                "콘텐츠 투자비의 절대 규모와 회수 사이클",
+                "신규 시장 (인도 / 동남아) ARPU 의 한계",
+            ],
+            "opportunity": [
+                "광고 요금제 확장 / 가격 인상 여력",
+                "스포츠 / 라이브 콘텐츠 진출",
+            ],
+            "threat": [
+                "Disney / Amazon Prime / YouTube 경쟁 심화",
+                "콘텐츠 투자 효율 저하 가능성",
+            ],
+        },
+        "pestel": {
+            "political": "각국 콘텐츠 규제와 현지 제작 비중 의무화 흐름",
+            "economic": "가처분 소득 변화와 환율 영향",
+            "social": "OTT 시청 습관 정착 + 광고 수용도 회복",
+            "technological": "추천 알고리즘 / 광고 요금제 ad tech / 게임 / 라이브",
+            "environmental": "콘텐츠 제작의 탄소 배출 (로지스틱스)",
+            "legal": "저작권 / 콘텐츠 규제 / 광고 데이터 보호",
+        },
+        "three_c": {
+            "company": "글로벌 콘텐츠 제작·배급·추천 플랫폼",
+            "customer": "전 세계 유료 구독자 및 광고 요금제 광고주",
+            "competitor": "Disney / YouTube / Amazon Prime Video / Apple TV / HBO Max",
+        },
+        "three_p": {
+            "product": "구독형 스트리밍, 광고 요금제, 오리지널 콘텐츠",
+            "pricing": "가격 인상 여력은 있으나 churn 과 경쟁 강도 점검 필요",
+            "positioning": "글로벌 SVOD 시장의 독립 플랫폼 리더",
+        },
+    },
+    "NVDA": {
+        "swot": {
+            "strength": [
+                "AI 데이터센터 GPU 사실상 독점 + CUDA 생태계 lock-in",
+                "Gross margin 75% 수준의 강한 가격 결정력",
+            ],
+            "weakness": [
+                "Hyperscaler 4-5 곳에 매출 집중",
+                "TSMC capacity 의존 (지정학 리스크)",
+            ],
+            "opportunity": [
+                "AI 추론(inference) 시장 확장",
+                "엔터프라이즈 / 자율주행 / 로보틱스 GPU 수요",
+            ],
+            "threat": [
+                "Hyperscaler 자체칩 (ASIC) 점유율 잠식",
+                "미국 수출 규제 강화",
+            ],
+        },
+        "pestel": {
+            "political": "미·중 반도체 패권 경쟁 + 수출 규제",
+            "economic": "Hyperscaler CAPEX 사이클에 매우 민감",
+            "social": "AI 도입 가속 + 일자리 / 윤리 논쟁",
+            "technological": "Rubin / 차세대 GPU 로드맵 + 추론 효율 가속",
+            "environmental": "데이터센터 전력 / 냉각 부담 (간접)",
+            "legal": "수출 통제 / 반독점 조사 가능성",
+        },
+        "three_c": {
+            "company": "AI 컴퓨팅 인프라의 핵심 병목을 장악",
+            "customer": "Hyperscaler / 엔터프라이즈 / 자율주행 / 로보틱스",
+            "competitor": "AMD / Intel / 자체칩 (Google TPU / AWS Trainium / Meta MTIA)",
+        },
+        "three_p": {
+            "product": "Blackwell / Rubin GPU + CUDA + Networking (Mellanox)",
+            "pricing": "AI 사이클 동안 강한 가격 결정력 유지",
+            "positioning": "AI 컴퓨팅 카테고리 사실상 독점 리더",
+        },
+    },
+    "AXON": {
+        "swot": {
+            "strength": [
+                "Evidence Cloud + AI 리포팅의 워크플로우 lock-in",
+                "테이저 / 바디캠 카테고리 사실상 독점",
+            ],
+            "weakness": [
+                "B2G 매출 비중이 높아 예산 사이클에 민감",
+                "고밸류 부담",
+            ],
+            "opportunity": [
+                "Public Safety OS 로의 전환 (소프트웨어 매출 비중 확대)",
+                "글로벌 경찰 / 연방기관 확장",
+            ],
+            "threat": [
+                "공공부문 정치 / 규제 리스크",
+                "장기 로봇 / 드론 경찰 시대의 하드웨어 대체 가능성",
+            ],
+        },
+        "pestel": {
+            "political": "공공안전 예산 우선순위 변화",
+            "economic": "지방정부 재정 건전성에 일부 의존",
+            "social": "경찰 책임성 / 시민 감시 논쟁",
+            "technological": "AI 리포팅 / 영상 분석 / 클라우드 인프라",
+            "environmental": "직접 영향 제한적",
+            "legal": "증거 데이터 보관 / 프라이버시 규제",
+        },
+        "three_c": {
+            "company": "공공안전 데이터 / 증거관리 / AI 리포팅 SaaS 사업자",
+            "customer": "미국 / 글로벌 경찰서, 연방기관, 일부 군 / 사기업",
+            "competitor": "Motorola Solutions / Genetec / Verint / 일부 startup",
+        },
+        "three_p": {
+            "product": "테이저 / 바디캠 / Evidence Cloud / AI 리포팅",
+            "pricing": "Evidence Cloud + AI 모듈은 사실상 표준 — 가격 인상 여력",
+            "positioning": "Public Safety SaaS 카테고리 리더",
+        },
+    },
+    "CRDO": {
+        "swot": {
+            "strength": [
+                "AI 데이터센터 AEC 카테고리 진입 우위",
+                "광통신 인수로 optical interconnect 영역 확장 가능성",
+            ],
+            "weakness": [
+                "Hyperscaler 2-3 곳에 매출 집중",
+                "광 / 구리 전환 사이클 변동성",
+            ],
+            "opportunity": [
+                "AI 클러스터 고속 연결 수요 가속",
+                "광통신 인수 시너지 인식",
+            ],
+            "threat": [
+                "광통신으로의 빠른 대체",
+                "Marvell / Broadcom 등 대형 경쟁사 진입",
+            ],
+        },
+        "pestel": {
+            "political": "미·중 반도체 정책 영향 (간접)",
+            "economic": "Hyperscaler CAPEX 사이클에 매우 민감",
+            "social": "AI 인프라 확장에 따른 전력 / 대역폭 수요",
+            "technological": "AEC / DSP / 광통신 표준 변화",
+            "environmental": "데이터센터 전력 효율 (간접)",
+            "legal": "지적재산 / 표준 라이선스 변동",
+        },
+        "three_c": {
+            "company": "AI 데이터센터 connectivity layer 사업자",
+            "customer": "Hyperscaler 데이터센터 + 일부 enterprise",
+            "competitor": "Marvell / Broadcom / Astera Labs / 일부 광통신 vendor",
+        },
+        "three_p": {
+            "product": "Active Electrical Cable + DSP + 광통신 (인수)",
+            "pricing": "AEC 카테고리 내 경쟁 — gross margin 추세가 핵심 증거",
+            "positioning": "AI 인터커넥트 niche player → 광통신 확장 단계",
+        },
+    },
+}
+
+
+def strategic_lens(ticker: str) -> dict | None:
+    return STRATEGIC_LENS_KO.get(ticker)
+
+
+# ---------------------------------------------------------------------------
 # 분류 라벨
 # ---------------------------------------------------------------------------
 

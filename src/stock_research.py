@@ -27,6 +27,7 @@ from .curated import (
     simple_explanation as _curated_simple_explanation,
     thesis_pillars as _curated_thesis_pillars,
 )
+from .earnings_quality import build_earnings_quality, build_strategic_lens
 from .stock_detail import (
     anti_thesis,
     core_thesis_full,
@@ -111,6 +112,12 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
     # 8. research_quality
     rq = research_quality(row)
 
+    # 9. earnings_quality (8 차원 + Moat + Alpha Judgment)
+    eq = build_earnings_quality(ticker, row)
+
+    # 10. strategic_lens (SWOT / PESTEL / 3C / 3P)
+    lens = build_strategic_lens(ticker)
+
     return {
         "easy_explanation": easy,
         "core_thesis": core,
@@ -120,6 +127,8 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
         "anti_thesis": anti,
         "final_view": final_view,
         "research_quality": rq,
+        "earnings_quality": eq,
+        "strategic_lens": lens,
     }
 
 

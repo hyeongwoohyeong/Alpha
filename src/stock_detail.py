@@ -834,6 +834,7 @@ def risk_grade(row: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
+    from .earnings_quality import build_earnings_quality, build_strategic_lens
     md = row["market_data"]
     sc = row["scores"]
     return {
@@ -860,6 +861,8 @@ def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
         "anti_thesis": anti_thesis(row),
         "final_judgment": final_judgment(row),
         "research_quality": research_quality(row),
+        "earnings_quality": build_earnings_quality(row["ticker"], row),
+        "strategic_lens": build_strategic_lens(row["ticker"]),
         # 하위 호환 (UI에서 더 이상 사용하지 않지만 다른 코드가 참조 가능)
         "scenarios": scenarios(row),
         "lens_views": lens_views(row),
