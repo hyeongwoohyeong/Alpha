@@ -1,4 +1,10 @@
-"""Tier 1 Discovery — 미국 상장주식 wide universe 정량 스크리닝.
+"""Wide Scan → Discovery Candidate — 미국 상장주식 정량 스크리닝.
+
+퍼널 단계:
+    Wide Scan         — wide_universe (~300) 가격/거래량 batch fetch
+    Discovery Cand.   — 4 큐 (정량 시그널) 통과 후보 80개 선정 (이 모듈)
+    Promoted Cand.    — promotion.py 가 처리
+    Deep Dive         — core watchlist + 상위 promoted
 
 큐:
     A. Quality Dislocation     — 우량주가 단기 이슈로 20~45% 조정받은 후보
@@ -8,7 +14,7 @@
 
 원칙:
     - LLM 사용 금지 (정량만)
-    - 뉴스 fetch 금지 (Tier 2 부터)
+    - 뉴스 fetch 금지 (Promoted Candidate 단계부터)
     - market_data 의 batch fetch 결과만 사용
     - 데이터 부족 / NaN 은 큐에서 제외 (False positive 회피)
 """
@@ -479,12 +485,12 @@ def run_discovery(
     return by_queue
 
 
-def select_tier1(
+def select_discovery_candidates(
     by_queue: dict[str, list[dict[str, Any]]],
     top_k: int = 80,
     per_queue_cap: int = 30,
 ) -> list[dict[str, Any]]:
-    """큐 통합 — 큐별 상위 per_queue_cap 후 중복 제거. 최종 top_k 까지.
+    """큐 통합 — 큐별 상위 per_queue_cap 후 중복 제거. 최종 top_k Discovery Candidate.
 
     같은 종목이 여러 큐에 들어가면 모든 큐 정보를 보존 (queues 리스트).
     """
@@ -516,3 +522,7 @@ def select_tier1(
 
     ranked = sorted(pool.values(), key=lambda x: x["final_discovery_score"], reverse=True)
     return ranked[:top_k]
+
+
+# Backward-compat alias (구 import 호환)
+select_tier1 = select_discovery_candidates

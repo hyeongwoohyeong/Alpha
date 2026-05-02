@@ -61,15 +61,15 @@ class AlphaConfig:
     enable_discovery: bool = True
     enable_promotion: bool = True
 
-    # Wide universe 처리 한도 (필터 통과 후 상위 N개만 가격 fetch)
+    # Wide Scan 처리 한도 (필터 통과 후 상위 N개만 가격 fetch)
     wide_universe_limit: int = 1500
-    # Tier1 → Tier2 promotion 후보 수
-    tier1_top_k: int = 80
-    # Tier2 → Tier3 deep dive 승격 후보 수
-    promote_to_deep_dive_k: int = 15
+    # Wide Scan → Discovery Candidate (큐 통합 상위 K)
+    discovery_top_k: int = 80
+    # Promoted Candidate → Deep Dive 승격 K
+    deep_dive_k: int = 15
 
-    # 뉴스 fetch — Tier1 후보에만 적용
-    news_per_tier1_ticker: int = 3
+    # 뉴스 fetch — Discovery Candidate 단계에서 후보당
+    news_per_discovery_ticker: int = 3
 
     @property
     def llm_enabled(self) -> bool:
@@ -78,6 +78,19 @@ class AlphaConfig:
     @property
     def use_high_quality_llm(self) -> bool:
         return self.llm_mode == LLM_MODE_HIGH_QUALITY
+
+    # ── Backward-compat aliases (구 이름 호환) ──
+    @property
+    def tier1_top_k(self) -> int:
+        return self.discovery_top_k
+
+    @property
+    def promote_to_deep_dive_k(self) -> int:
+        return self.deep_dive_k
+
+    @property
+    def news_per_tier1_ticker(self) -> int:
+        return self.news_per_discovery_ticker
 
 
 def load_config() -> AlphaConfig:
@@ -98,9 +111,13 @@ def load_config() -> AlphaConfig:
         enable_discovery=_env_bool("ENABLE_DISCOVERY", True),
         enable_promotion=_env_bool("ENABLE_PROMOTION", True),
         wide_universe_limit=_env_int("WIDE_UNIVERSE_LIMIT", 1500),
-        tier1_top_k=_env_int("TIER1_TOP_K", 80),
-        promote_to_deep_dive_k=_env_int("PROMOTE_TO_DEEP_DIVE_K", 15),
-        news_per_tier1_ticker=_env_int("NEWS_PER_TIER1_TICKER", 3),
+        # 새 환경변수 우선 → 없으면 구 이름 fallback
+        discovery_top_k=_env_int("DISCOVERY_TOP_K", _env_int("TIER1_TOP_K", 80)),
+        deep_dive_k=_env_int("DEEP_DIVE_K", _env_int("PROMOTE_TO_DEEP_DIVE_K", 15)),
+        news_per_discovery_ticker=_env_int(
+            "NEWS_PER_DISCOVERY_TICKER",
+            _env_int("NEWS_PER_TIER1_TICKER", 3),
+        ),
     )
 
 

@@ -2904,8 +2904,8 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
 def render_brief_discovery_section():
     """Daily Brief 안의 신규 발굴 후보 섹션.
 
-    Tier 2 Promotion 통과 후보가 있으면 그것을 표시. 없으면 Tier 1 의 큐별
-    상위 후보를 "예비 발굴 후보" 로 표시 (정밀 검토 전 단계 명시).
+    Promoted Candidate 가 있으면 그것을 표시. 없으면 Wide Scan 통과 후
+    Discovery Candidate 큐별 상위 후보를 "예비 발굴 후보" 로 표시.
     """
     data = _fetch_discovery_data()
     promoted = data.get("promoted") or []
@@ -2940,10 +2940,10 @@ def render_brief_discovery_section():
     st.markdown(summary_html, unsafe_allow_html=True)
 
     if promoted:
-        # ── Tier 2 통과 후보 ──
+        # ── Promoted Candidate (Deep Dive 권장) ──
         st.markdown(
             '<div class="info-row check" style="margin-bottom:8px;">'
-            'Tier 2 Promotion 통과 — Deep Dive 권장 후보'
+            'Promoted Candidate — Deep Dive 권장 후보'
             "</div>",
             unsafe_allow_html=True,
         )
@@ -2951,10 +2951,11 @@ def render_brief_discovery_section():
             _render_discovery_card(c, i, key_prefix="brief_disc")
         return
 
-    # ── Tier 2 통과 후보 없음 — Tier 1 예비 후보 표시 (큐별 상위 1~2개씩) ──
+    # ── Promoted Candidate 없음 — Discovery Candidate 예비 후보 표시 ──
     st.markdown(
         '<div class="info-row alert" style="margin-bottom:8px;">'
-        'Tier 2 Promotion 통과 후보 없음 — 아래는 <b>정밀 검토 전 예비 후보</b> 입니다 (Tier 1 정량 시그널만 통과). '
+        'Promoted Candidate 없음 — 아래는 <b>정밀 검토 전 예비 후보</b> 입니다 '
+        '(Wide Scan 정량 시그널만 통과한 Discovery Candidate). '
         '추천이 아니며, Discovery 페이지에서 큐별 전체 후보를 확인하실 수 있습니다.'
         "</div>",
         unsafe_allow_html=True,
@@ -2982,7 +2983,7 @@ def render_brief_discovery_section():
                 "queue_type": q,
                 "reason": it.get("signal_summary"),
                 "discovery_score": it.get("score"),
-                "thesis_impact": "정밀 검토 전 (Tier 1 시그널만 통과)",
+                "thesis_impact": "정밀 검토 전 (Wide Scan 시그널만 통과)",
                 "action_recommendation": "Promotion 미통과 — 후속 뉴스 / 이벤트 확인 후 Deep Dive 검토",
             })
             break  # 큐당 1개만
@@ -3001,7 +3002,7 @@ def render_brief_discovery_section():
                 "queue_type": q,
                 "reason": it.get("signal_summary"),
                 "discovery_score": it.get("score"),
-                "thesis_impact": "정밀 검토 전 (Tier 1 시그널만 통과)",
+                "thesis_impact": "정밀 검토 전 (Wide Scan 시그널만 통과)",
                 "action_recommendation": "Promotion 미통과 — 후속 뉴스 / 이벤트 확인 후 Deep Dive 검토",
             })
             if len(preliminary) >= 5:
@@ -3022,7 +3023,7 @@ def render_discovery():
     render_back_button("discovery")
     page_header(
         "Discovery",
-        meta="미국 상장주식 wide universe 정량 스크리닝 → Tier 1 / Tier 2 후보",
+        meta="미국 상장주식 Wide Scan → Discovery Candidate / Promoted Candidate",
     )
 
     data = _fetch_discovery_data()
@@ -3043,9 +3044,9 @@ def render_discovery():
         )
         return
 
-    # 1) 승격 후보 (Tier 2 통과)
+    # 1) Promoted Candidate (Deep Dive 권장)
     st.markdown(
-        '<div class="section-title">Tier 2 승격 후보 (Deep Dive 권장)</div>',
+        '<div class="section-title">Promoted Candidate — Deep Dive 권장</div>',
         unsafe_allow_html=True,
     )
     if promoted:

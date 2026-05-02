@@ -44,7 +44,7 @@ from src.brief_generator import (
 )
 from src.config import load_config, make_budget
 from src.curated import recent_events as _curated_recent_events
-from src.discovery import run_discovery, select_tier1
+from src.discovery import run_discovery, select_discovery_candidates
 from src.event_processor import (
     cluster_news_by_event,
     enrich_curated_event,
@@ -115,7 +115,8 @@ def step_fetch_wide_market_data(
         chunk = tickers[i:i + chunk_size]
         chunk_idx = i // chunk_size + 1
         try:
-            res = fetch_market_universe(chunk, period="1y", enrich=False)
+            # enrich=True 로 시총/PER 등 메타데이터까지 보강 (필터링용)
+            res = fetch_market_universe(chunk, period="1y", enrich=True)
             md_map.update(res)
             avail = sum(1 for m in res.values() if m.get("available"))
             log.info(
@@ -139,14 +140,14 @@ def step_run_discovery(
     conn, run_id: str, date_iso: str,
     wide_universe: list[dict], md_map: dict[str, dict], top_k: int = 80,
 ) -> tuple[dict[str, list[dict]], list[dict]]:
-    """Tier 1 — 큐별 시그널 + Tier1 통합 선정 + DB 저장."""
+    """Wide Scan → Discovery Candidate (큐별 시그널 + 통합 선정) + DB 저장."""
     if not wide_universe or not md_map:
         log.info("[4/15] discovery skipped (no wide universe or md_map)")
         return {}, []
     log.info("[4/15] running discovery on %d wide tickers...", len(wide_universe))
 
     by_queue = run_discovery(wide_universe, md_map)
-    tier1 = select_tier1(by_queue, top_k=top_k)
+    discovery_candidates = select_discovery_candidates(by_queue, top_k=top_k)
 
     # discovery_scores 저장
     for queue_type, items in by_queue.items():
@@ -164,23 +165,23 @@ def step_run_discovery(
             except Exception as e:
                 log.debug("[%s] discovery_score upsert failed: %s", it["ticker"], e)
     conn.commit()
-    log.info("[4/15] discovery done: tier1=%d", len(tier1))
-    return by_queue, tier1
+    log.info("[4/15] discovery done: candidates=%d", len(discovery_candidates))
+    return by_queue, discovery_candidates
 
 
 def step_run_promotion(
     conn, run_id: str, date_iso: str,
-    tier1_candidates: list[dict],
+    discovery_candidates: list[dict],
     md_map: dict[str, dict],
     core_tickers: set[str],
     cfg,
     promote_k: int = 15,
 ) -> list[dict]:
-    """Tier 2 — 뉴스 fetch + 요약 + Promotion Score + 상위 K 승격."""
-    if not tier1_candidates:
-        log.info("[5-7/15] promotion skipped — no tier1 candidates")
+    """Promotion — 뉴스 fetch + 요약 + Promotion Score + 상위 K Promoted Candidate."""
+    if not discovery_candidates:
+        log.info("[5-7/15] promotion skipped — no discovery candidates")
         return []
-    log.info("[5-7/15] promoting %d tier1 candidates (core 제외)...", len(tier1_candidates))
+    log.info("[5-7/15] promoting %d discovery candidates (core 제외)...", len(discovery_candidates))
 
     # 캐시-인지 summarize_fn (article_summaries 사용)
     def _summarize_with_conn(news_item, stock_context=None, budget=None, cfg=None):
@@ -189,13 +190,13 @@ def step_run_promotion(
         )
 
     promo = run_promotion(
-        tier1_candidates,
+        discovery_candidates,
         md_map=md_map,
         core_tickers=core_tickers,
         cfg=cfg,
         fetch_news_fn=fetch_ticker_news,
         summarize_fn=_summarize_with_conn,
-        news_per_ticker=cfg.news_per_tier1_ticker,
+        news_per_ticker=cfg.news_per_discovery_ticker,
     )
     promoted = select_promoted(promo, k=promote_k)
 
@@ -563,15 +564,15 @@ def run_research(
         "run_id": run_id, "date": date_iso, "ok": False,
         "universe": 0, "wide_universe": 0,
         "price_ok": 0, "news_ok": 0, "scores": 0, "research": 0,
-        "tier1": 0, "promoted": 0,
+        "discovery_candidates": 0, "promoted": 0,
     }
     try:
-        # ── Tier 3 core watchlist 로드 ─────────────────────────────────
+        # ── Deep Dive 의 core watchlist 로드 ─────────────────────────
         unis = step_load_universe(conn, run_id, only_tickers=only_tickers)
         summary["universe"] = len(unis)
         core_tickers = {u["ticker"] for u in unis}
 
-        # ── Tier 1 Discovery — wide universe ─────────────────────────
+        # ── Wide Scan → Discovery Candidate ─────────────────────────
         promoted: list[dict] = []
         if cfg.enable_discovery and not skip_discovery and not only_tickers:
             wide = step_load_wide_universe(conn, run_id, limit=cfg.wide_universe_limit)
@@ -579,22 +580,22 @@ def run_research(
             wide_md = step_fetch_wide_market_data(
                 conn, run_id, wide, date_iso, skip=skip_wide_fetch,
             )
-            _, tier1 = step_run_discovery(
-                conn, run_id, date_iso, wide, wide_md, top_k=cfg.tier1_top_k,
+            _, discovery_cands = step_run_discovery(
+                conn, run_id, date_iso, wide, wide_md, top_k=cfg.discovery_top_k,
             )
-            summary["tier1"] = len(tier1)
+            summary["discovery_candidates"] = len(discovery_cands)
 
-            # Tier 2 Promotion (뉴스 fetch + summarize + 점수)
-            if cfg.enable_promotion and tier1:
+            # Promotion (뉴스 fetch + summarize + 점수) → Promoted Candidate
+            if cfg.enable_promotion and discovery_cands:
                 promoted = step_run_promotion(
-                    conn, run_id, date_iso, tier1, wide_md, core_tickers,
-                    cfg=cfg, promote_k=cfg.promote_to_deep_dive_k,
+                    conn, run_id, date_iso, discovery_cands, wide_md, core_tickers,
+                    cfg=cfg, promote_k=cfg.deep_dive_k,
                 )
             summary["promoted"] = len(promoted)
         else:
             log.info("[2-7/15] discovery / promotion skipped")
 
-        # ── Tier 3 Deep Dive — core watchlist + 승격 후보 ─────────────
+        # ── Deep Dive — core watchlist + Promoted Candidate ─────────
         # 승격된 후보를 unis 에 임시로 합쳐 deep dive 처리
         promoted_metas = []
         for p in promoted:
@@ -655,7 +656,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ticker", action="append", help="특정 종목만 처리 (Discovery 단계 자동 skip)")
     p.add_argument("--skip-news", action="store_true", help="뉴스 fetch 생략 (가격만 빠르게)")
     p.add_argument("--skip-discovery", action="store_true",
-                   help="Tier 1 Discovery / Tier 2 Promotion 단계 생략 (core watchlist 만 처리)")
+                   help="Wide Scan / Discovery / Promotion 단계 생략 (core watchlist 만 처리)")
     p.add_argument("--skip-wide-fetch", action="store_true",
                    help="Wide universe 가격 fetch 생략 (개발/테스트용)")
     p.add_argument("--dry-run", action="store_true", help="DB에 쓰지 않고 출력만")

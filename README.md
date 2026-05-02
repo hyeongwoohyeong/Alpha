@@ -14,34 +14,39 @@
 
 ## 핵심 특징
 
-- **3-Tier Discovery Engine**: 미국 상장주식 wide universe (~300 sample) 정량 스크리닝 → Tier 2 promotion → Tier 3 deep dive
+- **4 단계 Discovery 퍼널**: Wide Scan → Discovery Candidate → Promoted Candidate → Deep Dive
 - **4 Discovery 큐**: Quality Dislocation / Earnings Revision / Unusual Volume / Civilization Alpha
 - **LLM 비용 0원 운영 가능**: `LLM_MODE=none` 모드에서 룰 기반으로만 작동. 같은 기사 URL 은 `article_summaries` 캐시로 재사용
-- **3 LLM 모드**: `none` (비용 0) / `low_cost` (Tier 2 후보 일부) / `high_quality` (Deep Dive 후보)
+- **3 LLM 모드**: `none` (비용 0) / `low_cost` (Promoted Candidate 일부) / `high_quality` (Deep Dive)
 - **실제 데이터** : `yfinance`로 실시간 주가, `Google News RSS`로 종목/테마 뉴스를 수집
 - **에러 격리** : 특정 종목 데이터/뉴스 수집이 실패해도 앱은 죽지 않고 *Data Unavailable*로 표시
 
-## 3-Tier 구조
+## 퍼널 구조 (Wide Scan → Deep Dive)
 
 ```
-Tier 1  Discovery   |  data/wide_universe.csv (~300 sample, Russell 3000 확장 가능)
-                    |  → 정량 스크리닝 (가격 / 거래량 / 멀티플 / 재무비율)
-                    |  → 4 큐 별 시그널 (Quality Dislocation / Earnings Revision / Unusual Volume / Civilization Alpha)
-                    |  → discovery_scores 테이블
-                    |  → Tier1 통합 상위 80 후보
-                    |  ※ LLM 사용 금지, 뉴스 fetch 금지
-                    ↓
-Tier 2  Promotion   |  Tier 1 상위 80 후보 (core watchlist 제외)
-                    |  → 뉴스 fetch (후보당 3건만)
-                    |  → 한국어 요약 (LLM_MODE=none 이면 룰 기반)
-                    |  → article_summaries 캐시 (같은 URL 재호출 X)
-                    |  → Promotion Score 계산 → 상위 15 승격
-                    |  → promotion_candidates 테이블 (promoted_to_deep_dive=1)
-                    ↓
-Tier 3  Deep Dive   |  core watchlist 42 + 승격 15
-                    |  → 6요소 점수 / Anti-Thesis / Action Tag / Daily Brief
-                    |  → 기존 종목 상세 화면 그대로 사용
+1) Wide Scan            |  data/wide_universe.csv (~300 sample, Russell 3000 확장 가능)
+                        |  → 가격 / 거래량 / 시총 batch fetch
+                        |  ※ LLM 사용 금지, 뉴스 fetch 금지
+                        ↓
+2) Discovery Candidate  |  4 큐 정량 시그널 통과 ~80 후보
+                        |  Quality Dislocation / Earnings Revision /
+                        |  Unusual Volume / Civilization Alpha
+                        |  → discovery_scores 테이블
+                        ↓
+3) Promoted Candidate   |  뉴스 fetch (후보당 3건) + 한국어 요약 + Promotion Score
+                        |  → article_summaries 캐시 (같은 URL 재호출 X)
+                        |  → 상위 ~15 deep dive 승격
+                        |  → promotion_candidates 테이블 (promoted_to_deep_dive=1)
+                        |  (core watchlist 종목은 자동 deep dive — promotion 제외)
+                        ↓
+4) Deep Dive            |  core watchlist 42 + Promoted Candidate ~15
+                        |  → 6요소 점수 / Anti-Thesis / Action Tag / Daily Brief
+                        |  → 종목 상세 / 종합 판단 / 종목별 KPI 큐레이션
 ```
+
+> **명칭 안내**: 이전 문서의 "Tier 1 / Tier 2 / Tier 3" 표현은 위와 같이
+> Wide Scan → Discovery Candidate → Promoted Candidate → Deep Dive 로 통일했습니다.
+> "Tier 1 이 Tier 2 보다 상위 등급" 으로 오해될 여지가 있어 퍼널 단계 명칭으로 변경.
 
 ## LLM 모드 / 비용 제어
 
@@ -52,11 +57,12 @@ Tier 3  Deep Dive   |  core watchlist 42 + 승격 15
 | `LLM_MODE` | `none` | `none` / `low_cost` / `high_quality` |
 | `MAX_LLM_CALLS_PER_RUN` | `30` | 한 run 당 최대 LLM 호출 (캐시 hit 제외) |
 | `ENABLE_SUMMARY_CACHE` | `true` | `article_summaries` 캐시 사용 여부 |
-| `ENABLE_DISCOVERY` | `true` | Tier 1 Discovery 단계 on/off |
-| `ENABLE_PROMOTION` | `true` | Tier 2 Promotion 단계 on/off |
-| `WIDE_UNIVERSE_LIMIT` | `1500` | wide universe 처리 종목 상한 |
-| `TIER1_TOP_K` | `80` | Tier 1 통합 후보 수 |
-| `PROMOTE_TO_DEEP_DIVE_K` | `15` | Tier 2 → Tier 3 승격 수 |
+| `ENABLE_DISCOVERY` | `true` | Wide Scan + Discovery Candidate 단계 on/off |
+| `ENABLE_PROMOTION` | `true` | Promotion 단계 (→ Promoted Candidate) on/off |
+| `WIDE_UNIVERSE_LIMIT` | `1500` | Wide Scan 처리 종목 상한 |
+| `DISCOVERY_TOP_K` | `80` | Discovery Candidate 통합 후보 수 (구: `TIER1_TOP_K`) |
+| `DEEP_DIVE_K` | `15` | Promoted → Deep Dive 승격 수 (구: `PROMOTE_TO_DEEP_DIVE_K`) |
+| `NEWS_PER_DISCOVERY_TICKER` | `3` | Discovery Candidate 단계 뉴스 fetch 수 (구: `NEWS_PER_TIER1_TICKER`) |
 
 `LLM_MODE=none` 또는 API key 미설정 시 — 자동으로 룰 기반 폴백. 엔진 전체 동작에는 영향 없음.
 
@@ -102,7 +108,7 @@ Alpha 는 두 프로세스로 분리되어 있습니다.
 15 단계로 확장된 파이프라인.
 
 1. core_universe 로드
-2. wide_universe 로드 (Tier 1)
+2. wide_universe 로드 (Wide Scan)
 3. wide market data batch fetch
 4. Discovery 4-queue scoring → discovery_scores
 5-7. Promotion (뉴스 fetch + 한국어 요약 + Promotion Score) → promotion_candidates

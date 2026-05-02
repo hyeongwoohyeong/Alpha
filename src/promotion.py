@@ -1,4 +1,7 @@
-"""Tier 2 Promotion Engine — Tier 1 후보 50~100개 → Tier 3 승격 10~20개.
+"""Promotion Engine — Discovery Candidate 50~100개 → Promoted Candidate 10~20개.
+
+퍼널:
+    Wide Scan → Discovery Candidate → Promoted Candidate → Deep Dive
 
 수행:
     - 뉴스 fetch (후보당 N건만)
@@ -9,7 +12,7 @@
 LLM:
     - LLM 모드가 켜져 있으면 article_summaries 캐시 활용 또는 신규 호출
     - LLM_MODE=none 이면 룰 기반 요약만
-    - core watchlist 종목은 자동 promotion 제외 (이미 Tier 3 항상 처리됨)
+    - core watchlist 종목은 자동 promotion 제외 (이미 Deep Dive 항상 처리됨)
 """
 from __future__ import annotations
 
@@ -130,7 +133,7 @@ def _action_recommendation(promotion_score: float, impact: str) -> str:
 
 
 def run_promotion(
-    tier1_candidates: list[dict[str, Any]],
+    discovery_candidates: list[dict[str, Any]],
     md_map: dict[str, dict[str, Any]],
     *,
     core_tickers: set[str],
@@ -139,11 +142,11 @@ def run_promotion(
     summarize_fn=None,
     news_per_ticker: int = 3,
 ) -> list[dict[str, Any]]:
-    """Tier 1 후보 → 뉴스/이벤트/재무 종합 → Promotion Score.
+    """Discovery Candidate → 뉴스/이벤트/재무 종합 → Promotion Score.
 
     Args:
-        tier1_candidates: select_tier1() 결과
-        md_map: 가격/재무 데이터 (Tier 1 fetch 재사용)
+        discovery_candidates: select_discovery_candidates() 결과
+        md_map: 가격/재무 데이터 (Wide Scan fetch 재사용)
         core_tickers: 이미 deep dive 대상인 core watchlist (제외 처리)
         fetch_news_fn: dependency injection (테스트용)
         summarize_fn: dependency injection (테스트용)
@@ -157,7 +160,7 @@ def run_promotion(
     summarize_fn = summarize_fn or summarize_news_to_korean
 
     out: list[dict[str, Any]] = []
-    for cand in tier1_candidates:
+    for cand in discovery_candidates:
         ticker = cand["ticker"]
         if ticker in core_tickers:
             # core watchlist 종목은 자동 deep dive — promotion 흐름에서 제외

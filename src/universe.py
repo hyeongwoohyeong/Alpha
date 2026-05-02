@@ -45,7 +45,7 @@ THEME_LABEL_KO: dict[str, str] = {
     "defense": "방산",
     "space": "우주",
     "healthcare_infra": "헬스케어 인프라",
-    "platform": "퀄리티 플랫폼",
+    "platform": "프리미엄 플랫폼",
     "ecommerce_platform": "이커머스 플랫폼",
     "travel_mobility": "여행/모빌리티",
     "mobility_consumer": "모빌리티/소비",
@@ -59,7 +59,7 @@ CATEGORY_LABEL_KO: dict[str, str] = {
     "Defense": "방산",
     "Space": "우주",
     "Healthcare Infrastructure": "헬스케어 인프라",
-    "Quality Platform": "퀄리티 플랫폼",
+    "Quality Platform": "프리미엄 플랫폼",
     "Consumer Mobility": "소비/모빌리티",
     "Consumer Brand": "컨슈머 브랜드",
 }
