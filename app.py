@@ -2914,6 +2914,86 @@ def render_stock_detail():
     st.markdown(f'<div class="card">{anti_body}</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
 
+    # ================== Bottleneck Thesis (해당될 때만) ==================
+    try:
+        from src.bottleneck import build_bottleneck_thesis
+        _bn_meta = {
+            "ticker": row.get("ticker"),
+            "name": row.get("name_en") or row.get("name_ko") or "",
+            "sector": row.get("sector"),
+            "industry": row.get("industry"),
+        }
+        # core_universe 는 sector / industry 비어 있을 수 있어 wide_universe 매핑에서 보강
+        if not (_bn_meta["sector"] or _bn_meta["industry"]):
+            _wm = _wide_universe_name_map.__wrapped__() if hasattr(_wide_universe_name_map, "__wrapped__") else None
+            try:
+                from src.universe import load_wide_universe
+                for _u in load_wide_universe():
+                    if (_u.get("ticker") or "").upper() == (row.get("ticker") or "").upper():
+                        _bn_meta["sector"] = _u.get("sector")
+                        _bn_meta["industry"] = _u.get("industry")
+                        _bn_meta["name"] = _bn_meta["name"] or _u.get("name") or ""
+                        break
+            except Exception:
+                pass
+        bn = build_bottleneck_thesis(row.get("ticker", ""), _bn_meta, row.get("market_data") or {})
+    except Exception:
+        bn = None
+
+    if bn:
+        st.markdown(
+            '<div class="section-title">Bottleneck Thesis'
+            '<span style="font-size:13px; color:var(--muted); margin-left:8px;">밸류체인 병목 투자 논리</span>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        score_color = (
+            "#0F4C75" if bn["score"] >= 75 else
+            "#1B6FC0" if bn["score"] >= 60 else
+            "#6B7280"
+        )
+        st.markdown(
+            '<div class="card">'
+            '<div style="display:flex; gap:18px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">'
+            f'<span style="font-size:13px; color:var(--muted);">Bottleneck Alpha Score</span>'
+            f'<span style="font-size:26px; font-weight:700; color:{score_color};">{bn["score"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Target Industry</span>'
+            f'<span class="para-text">{bn["target_industry"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Value Chain Position</span>'
+            f'<span class="para-text">{bn["value_chain_position"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Bottleneck Description</span>'
+            f'<span class="para-text">{bn["bottleneck_description"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Why It Matters</span>'
+            f'<span class="para-text">{bn["why_it_matters"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Who Benefits</span>'
+            f'<span class="para-text">{bn["who_benefits"]}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">Key Risk</span>'
+            f'<span class="para-text">{bn["key_risk"]}</span>'
+            "</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="judgment-card" style="margin-top:6px;">'
+            '<div class="judgment-eyebrow">Alpha Judgment — 밸류체인 병목 관점</div>'
+            f'<div class="judgment-body">{bn["alpha_judgment"]}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
+
     # ================== [NEW] 주요 뉴스 ==================
     st.markdown('<div class="section-title">주요 뉴스</div>', unsafe_allow_html=True)
     news_items = news_with_impact(row, limit=5)
@@ -3258,6 +3338,7 @@ def _fetch_discovery_data():
                 "Earnings Revision",
                 "Unusual Volume",
                 "Civilization Alpha",
+                "Bottleneck Supplier",
             ):
                 items = [dict(r) for r in _db.fetch_discovery_scores(conn, queue_type=q, limit=20)]
                 queues[q] = items
@@ -3357,7 +3438,7 @@ def render_brief_discovery_section():
         )
         return
 
-    # 큐 요약
+    # 큐 요약 (5 개 큐)
     summary_html = (
         '<div class="card">'
         '<div class="para-row">'
@@ -3366,7 +3447,8 @@ def render_brief_discovery_section():
         f'Quality Dislocation {queue_counts.get("Quality Dislocation", 0)} · '
         f'Earnings Revision {queue_counts.get("Earnings Revision", 0)} · '
         f'Unusual Volume {queue_counts.get("Unusual Volume", 0)} · '
-        f'Civilization Alpha {queue_counts.get("Civilization Alpha", 0)}'
+        f'Civilization Alpha {queue_counts.get("Civilization Alpha", 0)} · '
+        f'<b>Bottleneck Supplier {queue_counts.get("Bottleneck Supplier", 0)}</b>'
         "</span></div>"
         "</div>"
     )
@@ -3399,6 +3481,7 @@ def render_brief_discovery_section():
     seen: set[str] = set()
     queue_order = [
         "Quality Dislocation",
+        "Bottleneck Supplier",  # 사용자가 가장 보고 싶어하는 큐 — 우선 노출
         "Earnings Revision",
         "Civilization Alpha",
         "Unusual Volume",

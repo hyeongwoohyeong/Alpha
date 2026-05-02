@@ -36,12 +36,14 @@ QUEUE_DISLOCATION = "Quality Dislocation"
 QUEUE_EARNINGS = "Earnings Revision"
 QUEUE_UNUSUAL_VOLUME = "Unusual Volume"
 QUEUE_CIVILIZATION = "Civilization Alpha"
+QUEUE_BOTTLENECK = "Bottleneck Supplier"
 
 ALL_QUEUES = (
     QUEUE_DISLOCATION,
     QUEUE_EARNINGS,
     QUEUE_UNUSUAL_VOLUME,
     QUEUE_CIVILIZATION,
+    QUEUE_BOTTLENECK,
 )
 
 
@@ -410,11 +412,21 @@ def _score_civilization(meta: dict[str, Any], md: dict[str, Any]) -> dict | None
     }
 
 
+def _score_bottleneck_supplier(meta: dict[str, Any], md: dict[str, Any]) -> dict | None:
+    """Bottleneck Supplier 큐 — 밸류체인 병목 공급자 발굴.
+
+    src/bottleneck.py 의 score_for_discovery_queue 위임.
+    """
+    from .bottleneck import score_for_discovery_queue
+    return score_for_discovery_queue(meta, md)
+
+
 _QUEUE_SCORERS = {
     QUEUE_DISLOCATION: _score_dislocation,
     QUEUE_EARNINGS: _score_earnings,
     QUEUE_UNUSUAL_VOLUME: _score_unusual_volume,
     QUEUE_CIVILIZATION: _score_civilization,
+    QUEUE_BOTTLENECK: _score_bottleneck_supplier,
 }
 
 
@@ -475,12 +487,13 @@ def run_discovery(
             it["rank"] = i
 
     log.info(
-        "discovery: filtered=%d/%d / dislocation=%d earnings=%d volume=%d civ=%d",
+        "discovery: filtered=%d/%d / dislocation=%d earnings=%d volume=%d civ=%d bottleneck=%d",
         n_filtered, n_total,
         len(by_queue[QUEUE_DISLOCATION]),
         len(by_queue[QUEUE_EARNINGS]),
         len(by_queue[QUEUE_UNUSUAL_VOLUME]),
         len(by_queue[QUEUE_CIVILIZATION]),
+        len(by_queue[QUEUE_BOTTLENECK]),
     )
     return by_queue
 
