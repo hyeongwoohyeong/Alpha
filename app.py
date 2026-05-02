@@ -685,6 +685,28 @@ CUSTOM_CSS = """
         color: #1F2937;
         padding: 3px 0;
     }
+    /* 뉴스 카드 관련 기사 묶음 */
+    .related-news-link {
+        font-size: 13px;
+        color: var(--navy);
+        text-decoration: none;
+        border-bottom: 1px dashed var(--line-strong);
+        padding: 0 2px;
+    }
+    .related-news-link:hover {
+        background: var(--accent-bg);
+    }
+    /* 데이터 품질 경고 배너 */
+    .data-quality-warning {
+        background: #FEF3C7;
+        border-left: 4px solid #D97706;
+        color: #78350F;
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 14px;
+        line-height: 1.6;
+        margin-bottom: 14px;
+    }
     @media (max-width: 640px) {
         .para-row.kpts-row {
             grid-template-columns: 1fr;
@@ -2060,13 +2082,27 @@ def render_stock_detail():
         '<div class="card">'
         '<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">'
         f'<div><div class="pick-name" style="font-size:22px;">{detail["name_kr"]}</div>'
-        f'<div class="pick-type">{detail["category"]} · {detail["investment_type"]}'
+        f'<div class="pick-type">{detail["investment_type"]}'
         f' · <b style="color:var(--navy);">분류: {detail.get("company_type","Structural Growth")}</b></div></div>'
         f'<div>{render_tag(detail["judgment_tag"])}</div>'
         "</div>"
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # 데이터 품질 경고 — split-adjusted / 가격 오류 가능성
+    _md = row.get("market_data") or {}
+    _dq_flag = _md.get("data_quality_flag")
+    _dq_reason = _md.get("data_quality_reason")
+    if _dq_flag and _dq_flag != "OK":
+        st.markdown(
+            '<div class="data-quality-warning">'
+            f'<b>가격 데이터 확인 필요</b> — {_dq_flag}'
+            + (f': {_dq_reason}' if _dq_reason else '')
+            + ' (split-adjusted 또는 yfinance 데이터 소스 점검 권장)'
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     # 이 회사는 쉽게 말해
     st.markdown(
@@ -2621,7 +2657,61 @@ def render_stock_detail():
             unsafe_allow_html=True,
         )
     else:
+        # ── 이벤트 클러스터링 (UI 전용 — 같은 토픽 + 같은 주 → 1 클러스터) ──
+        from collections import defaultdict
+        try:
+            from src.event_processor import enrich_news, _extract_topics
+        except Exception:
+            enrich_news = lambda n: n
+            _extract_topics = lambda _: set()
+
+        def _week_key(d_str: str) -> str:
+            try:
+                d = _dt.date.fromisoformat((d_str or "")[:10])
+                return f"{d.year}-W{d.isocalendar()[1]:02d}"
+            except Exception:
+                return "?-?"
+
+        _groups: dict[tuple, list[dict]] = defaultdict(list)
         for n in news_items:
+            e = enrich_news(n) if callable(enrich_news) else n
+            text = (e.get("title") or "") + " " + (e.get("summary") or "")
+            topics = _extract_topics(text) if callable(_extract_topics) else set()
+            primary = sorted(topics)[0] if topics else "general"
+            wk = _week_key(e.get("published_at") or n.get("published_at"))
+            _groups[(primary, wk)].append(n)
+
+        # 클러스터 → 대표 + 관련 기사 매핑
+        cluster_by_news_id: dict[str, list[dict]] = {}
+        single_news: list[dict] = []
+        for key, members in _groups.items():
+            if len(members) >= 2:
+                # 한국어 요약이 풍부한 + 최신 발행일 기준 대표 선정
+                rep = max(
+                    members,
+                    key=lambda m: (
+                        len(m.get("detailed_summary_ko") or ""),
+                        m.get("published_at") or "",
+                    ),
+                )
+                rep_key = id(rep)
+                related = [m for m in members if m is not rep]
+                cluster_by_news_id[str(rep_key)] = related
+                single_news.append(rep)
+            else:
+                single_news.append(members[0])
+
+        # 정렬 — 발행일 최신 우선
+        single_news.sort(
+            key=lambda n: n.get("published_at") or "", reverse=True,
+        )
+
+        # 클러스터 카드 안에 관련 기사 링크 묶음을 노출하기 위해 메타 부착
+        for n in single_news:
+            related = cluster_by_news_id.get(str(id(n))) or []
+            n["_cluster_related"] = related
+
+        for n in single_news:
             cls_label = n.get("thesis_impact_ko") or n.get("thesis_impact_label") or "확인 필요"
             link = n.get("link") or ""
             title = n.get("title") or "(제목 없음)"
@@ -2684,6 +2774,32 @@ def render_stock_detail():
                     "</div>"
                 )
 
+            # ── 관련 기사 묶음 (이벤트 클러스터) ──
+            related = n.get("_cluster_related") or []
+            related_html = ""
+            if related:
+                links = []
+                for r in related[:5]:
+                    rl = (r.get("link") or "").strip()
+                    rs = (r.get("source") or "출처 미상").strip()
+                    rt = (r.get("title") or "")[:80]
+                    if rl:
+                        links.append(
+                            f'<a href="{rl}" target="_blank" rel="noopener noreferrer" '
+                            f'class="related-news-link" title="{rt}">{rs}</a>'
+                        )
+                    else:
+                        links.append(f'<span class="related-news-link" style="opacity:0.5;">{rs}</span>')
+                related_html = (
+                    '<div class="para-row kpts-row">'
+                    '<div class="para-label">관련 기사</div>'
+                    '<div class="para-text">'
+                    + " · ".join(links)
+                    + f'<span style="margin-left:8px; color:var(--text-2); font-size:13px;">'
+                    + f'(같은 이벤트 {len(related) + 1}개 기사)</span>'
+                    + "</div></div>"
+                )
+
             st.markdown(
                 '<div class="news-card">'
                 '<div class="news-head">'
@@ -2700,6 +2816,7 @@ def render_stock_detail():
                 f'<span class="para-text">{implication}</span>'
                 "</div>"
                 f"{follow_html}"
+                f"{related_html}"
                 f"{link_btn}"
                 "</div>",
                 unsafe_allow_html=True,

@@ -23,17 +23,17 @@ from .utils import display_name, fmt_pct
 # ---------------------------------------------------------------------------
 
 INVESTMENT_TYPE_BY_THEME: dict[str, str] = {
-    "ai_semiconductor": "AI 반도체 / Compute Layer",
-    "ai_networking": "AI 인프라 / Connectivity Layer",
-    "data_center_power": "전력 인프라 / Energy Tailwind",
-    "public_safety": "공공안전 OS 전환 후보 / Civilization Alpha",
-    "defense": "방산 / Defense Cycle",
-    "space": "우주 인프라 / Long-duration Bet",
-    "healthcare_infra": "헬스케어 인프라 / Quality Compounder",
-    "platform": "글로벌 플랫폼 / Quality Platform",
-    "ecommerce_platform": "이커머스 플랫폼 / Quality Platform",
-    "travel_mobility": "여행 / Reopening Beneficiary",
-    "mobility_consumer": "모빌리티 / Robotaxi Optionality",
+    "ai_semiconductor": "AI 반도체 (Compute Layer)",
+    "ai_networking": "AI 인프라 (Connectivity Layer)",
+    "data_center_power": "전력 인프라 (Energy Tailwind)",
+    "public_safety": "공공안전 OS 전환 후보 (Civilization Alpha)",
+    "defense": "방산 (Defense Cycle)",
+    "space": "우주 인프라 (Long-duration Bet)",
+    "healthcare_infra": "헬스케어 인프라 (Quality Compounder)",
+    "platform": "글로벌 플랫폼 강자",
+    "ecommerce_platform": "이커머스 플랫폼 강자",
+    "travel_mobility": "여행 (Reopening Beneficiary)",
+    "mobility_consumer": "모빌리티 (Robotaxi Optionality)",
     "consumer_brand": "글로벌 컨슈머 브랜드",
 }
 
