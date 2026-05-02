@@ -1,0 +1,43 @@
+ticker,name_ko,name_en,theme,category
+NVDA,엔비디아,NVIDIA,ai_semiconductor,AI Infrastructure
+AVGO,브로드컴,Broadcom,ai_semiconductor,AI Infrastructure
+AMD,AMD,Advanced Micro Devices,ai_semiconductor,AI Infrastructure
+MU,마이크론,Micron Technology,ai_semiconductor,AI Infrastructure
+TSM,TSMC,Taiwan Semiconductor,ai_semiconductor,AI Infrastructure
+ANET,아리스타 네트웍스,Arista Networks,ai_networking,AI Infrastructure
+CRDO,크리도 테크놀로지,Credo Technology,ai_networking,AI Infrastructure
+ALAB,아스테라 랩스,Astera Labs,ai_networking,AI Infrastructure
+CLS,셀레스티카,Celestica,ai_networking,AI Infrastructure
+VRT,버티브,Vertiv Holdings,data_center_power,Energy Security
+ETN,이튼,Eaton,data_center_power,Energy Security
+CEG,컨스텔레이션 에너지,Constellation Energy,data_center_power,Energy Security
+VST,비스트라,Vistra,data_center_power,Energy Security
+CCJ,카메코,Cameco,data_center_power,Energy Security
+AXON,액손 엔터프라이즈,Axon Enterprise,public_safety,Public Safety
+PLTR,팔란티어,Palantir Technologies,public_safety,Public Safety
+LMT,록히드마틴,Lockheed Martin,defense,Defense
+NOC,노스롭그루먼,Northrop Grumman,defense,Defense
+RTX,RTX,RTX Corporation,defense,Defense
+HII,헌팅턴 잉걸스,Huntington Ingalls,defense,Defense
+RKLB,로켓랩,Rocket Lab USA,space,Space
+LUNR,인튜이티브 머신스,Intuitive Machines,space,Space
+TMDX,트랜스메딕스,TransMedics Group,healthcare_infra,Healthcare Infrastructure
+ISRG,인튜이티브 서지컬,Intuitive Surgical,healthcare_infra,Healthcare Infrastructure
+NTRA,내터라,Natera,healthcare_infra,Healthcare Infrastructure
+TMO,써모 피셔,Thermo Fisher Scientific,healthcare_infra,Healthcare Infrastructure
+DHR,다나허,Danaher,healthcare_infra,Healthcare Infrastructure
+NFLX,넷플릭스,Netflix,platform,Quality Platform
+META,메타,Meta Platforms,platform,Quality Platform
+AMZN,아마존,Amazon,platform,Quality Platform
+MSFT,마이크로소프트,Microsoft,platform,Quality Platform
+GOOGL,알파벳,Alphabet,platform,Quality Platform
+TSLA,테슬라,Tesla,mobility_consumer,Consumer Mobility
+PYPL,페이팔,PayPal,mobility_consumer,Consumer Mobility
+SBUX,스타벅스,Starbucks,consumer_brand,Consumer Brand
+DIS,디즈니,Walt Disney,consumer_brand,Consumer Brand
+SHOP,쇼피파이,Shopify,ecommerce_platform,Quality Platform
+MELI,메르카도리브레,MercadoLibre,ecommerce_platform,Quality Platform
+UBER,우버,Uber Technologies,travel_mobility,Consumer Mobility
+ABNB,에어비앤비,Airbnb,travel_mobility,Quality Platform
+BKNG,부킹홀딩스,Booking Holdings,travel_mobility,Quality Platform
+SPOT,스포티파이,Spotify Technology,platform,Quality Platform

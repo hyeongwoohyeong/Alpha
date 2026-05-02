@@ -1,0 +1,19 @@
+[theme]
+base = "light"
+primaryColor = "#2563eb"
+backgroundColor = "#f7f8fa"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#111827"
+font = "sans serif"
+
+[server]
+headless = true                       # Cloud 배포 시 필수
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showSidebarNavigation = false         # 사이드바는 우리가 직접 그림
+toolbarMode = "minimal"               # 우상단 햄버거 메뉴 최소화

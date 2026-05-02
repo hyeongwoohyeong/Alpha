@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit secrets (절대 push 금지)
+.streamlit/secrets.toml
+
+# 로그
+*.log
+data/cron.log
+
+# 임시
+*.tmp
+.cache/
+
+# alpha.db 는 commit 한다 (Streamlit Cloud + GitHub Actions 흐름)
+# 다만 SQLite WAL/journal 파일은 제외
+data/alpha.db-journal
+data/alpha.db-wal
+data/alpha.db-shm

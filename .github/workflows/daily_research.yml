@@ -1,0 +1,66 @@
+name: Daily Research
+
+# 매일 한국시간 오전 7:30 (UTC 22:30) 자동 실행 + 수동 트리거 가능
+on:
+  schedule:
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: "특정 종목만 (선택)"
+        required: false
+        default: ""
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write     # alpha.db 커밋을 위해 필요
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run research pipeline
+        env:
+          # Yahoo가 GitHub Actions IP를 차단하는 경우를 대비
+          PYTHONUNBUFFERED: "1"
+        run: |
+          if [ -n "${{ github.event.inputs.ticker }}" ]; then
+            python run_research.py --ticker "${{ github.event.inputs.ticker }}"
+          else
+            python run_research.py
+          fi
+
+      - name: Commit alpha.db
+        run: |
+          git config user.name  "alpha-bot"
+          git config user.email "alpha-bot@users.noreply.github.com"
+          git add data/alpha.db
+          if git diff --staged --quiet; then
+            echo "No DB changes to commit"
+          else
+            git commit -m "chore: daily research $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
+
+      - name: Upload DB artifact (백업)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alpha-db-${{ github.run_number }}
+          path: data/alpha.db
+          retention-days: 14
