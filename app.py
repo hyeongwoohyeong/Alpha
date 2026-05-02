@@ -1218,17 +1218,39 @@ NAV_ITEMS: list[tuple[str, str]] = [
 ]
 NAV_LABEL_BY_KEY = {k: l for k, l in NAV_ITEMS}
 
+# Query params 와 session_state 동기화 — 매 rerun 마다 실행
+# (브라우저 뒤로가기 / 앞으로가기로 URL 만 바뀐 경우도 화면 따라가도록)
+try:
+    qp = st.query_params
+    qp_page = (qp.get("page") or "").strip()
+    qp_ticker = (qp.get("ticker") or "").strip() or None
+    qp_news_id = (qp.get("news_id") or "").strip() or None
+except Exception:
+    qp_page, qp_ticker, qp_news_id = "", None, None
+
 if "nav_key" not in st.session_state:
-    # query_params 우선 → 없으면 기본
-    try:
-        qp = st.query_params
-        st.session_state["nav_key"] = qp.get("page", "brief") or "brief"
-        if qp.get("ticker"):
-            st.session_state["selected_ticker"] = qp["ticker"]
-        if qp.get("news_id"):
-            st.session_state["selected_news_id"] = qp["news_id"]
-    except Exception:
-        st.session_state["nav_key"] = "brief"
+    # 최초 로드 — URL 우선
+    st.session_state["nav_key"] = qp_page or "brief"
+    st.session_state["selected_ticker"] = qp_ticker
+    st.session_state["selected_news_id"] = qp_news_id
+else:
+    # 후속 rerun — 브라우저 뒤로/앞으로 가기로 URL 이 session_state 보다
+    # 앞서 바뀐 경우 동기화 (in-app navigate_to 후에는 이미 동기화돼 있음)
+    cur_page = st.session_state.get("nav_key") or "brief"
+    cur_ticker = st.session_state.get("selected_ticker")
+    cur_news_id = st.session_state.get("selected_news_id")
+    target_page = qp_page or "brief"
+    url_changed = (
+        target_page != cur_page
+        or (qp_ticker or "") != (cur_ticker or "")
+        or (qp_news_id or "") != (cur_news_id or "")
+    )
+    if url_changed:
+        st.session_state["nav_key"] = target_page
+        st.session_state["selected_ticker"] = qp_ticker
+        st.session_state["selected_news_id"] = qp_news_id
+        st.session_state["scroll_to_top"] = True
+
 if "navigation_history" not in st.session_state:
     st.session_state["navigation_history"] = []
 if "selected_news_id" not in st.session_state:
