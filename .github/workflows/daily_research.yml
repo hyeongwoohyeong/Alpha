@@ -38,6 +38,12 @@ jobs:
         env:
           # Yahoo가 GitHub Actions IP를 차단하는 경우를 대비
           PYTHONUNBUFFERED: "1"
+          # LLM 키 (있을 때만 활성화 — secret 미등록 시 자동으로 NO_LLM_MODE)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_MODE: ${{ vars.LLM_MODE || 'low_cost' }}
+          MAX_LLM_CALLS_PER_RUN: ${{ vars.MAX_LLM_CALLS_PER_RUN || '30' }}
+          ENABLE_SUMMARY_CACHE: "true"
         run: |
           if [ -n "${{ github.event.inputs.ticker }}" ]; then
             python run_research.py --ticker "${{ github.event.inputs.ticker }}"
