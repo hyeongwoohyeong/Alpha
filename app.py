@@ -1078,7 +1078,12 @@ def scroll_to_top():
 
 
 def _sync_query_params(page: str, ticker: str | None = None, news_id: str | None = None):
-    """URL query params 동기화 + 브라우저 history 에 명시적 push."""
+    """URL query params 동기화 — Streamlit 의 native 동작에 의존.
+
+    Streamlit 1.30+ 는 query_params 변경 시 pushState 로 history 추가.
+    브라우저 back 시 URL 변경 → 자동 rerun → 본 모듈 상단의 sync 블록이
+    session_state 를 업데이트.
+    """
     try:
         qp = st.query_params
         qp["page"] = page
@@ -1090,35 +1095,6 @@ def _sync_query_params(page: str, ticker: str | None = None, news_id: str | None
             qp["news_id"] = news_id
         elif "news_id" in qp:
             del qp["news_id"]
-    except Exception:
-        pass
-
-    # 브라우저 history 에 새 entry 가 확실히 쌓이도록 pushState 직접 호출
-    # (Streamlit 의 query_params setter 가 버전에 따라 replaceState 를 쓸 수 있어
-    #  명시적으로 pushState 호출해서 일관된 동작 보장)
-    import urllib.parse as _u
-    params = {"page": page}
-    if ticker:
-        params["ticker"] = ticker
-    if news_id:
-        params["news_id"] = news_id
-    qs = _u.urlencode(params)
-    try:
-        import streamlit.components.v1 as _components
-        _components.html(
-            f"""
-            <script>
-            try {{
-                const w = window.parent || window;
-                const target = '?{qs}';
-                if (w.location.search !== target) {{
-                    w.history.pushState(null, '', target);
-                }}
-            }} catch (e) {{ /* 무시 */ }}
-            </script>
-            """,
-            height=0,
-        )
     except Exception:
         pass
 
@@ -1320,35 +1296,6 @@ with st.sidebar:
         )
 
 nav = st.session_state["nav_key"]
-
-
-# ---------------------------------------------------------------------------
-# 브라우저 뒤로가기 / 앞으로가기 — popstate 이벤트로 페이지 새로고침
-# (Streamlit 의 st.query_params 만으로는 일부 버전에서 동작이 일관되지 않아
-#  명시적 popstate 리스너 + window.location.reload() 로 안정적 처리)
-# ---------------------------------------------------------------------------
-
-import streamlit.components.v1 as _components
-
-_components.html(
-    """
-    <script>
-    (function() {
-        // 부모 창 (Streamlit iframe 외부) 에 등록
-        try {
-            const w = window.parent || window;
-            if (w.__alphaPopstateInstalled) return;
-            w.__alphaPopstateInstalled = true;
-            w.addEventListener('popstate', function() {
-                // 브라우저 뒤로가기 / 앞으로가기 감지 → 전체 reload
-                w.location.reload();
-            });
-        } catch (e) { /* cross-origin 등 — 무시 */ }
-    })();
-    </script>
-    """,
-    height=0,
-)
 
 
 # ---------------------------------------------------------------------------
