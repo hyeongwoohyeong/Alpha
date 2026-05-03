@@ -2744,8 +2744,12 @@ def render_today_brief():
             unsafe_allow_html=True,
         )
 
-    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목) — 사용자 요청으로
-    # 주요 관찰 종목 아래로 내림 (2026-05-03)
+    # ── Outsider Top picks — 큐레이션 외 발굴 종목 (Echo Chamber 방지)
+    # Phase 2 (사용자 요청 2026-05-03) — 큐레이션 42 종목에 매몰되지 않도록
+    # Promoted Candidate + auto_curation 된 종목 중 Alpha Score 상위만 별도 노출.
+    render_outsider_top_picks()
+
+    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목)
     render_brief_discovery_section()
 
     col_left, col_right = st.columns(2)
@@ -3863,6 +3867,187 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
         )
     body += "</div>"
     st.markdown(body, unsafe_allow_html=True)
+
+
+def render_outsider_top_picks():
+    """Outsider Top picks — 큐레이션 외 발굴 종목 중 Alpha Score 상위 카드.
+
+    데이터 소스 우선순위 (Echo Chamber 방지):
+        1. Promoted Candidate (DB) — Discovery 엔진이 wide universe 에서 승격한 종목
+        2. auto_curation 테이블 — LLM 자동 큐레이션 받은 종목 (큐레이션 42 종목 제외)
+        3. 위 두 풀에서 stock_research.alpha_score 상위 N 개
+
+    형우의 큐레이션 watchlist 는 의도적으로 제외 — 매몰 방지.
+    매일 다른 종목이 등장 가능 — 진짜 alpha 발굴 엔진의 의미가 살아남.
+    """
+    try:
+        from src import database as _db
+        from src.curated import is_manually_curated as _is_manual
+
+        with _db.db_session() as conn:
+            # 1) Promoted Candidate (Discovery → Promotion 통과)
+            promoted = [
+                dict(r) for r in _db.fetch_promotion_candidates(
+                    conn, promoted_only=True, limit=20,
+                )
+            ]
+            # 2) auto_curation 종목 — manual 제외
+            try:
+                auto_rows = [
+                    dict(r) for r in _db.fetch_all_auto_curation(conn, limit=50)
+                ]
+            except Exception:
+                auto_rows = []
+
+            # 후보 합치기 (중복 제거 — promoted 우선)
+            seen: set[str] = set()
+            candidates: list[dict] = []
+            for p in promoted:
+                t = (p.get("ticker") or "").upper()
+                if not t or t in seen or _is_manual(t):
+                    continue
+                seen.add(t)
+                candidates.append({
+                    "ticker": t, "name": p.get("name") or t,
+                    "queue_type": p.get("queue_type"),
+                    "promotion_score": p.get("promotion_score"),
+                    "thesis_impact": p.get("thesis_impact"),
+                    "reason": p.get("reason"),
+                    "_source": "promoted",
+                })
+            for ac in auto_rows:
+                t = (ac.get("ticker") or "").upper()
+                if not t or t in seen or _is_manual(t):
+                    continue
+                seen.add(t)
+                candidates.append({
+                    "ticker": t, "name": t, "queue_type": None,
+                    "_source": "auto_curation",
+                })
+
+            # 각 후보에 대해 stock_research 의 alpha_score 가져오기
+            scored: list[dict] = []
+            for c in candidates:
+                t = c["ticker"]
+                row = _db.fetch_stock_research(conn, t)
+                if not row:
+                    continue
+                try:
+                    alpha = json.loads(row["alpha_score_json"] or "{}")
+                except Exception:
+                    alpha = {}
+                score = alpha.get("alpha_score")
+                if score is None:
+                    continue
+                # Provisional / Low confidence 도 포함하되 점수 조회만
+                c["alpha_score"] = score
+                c["alpha_rating_en"] = alpha.get("alpha_rating_en", "")
+                c["alpha_rating_ko"] = alpha.get("alpha_rating_ko", "")
+                c["data_confidence"] = alpha.get("data_confidence", "Low")
+                # 핵심 thesis 1줄 — easy_explanation / core_thesis 우선
+                c["easy_explanation"] = (
+                    row["easy_explanation"] or row["core_thesis"] or ""
+                )[:200]
+                scored.append(c)
+
+            # alpha_score 상위로 정렬 + 상위 5
+            scored.sort(key=lambda x: x["alpha_score"], reverse=True)
+            top = scored[:5]
+
+    except Exception as e:
+        log.warning(f"render_outsider_top_picks 실패: {e}")
+        return
+
+    if not top:
+        # 데이터 부족 — 안내 표시만
+        st.markdown(
+            '<div class="section-title">Outsider Top picks'
+            '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
+            '— 큐레이션 외 발굴 종목 중 Alpha Score 상위'
+            "</span></div>"
+            '<div class="card" style="background:#FEF3C7; border-color:#FCD34D;">'
+            '아직 Promoted Candidate / auto_curation 데이터가 충분하지 않습니다. '
+            'GitHub Actions 의 다음 run 이후 (또는 며칠 누적 뒤) 등장하기 시작합니다.'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        '<div class="section-title">Outsider Top picks'
+        '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
+        '— 큐레이션 외 발굴 종목 중 Alpha Score 상위 (Echo Chamber 방지)'
+        "</span></div>"
+        '<div class="info-row check" style="background:#F5F3FF; border-left-color:#5B21B6; '
+        'color:#5B21B6; margin-bottom:8px;">'
+        '※ 형우의 큐레이션 watchlist 외 종목 중 Discovery + LLM 자동 큐레이션 기반으로 '
+        'Alpha Score 상위만 노출. 매일 변동될 수 있으며, 익숙하지 않은 종목이 보이는 게 정상입니다.'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    for i, c in enumerate(top):
+        ticker = c["ticker"]
+        name = c.get("name") or ticker
+        score = c["alpha_score"]
+        rating_en = c.get("alpha_rating_en", "")
+        confidence = c.get("data_confidence", "")
+        easy = c.get("easy_explanation", "")
+        queue = c.get("queue_type")
+        source = c.get("_source", "")
+
+        # confidence chip color
+        chip_color = {
+            "LLM Researched": "#1E40AF",
+            "Heuristic": "#B45309",
+            "Manual Override": "#5B21B6",
+            "Low": "#9F1239",
+        }.get(confidence, "#6B7280")
+        score_color = _alpha_score_color(score)
+
+        source_label = "Promoted Candidate" if source == "promoted" else "Auto-Curation"
+        source_chip = (
+            f'<span class="chip chip-needs-check" style="font-size:11px;">{source_label}</span>'
+        )
+        if queue:
+            source_chip += (
+                f'<span class="chip chip-needs-check" style="font-size:11px; margin-left:4px;">'
+                f'{queue}</span>'
+            )
+
+        body = (
+            '<div class="card" style="border-left:3px solid #5B21B6;">'
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; '
+            'gap:12px; margin-bottom:8px; flex-wrap:wrap;">'
+            f'<div><div style="font-size:16px; font-weight:600;">{name} ({ticker})</div>'
+            f'<div style="margin-top:4px;">{source_chip}</div></div>'
+            f'<div style="text-align:right; flex-shrink:0;">'
+            f'<div style="font-size:24px; font-weight:700; color:{score_color}; line-height:1.1;">'
+            f'{score:.0f}<span style="font-size:13px; color:var(--muted); font-weight:500;">/100</span>'
+            "</div>"
+            f'<div style="font-size:12px; color:{score_color}; font-weight:600;">{rating_en}</div>'
+            f'<div style="font-size:11px; color:{chip_color}; margin-top:2px;">{confidence}</div>'
+            "</div>"
+            "</div>"
+        )
+        if easy:
+            body += (
+                '<div style="font-size:13px; line-height:1.55; color:var(--text); '
+                'margin-top:6px;">'
+                f'{easy}'
+                "</div>"
+            )
+        body += "</div>"
+        st.markdown(body, unsafe_allow_html=True)
+
+        # 상세 보기 버튼
+        if st.button(
+            f"{ticker} 상세 보기",
+            key=f"outsider_{ticker}_{i}",
+            use_container_width=True,
+        ):
+            navigate_to("detail", ticker=ticker)
+            st.rerun()
 
 
 def render_brief_discovery_section():

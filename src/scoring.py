@@ -17,7 +17,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from .curated import THESIS_PILLARS, company_type as _curated_company_type
+from .curated import (
+    THESIS_PILLARS,
+    company_type as _curated_company_type,
+    thesis_pillars as _thesis_pillars_lookup,  # auto_curation fallback 포함
+)
 from .universe import theme_weight
 from .utils import clip
 
@@ -54,16 +58,32 @@ THRESHOLDS: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 def thesis_strength_score(row: dict[str, Any]) -> float:
-    pillars = THESIS_PILLARS.get(row["ticker"], [])
-    pillar_count = min(len(pillars), 3)  # 0~3
+    """Thesis Strength — 큐레이션 thesis_pillars + 카테고리 weight 결합.
+
+    de-bias (2026-05-03): 정적 THESIS_PILLARS dict 직접 호출 대신 lookup 함수 사용.
+    이렇게 해야 auto_curation (LLM 자동 큐레이션) 으로 pillar 받은 종목도
+    pillar_count 인정 받음 — 큐레이션 미등록 종목이 thesis 점수에서 구조적으로
+    36 점 페널티 받던 편향 제거.
+    """
+    # 1차: lookup 함수 — Manual Override (THESIS_PILLARS dict) → auto_curation DB → []
+    pillars = _thesis_pillars_lookup(row["ticker"])
+    pillar_count = min(len(pillars), 3)
     base = 50.0 + pillar_count * 12.0    # 0개 50 / 3개 86
 
     # 카테고리 weight 보정 (0.55~1.0)
     w = theme_weight(row.get("theme", ""))
-    base = base * (0.7 + 0.3 * w)        # weight 1.0 → 1.0배, 0.55 → 0.865배
+    base = base * (0.7 + 0.3 * w)
 
-    # company_type별 추가 보정
+    # company_type별 추가 보정 — 마찬가지로 auto_curation 자동 분류 시도
     ctype = _curated_company_type(row["ticker"])
+    if not ctype:
+        # auto_curation 의 thesis_type 이라도 있으면 활용
+        try:
+            from .curated import _ac_field
+            ctype = _ac_field(row["ticker"], "thesis_type") or ""
+        except Exception:
+            ctype = ""
+
     if ctype == "Civilization Alpha":
         base += 5
     elif ctype == "Re-rating Candidate":
