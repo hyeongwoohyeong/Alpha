@@ -70,6 +70,90 @@ def is_llm_curated(ticker: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# 큐레이션 노후화 (staleness) 추적
+# ---------------------------------------------------------------------------
+
+# 큐레이션 작성 / 갱신 일자 (Manual Override 한정)
+# 기본값: 시스템 도입 이후 정리 완료일. 사용자가 큐레이션 갱신 시 해당 ticker 의
+# 일자도 함께 갱신해야 정확한 stale 추적이 됨.
+DEFAULT_MANUAL_REVIEW_DATE = "2026-05-03"
+
+# Per-ticker 갱신 일자 — 형우가 특정 종목 thesis / KPI 등을 갱신할 때마다 수정
+# 비어있으면 DEFAULT_MANUAL_REVIEW_DATE 사용
+CURATION_LAST_REVIEWED: dict[str, str] = {
+    # 예: "META": "2026-05-15"  ← 형우가 META 큐레이션을 5/15 에 갱신했을 경우
+}
+
+
+def manual_curation_age_days(ticker: str) -> int | None:
+    """Manual Override 큐레이션의 작성/갱신 일자로부터 경과 일수. 없으면 None."""
+    if not is_manually_curated(ticker):
+        return None
+    import datetime as _dt
+    review_date = CURATION_LAST_REVIEWED.get(ticker, DEFAULT_MANUAL_REVIEW_DATE)
+    try:
+        d = _dt.date.fromisoformat(review_date)
+        return max(0, (_dt.date.today() - d).days)
+    except Exception:
+        return None
+
+
+def auto_curation_age_days(ticker: str) -> int | None:
+    """auto_curation 테이블의 generated_at 으로부터 경과 일수. 없으면 None."""
+    try:
+        from . import database as _db
+        import datetime as _dt
+        with _db.db_session() as conn:
+            row = _db.fetch_auto_curation(conn, ticker.upper())
+            if not row:
+                return None
+            d = _dt.date.fromisoformat(row["generated_at"])
+            return max(0, (_dt.date.today() - d).days)
+    except Exception:
+        return None
+
+
+def curation_staleness_status(ticker: str) -> dict[str, Any] | None:
+    """ticker 의 큐레이션 노후화 상태 종합.
+
+    Returns: {
+        "source": "manual" | "auto" | None,
+        "age_days": int,
+        "level": "fresh" | "aging" | "stale",
+        "label": "한국어 라벨"
+    } or None (큐레이션 자체가 없는 경우).
+
+    임계값:
+        Manual Override: < 90 fresh / 90~180 aging / > 180 stale
+        Auto-Curation:   < 60 fresh / 60~90 aging / > 90 stale
+                         (auto 는 60일 캐시 정책이라 더 짧게)
+    """
+    manual_age = manual_curation_age_days(ticker)
+    if manual_age is not None:
+        if manual_age < 90:
+            level, label = "fresh", f"{manual_age}일 전 작성"
+        elif manual_age < 180:
+            level, label = "aging", f"{manual_age}일 전 — 갱신 권장"
+        else:
+            level, label = "stale", f"{manual_age}일 전 — 노후화 (재검토 필요)"
+        return {"source": "manual", "age_days": manual_age,
+                "level": level, "label": label}
+
+    auto_age = auto_curation_age_days(ticker)
+    if auto_age is not None:
+        if auto_age < 60:
+            level, label = "fresh", f"LLM 큐레이션 — {auto_age}일 전 생성"
+        elif auto_age < 90:
+            level, label = "aging", f"LLM 큐레이션 — {auto_age}일 전 (재생성 임박)"
+        else:
+            level, label = "stale", f"LLM 큐레이션 — {auto_age}일 전 (재생성 필요)"
+        return {"source": "auto", "age_days": auto_age,
+                "level": level, "label": label}
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 종목 분류 (7유형) — Action Tag 결정의 1차 기준
 # ---------------------------------------------------------------------------
 

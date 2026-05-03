@@ -84,6 +84,54 @@ RATING_TIERS = [
 ]
 
 
+def compute_alpha_percentile(score: float | None) -> dict[str, Any] | None:
+    """ticker 의 Alpha Score 가 전체 stock_research 분포에서 어디에 위치하는지.
+
+    Returns: {
+        "percentile": int 0~100,           # 상위 % (작을수록 강함)
+        "rank": int,                        # 전체 종목 중 순위 (1 = 최고)
+        "total": int,                       # 전체 비교 종목 수
+        "median": float,                    # 분포 중앙값
+    } or None (분포 부족 시).
+
+    표본 < 5 면 의미 없으므로 None 반환.
+    """
+    if score is None:
+        return None
+    try:
+        import json as _json
+        from . import database as _db
+        with _db.db_session() as conn:
+            rows = _db.fetch_latest_stock_research_all(conn)
+        scores: list[float] = []
+        for r in rows:
+            try:
+                a = _json.loads(r["alpha_score_json"] or "{}")
+                s = a.get("alpha_score")
+                if s is not None:
+                    scores.append(float(s))
+            except Exception:
+                continue
+        if len(scores) < 5:
+            return None
+        scores.sort(reverse=True)
+        # 자기 자신보다 strictly 높은 점수 개수 + 1 = rank
+        rank = sum(1 for s in scores if s > score) + 1
+        # percentile = 자기보다 작거나 같은 비율 (top 10% 라면 percentile=90)
+        below_or_equal = sum(1 for s in scores if s <= score)
+        pct_rank = int(round(below_or_equal / len(scores) * 100))
+        median = scores[len(scores) // 2]
+        return {
+            "percentile": pct_rank,         # 100 = 최고, 0 = 최저
+            "top_pct": max(1, 100 - pct_rank),  # "상위 X%" — 보고용 (1~100)
+            "rank": rank,
+            "total": len(scores),
+            "median": round(median, 1),
+        }
+    except Exception:
+        return None
+
+
 def classify_alpha_rating(score: float, data_confidence: str = "Medium") -> tuple[str, str]:
     """Alpha Score → (rating_en, rating_ko). Low confidence 시 한 단계 낮춤."""
     rating_en, rating_ko = "Low Priority", "현재 우선순위 낮음"

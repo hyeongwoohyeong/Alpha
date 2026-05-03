@@ -2160,6 +2160,29 @@ def render_alpha_score_section(alpha: dict | None):
         "</span>"
     )
 
+    # Distribution Percentile — 전체 분포 내 위치
+    percentile_chip = ""
+    try:
+        from src.alpha_score import compute_alpha_percentile
+        pct = compute_alpha_percentile(score)
+        if pct:
+            top_pct = pct["top_pct"]
+            rank = pct["rank"]
+            total = pct["total"]
+            pct_color = "#0F4C75" if top_pct <= 20 else (
+                "#1B6FC0" if top_pct <= 40 else (
+                    "#6B7280" if top_pct <= 70 else "#9F1239"
+                )
+            )
+            percentile_chip = (
+                f'<span style="color:{pct_color}; margin-left:12px; font-size:13px; '
+                f'font-weight:600;" title="전체 {total} 종목 분포 — 중앙값 {pct["median"]}">'
+                f'상위 {top_pct}% (#{rank}/{total})'
+                "</span>"
+            )
+    except Exception:
+        pass
+
     st.markdown(
         '<div class="alpha-score-card">'
         '<div class="alpha-score-header">'
@@ -2169,6 +2192,7 @@ def render_alpha_score_section(alpha: dict | None):
         '<div class="alpha-score-confidence" style="color:' + confidence_chip_color + confidence_extra_style + ';">'
         f'Data Confidence: {confidence}{provisional_label}'
         f'{coverage_chip}'
+        f'{percentile_chip}'
         "</div>"
         "</div>"
         '<div class="alpha-score-main">'
@@ -2342,7 +2366,7 @@ def _component_status_badge(status: str, confidence: str) -> tuple[str, str]:
     return chip, label
 
 
-def render_earnings_quality_section(eq: dict | None):
+def render_earnings_quality_section(eq: dict | None, ticker: str | None = None):
     """Earnings Quality & Moat Assessment 카드 그리드."""
     if not eq:
         return
@@ -2355,9 +2379,37 @@ def render_earnings_quality_section(eq: dict | None):
     is_llm_researched = eq.get("is_llm_researched", False)
     is_auto_profiled = eq.get("is_auto_profiled", False)
 
+    # 큐레이션 노후화 chip — Manual / LLM 모두 추적
+    staleness_chip = ""
+    if ticker:
+        try:
+            from src.curated import curation_staleness_status
+            stale = curation_staleness_status(ticker)
+            if stale:
+                level = stale.get("level", "fresh")
+                label = stale.get("label", "")
+                if level == "stale":
+                    color_chip = "#9F1239"
+                    bg_chip = "#FEE2E2"
+                elif level == "aging":
+                    color_chip = "#B45309"
+                    bg_chip = "#FFFBEB"
+                else:
+                    color_chip = "#0F4C75"
+                    bg_chip = "#EFF6FF"
+                staleness_chip = (
+                    f'<span style="margin-left:10px; padding:2px 8px; '
+                    f'border-radius:6px; font-size:12px; font-weight:500; '
+                    f'background:{bg_chip}; color:{color_chip};">'
+                    f'{label}</span>'
+                )
+        except Exception:
+            pass
+
     st.markdown(
         '<div class="section-title">Earnings Quality & Moat Assessment'
         '<span style="font-size:13px; color:var(--muted); margin-left:8px;">이익의 질 및 해자 분석</span>'
+        f'{staleness_chip}'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -2876,7 +2928,7 @@ def render_stock_detail():
     )
 
     # ================== Earnings Quality & Moat Assessment ==================
-    render_earnings_quality_section(detail.get("earnings_quality"))
+    render_earnings_quality_section(detail.get("earnings_quality"), ticker=ticker)
 
     # ================== Strategic Lens ==================
     render_strategic_lens_section(detail.get("strategic_lens"))
