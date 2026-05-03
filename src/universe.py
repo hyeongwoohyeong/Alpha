@@ -157,7 +157,116 @@ def category_label_ko(category: str) -> str:
 # 사용자 관심종목 (watchlist) - 별도 json 파일에 저장
 # ---------------------------------------------------------------------------
 
+def _get_pat() -> str | None:
+    """GitHub PAT 가져오기 — 환경변수 우선, Streamlit secrets fallback."""
+    import os
+    pat = os.environ.get("GITHUB_PAT")
+    if pat:
+        return pat
+    try:
+        import streamlit as _st
+        return _st.secrets.get("GITHUB_PAT")  # type: ignore
+    except Exception:
+        return None
+
+
+def _get_repo_meta() -> tuple[str, str]:
+    """GitHub repo owner / name — secrets 또는 default."""
+    import os
+    owner = os.environ.get("GITHUB_REPO_OWNER")
+    name = os.environ.get("GITHUB_REPO_NAME")
+    if not owner or not name:
+        try:
+            import streamlit as _st
+            owner = owner or _st.secrets.get("GITHUB_REPO_OWNER")  # type: ignore
+            name = name or _st.secrets.get("GITHUB_REPO_NAME")  # type: ignore
+        except Exception:
+            pass
+    return owner or "hyeongwoohyeong", name or "Alpha"
+
+
+def _commit_watchlist_to_github(tickers: list[str]) -> tuple[bool, str]:
+    """Streamlit Cloud → GitHub Contents API 자동 commit (영구 보존).
+
+    PAT 미설정 시 silently skip (return (False, "no_pat")).
+    실패해도 local file 저장은 그대로 진행됨.
+    """
+    import base64
+    import urllib.error
+    import urllib.request
+
+    pat = _get_pat()
+    if not pat:
+        return False, "no_pat"
+
+    owner, repo = _get_repo_meta()
+    file_path = "data/watchlist.json"
+    content_str = json.dumps(
+        sorted(set(t.upper() for t in tickers)), ensure_ascii=False, indent=2,
+    )
+    content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("ascii")
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+    headers = {
+        "Authorization": f"Bearer {pat}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "Alpha-Engine-Watchlist-Sync",
+    }
+
+    # 1) 기존 파일의 sha 조회 (update 시 필수)
+    sha: str | None = None
+    try:
+        req = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            existing = json.loads(resp.read())
+            sha = existing.get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            log.warning("GitHub API sha fetch 실패: %s", e)
+            return False, f"sha_fetch_error_{e.code}"
+        # 404 = 파일 없음 → create 로 진행
+    except Exception as e:
+        log.warning("GitHub API sha fetch 예외: %s", e)
+        return False, "sha_fetch_exception"
+
+    # 2) PUT — create or update
+    body: dict[str, Any] = {
+        "message": f"chore: update watchlist ({len(tickers)} tickers)",
+        "content": content_b64,
+    }
+    if sha:
+        body["sha"] = sha
+
+    try:
+        req = urllib.request.Request(
+            api_url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={**headers, "Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            ok = resp.status in (200, 201)
+            return ok, "ok" if ok else f"status_{resp.status}"
+    except urllib.error.HTTPError as e:
+        body_text = ""
+        try:
+            body_text = e.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            pass
+        log.warning("GitHub API PUT 실패: %s — %s", e, body_text)
+        return False, f"put_error_{e.code}"
+    except Exception as e:
+        log.warning("GitHub API PUT 예외: %s", e)
+        return False, "put_exception"
+
+
 def load_watchlist() -> list[str]:
+    """관심종목 리스트 로드 — local file 우선.
+
+    Streamlit Cloud 가 컨테이너 재시작 시 git 에서 받은 watchlist.json 으로 초기화되므로,
+    save 시 GitHub commit 한 변경사항은 다음 컨테이너 부팅 시에도 보존됨.
+    """
     ensure_data_dir()
     if not WATCHLIST_JSON.exists():
         return []
@@ -168,23 +277,46 @@ def load_watchlist() -> list[str]:
         return []
 
 
-def save_watchlist(tickers: list[str]) -> None:
+def save_watchlist(tickers: list[str]) -> dict[str, Any]:
+    """관심종목 저장 — local file + GitHub Contents API 자동 commit.
+
+    Returns: {"local": bool, "github": bool, "github_status": str, "tickers": list[str]}
+    """
     ensure_data_dir()
-    WATCHLIST_JSON.write_text(
-        json.dumps(sorted(set(t.upper() for t in tickers)), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    sorted_tickers = sorted(set(t.upper() for t in tickers))
+    # 1) Local file (즉시 UI 반영)
+    local_ok = True
+    try:
+        WATCHLIST_JSON.write_text(
+            json.dumps(sorted_tickers, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        log.warning("watchlist local save 실패: %s", e)
+        local_ok = False
+
+    # 2) GitHub commit (영구 보존)
+    gh_ok, gh_status = _commit_watchlist_to_github(sorted_tickers)
+    if gh_ok:
+        log.info("watchlist GitHub commit OK (%d tickers)", len(sorted_tickers))
+    elif gh_status == "no_pat":
+        log.info("watchlist GitHub commit skip — GITHUB_PAT 미설정 (local-only)")
+    else:
+        log.warning("watchlist GitHub commit 실패: %s", gh_status)
+
+    return {
+        "local": local_ok, "github": gh_ok, "github_status": gh_status,
+        "tickers": sorted_tickers,
+    }
 
 
-def add_to_watchlist(ticker: str) -> list[str]:
+def add_to_watchlist(ticker: str) -> dict[str, Any]:
     wl = set(load_watchlist())
     wl.add(ticker.upper())
-    save_watchlist(sorted(wl))
-    return sorted(wl)
+    return save_watchlist(sorted(wl))
 
 
-def remove_from_watchlist(ticker: str) -> list[str]:
+def remove_from_watchlist(ticker: str) -> dict[str, Any]:
     wl = set(load_watchlist())
     wl.discard(ticker.upper())
-    save_watchlist(sorted(wl))
-    return sorted(wl)
+    return save_watchlist(sorted(wl))

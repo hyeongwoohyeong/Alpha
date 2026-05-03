@@ -2710,8 +2710,13 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
             navigate_to("detail", row["ticker"])
     with btn_cols[1]:
         if st.button("관심종목 편입", key=f"{key_prefix}_wl_{idx}_{row['ticker']}", use_container_width=True):
-            add_to_watchlist(row["ticker"])
-            st.toast(f"{name} 관심종목에 편입했습니다.")
+            res = add_to_watchlist(row["ticker"])
+            if res.get("github"):
+                st.toast(f"{name} 관심종목 편입 ✓ (영구 저장 완료)")
+            elif res.get("github_status") == "no_pat":
+                st.toast(f"{name} 관심종목 편입 (임시 저장 — GITHUB_PAT 미설정)")
+            else:
+                st.toast(f"{name} 관심종목 편입 (영구 저장 실패: {res.get('github_status')})")
 
 
 # ---------------------------------------------------------------------------
@@ -3763,13 +3768,19 @@ def render_stock_detail():
         wl = load_watchlist()
         if row["ticker"] in wl:
             if st.button("관심종목에서 제거", use_container_width=True):
-                remove_from_watchlist(row["ticker"])
-                st.toast("관심종목에서 제거했습니다.")
+                res = remove_from_watchlist(row["ticker"])
+                if res.get("github"):
+                    st.toast("관심종목 제거 ✓ (영구 저장 완료)")
+                else:
+                    st.toast(f"관심종목 제거 (github: {res.get('github_status')})")
                 st.rerun()
         else:
             if st.button("관심종목 편입", use_container_width=True):
-                add_to_watchlist(row["ticker"])
-                st.toast("관심종목에 편입했습니다.")
+                res = add_to_watchlist(row["ticker"])
+                if res.get("github"):
+                    st.toast("관심종목 편입 ✓ (영구 저장 완료)")
+                else:
+                    st.toast(f"관심종목 편입 (github: {res.get('github_status')})")
                 st.rerun()
 
 
@@ -4574,8 +4585,13 @@ def render_watchlist():
         )
     with cols[1]:
         if st.button("편입", use_container_width=True, type="primary") and add_ticker:
-            add_to_watchlist(add_ticker)
-            st.toast(f"{labels.get(add_ticker, add_ticker)} 편입")
+            res = add_to_watchlist(add_ticker)
+            if res.get("github"):
+                st.toast(f"{labels.get(add_ticker, add_ticker)} 편입 ✓ (영구 저장)")
+            elif res.get("github_status") == "no_pat":
+                st.toast(f"{labels.get(add_ticker, add_ticker)} 편입 (임시 — PAT 미설정)")
+            else:
+                st.toast(f"{labels.get(add_ticker, add_ticker)} 편입 (영구 저장 실패)")
             st.rerun()
 
     st.markdown(
@@ -4600,8 +4616,11 @@ def render_watchlist():
             continue
         render_pick_card(r, i, key_prefix="wl")
         if st.button(f"관심종목에서 제거 ({t})", key=f"rmwl_{t}"):
-            remove_from_watchlist(t)
-            st.toast("제거 완료")
+            res = remove_from_watchlist(t)
+            if res.get("github"):
+                st.toast(f"{t} 제거 ✓ (영구 저장)")
+            else:
+                st.toast(f"{t} 제거 (github: {res.get('github_status')})")
             st.rerun()
 
 
