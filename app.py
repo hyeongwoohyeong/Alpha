@@ -2613,10 +2613,7 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
           <div class="pick-name">{name}</div>
           <div class="pick-type">{inv_type}</div>
         </div>
-        <div class="pick-head-right">
-          {alpha_badge_html}
-          {render_tag(tag)}
-        </div>
+        <div class="pick-head-right">{alpha_badge_html}{render_tag(tag)}</div>
       </div>
       <div class="pick-divider"></div>
 
@@ -2736,10 +2733,7 @@ def render_today_brief():
                 unsafe_allow_html=True,
             )
 
-    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목)
-    render_brief_discovery_section()
-
-    # 금일 주요 관찰 종목
+    # 금일 주요 관찰 종목 (메인 큐레이션 watchlist)
     st.markdown('<div class="section-title">금일 주요 관찰 종목</div>', unsafe_allow_html=True)
     if brief["picks"]:
         for i, r in enumerate(brief["picks"]):
@@ -2749,6 +2743,10 @@ def render_today_brief():
             '<div class="card">금일 명확히 부각되는 후보가 부족합니다. 관심종목과 우량주 과매도 메뉴를 함께 점검하세요.</div>',
             unsafe_allow_html=True,
         )
+
+    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목) — 사용자 요청으로
+    # 주요 관찰 종목 아래로 내림 (2026-05-03)
+    render_brief_discovery_section()
 
     col_left, col_right = st.columns(2)
     with col_left:
