@@ -786,10 +786,17 @@ CUSTOM_CSS = """
     }
     .alpha-comp-label {
         font-size: 13px; color: var(--text); font-weight: 600;
+        display: flex; flex-direction: column; gap: 3px;
+        min-width: 0;
+    }
+    .alpha-comp-label-main {
+        display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px;
     }
     .alpha-comp-weight {
         font-size: 11px; color: var(--muted); font-weight: 400;
-        margin-left: 4px;
+    }
+    .alpha-comp-status {
+        font-size: 10px; line-height: 1; flex-shrink: 0;
     }
     .alpha-comp-bar-wrap {
         background: var(--line); height: 8px; border-radius: 4px; overflow: hidden;
@@ -2224,14 +2231,20 @@ def render_alpha_score_section(alpha: dict | None):
         # status → badge style
         status_badge_style, status_badge_text = _component_status_badge(c_status, c_conf)
 
+        # 라벨 셀 — 라벨 + weight 한 줄, chip 은 그 아래 별도 줄
+        label_cell = (
+            f'<div class="alpha-comp-label">'
+            f'<div class="alpha-comp-label-main">{label}'
+            f'<span class="alpha-comp-weight">{weight}%</span></div>'
+            f'<div class="alpha-comp-status">{status_badge_style}</div>'
+            "</div>"
+        )
+
         if c_score is None:
             # N/A 표시
             bar_html.append(
                 f'<div class="alpha-comp-row">'
-                f'<div class="alpha-comp-label">{label}'
-                f'<span class="alpha-comp-weight">{weight}%</span>'
-                f'{status_badge_style}'
-                "</div>"
+                f'{label_cell}'
                 '<div class="alpha-comp-bar-wrap">'
                 '<div class="alpha-comp-bar alpha-comp-bar-na" style="width:100%; '
                 'background:repeating-linear-gradient(45deg, #FEE2E2, #FEE2E2 6px, #FCA5A5 6px, #FCA5A5 10px);"></div>'
@@ -2244,10 +2257,7 @@ def render_alpha_score_section(alpha: dict | None):
             bar_color = _alpha_score_color(v)
             bar_html.append(
                 f'<div class="alpha-comp-row" title="{c_reason}">'
-                f'<div class="alpha-comp-label">{label}'
-                f'<span class="alpha-comp-weight">{weight}%</span>'
-                f'{status_badge_style}'
-                "</div>"
+                f'{label_cell}'
                 '<div class="alpha-comp-bar-wrap">'
                 f'<div class="alpha-comp-bar" style="width:{v:.0f}%; background:{bar_color};"></div>'
                 "</div>"
@@ -2359,8 +2369,9 @@ def _component_status_badge(status: str, confidence: str) -> tuple[str, str]:
         color, bg, label = "#6B7280", "#F3F4F6", status[:8]
 
     chip = (
-        f'<span style="margin-left:8px; padding:1px 7px; border-radius:8px; '
-        f'font-size:11px; font-weight:600; background:{bg}; color:{color};">'
+        f'<span style="padding:1px 7px; border-radius:8px; '
+        f'font-size:11px; font-weight:600; background:{bg}; color:{color}; '
+        f'display:inline-block; white-space:nowrap;">'
         f'{label}</span>'
     )
     return chip, label
