@@ -696,18 +696,12 @@ def calculate_alpha_score(
     scored_weight_ratio = total_weight  # 1.0 만점 기준
     penalty, is_provisional_by_coverage = _missing_data_penalty(scored_weight_ratio)
 
-    # 큐레이션 + 강력 EQ/Moat 조합 보너스 (+3) — 기존 룰 유지하되 "is_curated AND strong" 만
-    curated_bonus = 0.0
-    eq_score = components["earnings_quality"].get("score")
-    moat_score = components["moat_lockin"].get("score")
-    if (
-        eq.get("is_curated")
-        and eq_score is not None and eq_score >= 75
-        and moat_score is not None and moat_score >= 70
-    ):
-        curated_bonus = 3.0
-
-    alpha = round(min(100.0, max(0.0, raw_alpha + penalty + curated_bonus)), 1)
+    # 큐레이션 보너스 폐지 (사용자 요구 2026-05-03)
+    # 이전 룰: is_curated + EQ ≥ 75 + Moat ≥ 70 → +3
+    # 변경 이유: 큐레이션은 시드 예시일 뿐, 모든 종목이 8 컴포넌트만으로
+    # 동등하게 평가받아야 함. EQ / Moat 가 강하면 그 컴포넌트 점수에 이미 반영됨 —
+    # 큐레이션 여부로 추가 보너스 주는 건 이중 가산 + 편향.
+    alpha = round(min(100.0, max(0.0, raw_alpha + penalty)), 1)
 
     # Data Confidence
     is_curated_eq = bool(eq.get("is_curated"))

@@ -2733,23 +2733,12 @@ def render_today_brief():
                 unsafe_allow_html=True,
             )
 
-    # 금일 주요 관찰 종목 (메인 큐레이션 watchlist)
-    st.markdown('<div class="section-title">금일 주요 관찰 종목</div>', unsafe_allow_html=True)
-    if brief["picks"]:
-        for i, r in enumerate(brief["picks"]):
-            render_pick_card(r, i, key_prefix="brief")
-    else:
-        st.markdown(
-            '<div class="card">금일 명확히 부각되는 후보가 부족합니다. 관심종목과 우량주 과매도 메뉴를 함께 점검하세요.</div>',
-            unsafe_allow_html=True,
-        )
+    # 금일 추천 종목 — 통합 단일 섹션 (사용자 요구 2026-05-03)
+    # 큐레이션 / LLM Researched / Heuristic 구분 없이 Alpha Score 상위만 표시.
+    # 큐레이션은 시드 예시일 뿐, 우대 안 받음. 모든 종목 동등 평가.
+    render_unified_top_picks(brief["picks"])
 
-    # ── Outsider Top picks — 큐레이션 외 발굴 종목 (Echo Chamber 방지)
-    # Phase 2 (사용자 요청 2026-05-03) — 큐레이션 42 종목에 매몰되지 않도록
-    # Promoted Candidate + auto_curation 된 종목 중 Alpha Score 상위만 별도 노출.
-    render_outsider_top_picks()
-
-    # 금일 신규 발굴 후보 (Discovery — wide universe → 승격된 종목)
+    # 금일 신규 발굴 후보 (Discovery 큐별 raw 시그널 — 정밀 검토 전 단계)
     render_brief_discovery_section()
 
     col_left, col_right = st.columns(2)
@@ -3867,6 +3856,228 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
         )
     body += "</div>"
     st.markdown(body, unsafe_allow_html=True)
+
+
+def render_unified_top_picks(manual_picks: list[dict] | None):
+    """금일 추천 종목 — 단일 통합 섹션 (큐레이션 우대 폐지).
+
+    데이터 소스 (모두 동등 평가, Alpha Score 로 정렬):
+        1. 큐레이션 watchlist 의 manual_picks (build_daily_brief 결과)
+        2. Promoted Candidate (DB)
+        3. auto_curation 종목 (LLM Researched)
+
+    사용자 요구 (2026-05-03): "내 큐레이션과 엔진이 고른 탑픽이 굳이 구분 안됐으면
+    좋겠어. 큐레이션은 시드 예시일 뿐, 모든 종목이 공평하게 평가받았으면."
+
+    Source chip (Manual Override / LLM Researched / Heuristic) 은 정보 표시만 —
+    선정 우선순위에는 영향 없음.
+    """
+    pool: list[dict] = []
+    seen: set[str] = set()
+
+    # ── 1) Manual picks (큐레이션 + 시장 데이터로 Alpha Score 산출 가능한 rows) ──
+    for r in (manual_picks or []):
+        ticker = (r.get("ticker") or "").upper()
+        if not ticker or ticker in seen:
+            continue
+
+        # render_pick_card 와 같은 방식으로 Alpha Score 계산
+        try:
+            from src.alpha_score import calculate_alpha_score, reconcile_with_action_tag
+            from src.earnings_quality import build_earnings_quality
+            from src.bottleneck import build_bottleneck_thesis
+
+            md = r.get("market_data") or {}
+            _eq = build_earnings_quality(ticker, r)
+            _bn_meta = {
+                "ticker": ticker,
+                "name": r.get("name_en") or r.get("name_ko") or "",
+                "sector": r.get("sector"),
+                "industry": r.get("industry"),
+            }
+            _bn = build_bottleneck_thesis(ticker, _bn_meta, md)
+            _alpha = calculate_alpha_score(
+                ticker=ticker, market_data=md, scores=r.get("scores"),
+                earnings_quality=_eq, bottleneck_thesis=_bn,
+                news_agg=r.get("news_agg"), curated_events=r.get("curated_events"),
+            )
+            tag = r.get("action_tag", "Watchlist")
+            _alpha = reconcile_with_action_tag(_alpha, tag, too_crowded=(tag == "Too Crowded"))
+            score = _alpha.get("alpha_score")
+            if score is None:
+                continue
+            seen.add(ticker)
+            pool.append({
+                "ticker": ticker, "row": r,
+                "alpha_score": score,
+                "alpha_rating_en": _alpha.get("alpha_rating_en", ""),
+                "data_confidence": _alpha.get("data_confidence", ""),
+                "_source": "manual_pick",
+            })
+        except Exception:
+            continue
+
+    # ── 2) Promoted Candidate + auto_curation (DB 에서) ──
+    try:
+        from src import database as _db
+        from src.curated import is_manually_curated as _is_manual
+
+        with _db.db_session() as conn:
+            promoted = [
+                dict(r) for r in _db.fetch_promotion_candidates(
+                    conn, promoted_only=True, limit=20,
+                )
+            ]
+            try:
+                auto_rows = [
+                    dict(r) for r in _db.fetch_all_auto_curation(conn, limit=50)
+                ]
+            except Exception:
+                auto_rows = []
+
+            db_candidates: list[dict] = []
+            for p in promoted:
+                t = (p.get("ticker") or "").upper()
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                db_candidates.append({
+                    "ticker": t, "name": p.get("name") or t,
+                    "queue_type": p.get("queue_type"),
+                    "_source": "promoted",
+                })
+            for ac in auto_rows:
+                t = (ac.get("ticker") or "").upper()
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                db_candidates.append({
+                    "ticker": t, "name": t, "queue_type": None,
+                    "_source": "auto_curation",
+                })
+
+            for c in db_candidates:
+                t = c["ticker"]
+                row = _db.fetch_stock_research(conn, t)
+                if not row:
+                    continue
+                try:
+                    alpha = json.loads(row["alpha_score_json"] or "{}")
+                except Exception:
+                    alpha = {}
+                score = alpha.get("alpha_score")
+                if score is None:
+                    continue
+                pool.append({
+                    "ticker": t, "name": c.get("name"),
+                    "queue_type": c.get("queue_type"),
+                    "alpha_score": score,
+                    "alpha_rating_en": alpha.get("alpha_rating_en", ""),
+                    "alpha_rating_ko": alpha.get("alpha_rating_ko", ""),
+                    "data_confidence": alpha.get("data_confidence", "Low"),
+                    "easy_explanation": (
+                        row["easy_explanation"] or row["core_thesis"] or ""
+                    )[:200],
+                    "_source": c["_source"],
+                })
+    except Exception as e:
+        log.warning(f"unified picks DB fetch 실패: {e}")
+
+    # ── Alpha Score 로 정렬 + 상위 7 ──
+    pool.sort(key=lambda x: x.get("alpha_score") or 0, reverse=True)
+    top = pool[:7]
+
+    if not top:
+        st.markdown(
+            '<div class="section-title">금일 추천 종목</div>'
+            '<div class="card">금일 명확히 부각되는 후보가 부족합니다. '
+            '데이터 업데이트 후 다시 확인하세요.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        '<div class="section-title">금일 추천 종목'
+        '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
+        '— Alpha Score 상위 (큐레이션 / LLM / Heuristic 동등 평가)'
+        "</span></div>",
+        unsafe_allow_html=True,
+    )
+
+    for i, p in enumerate(top):
+        # manual_pick 은 full row 가 있어서 render_pick_card 로 렌더 가능
+        if p["_source"] == "manual_pick" and p.get("row"):
+            render_pick_card(p["row"], i, key_prefix="brief_unified")
+        else:
+            # DB-only 후보 — 간소 카드
+            _render_db_pick_card(p, i)
+
+
+def _render_db_pick_card(p: dict, idx: int) -> None:
+    """DB 에서 가져온 picks (Promoted / auto_curation) 의 간소 카드.
+
+    full row data 없이 alpha_score + easy_explanation + chips 만으로 구성.
+    상세 보기 버튼으로 종목 상세 페이지 이동.
+    """
+    ticker = p["ticker"]
+    name = p.get("name") or ticker
+    score = p["alpha_score"]
+    rating_en = p.get("alpha_rating_en", "")
+    confidence = p.get("data_confidence", "")
+    easy = p.get("easy_explanation", "")
+    queue = p.get("queue_type")
+    source = p.get("_source", "")
+
+    chip_color = {
+        "LLM Researched": "#1E40AF",
+        "Heuristic": "#B45309",
+        "Manual Override": "#5B21B6",
+        "Low": "#9F1239",
+    }.get(confidence, "#6B7280")
+    score_color = _alpha_score_color(score)
+
+    source_label = "Promoted Candidate" if source == "promoted" else "Auto-Curation"
+    source_chip = (
+        f'<span class="chip chip-needs-check" style="font-size:11px;">{source_label}</span>'
+    )
+    if queue:
+        source_chip += (
+            f'<span class="chip chip-needs-check" style="font-size:11px; margin-left:4px;">'
+            f'{queue}</span>'
+        )
+
+    body = (
+        '<div class="card" style="border-left:3px solid #94A3B8;">'
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start; '
+        'gap:12px; margin-bottom:8px; flex-wrap:wrap;">'
+        f'<div><div style="font-size:16px; font-weight:600;">{name} ({ticker})</div>'
+        f'<div style="margin-top:4px;">{source_chip}</div></div>'
+        '<div style="text-align:right; flex-shrink:0;">'
+        f'<div style="font-size:24px; font-weight:700; color:{score_color}; line-height:1.1;">'
+        f'{score:.0f}<span style="font-size:13px; color:var(--muted); font-weight:500;">/100</span>'
+        "</div>"
+        f'<div style="font-size:12px; color:{score_color}; font-weight:600;">{rating_en}</div>'
+        f'<div style="font-size:11px; color:{chip_color}; margin-top:2px;">{confidence}</div>'
+        "</div>"
+        "</div>"
+    )
+    if easy:
+        body += (
+            '<div style="font-size:13px; line-height:1.55; color:var(--text); '
+            'margin-top:6px;">'
+            f'{easy}'
+            "</div>"
+        )
+    body += "</div>"
+    st.markdown(body, unsafe_allow_html=True)
+
+    if st.button(
+        f"{ticker} 상세 보기",
+        key=f"unified_{ticker}_{idx}",
+        use_container_width=True,
+    ):
+        navigate_to("detail", ticker=ticker)
+        st.rerun()
 
 
 def render_outsider_top_picks():
