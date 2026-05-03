@@ -2806,6 +2806,10 @@ def render_today_brief():
     # 큐레이션은 시드 예시일 뿐, 우대 안 받음. 모든 종목 동등 평가.
     render_unified_top_picks(brief["picks"])
 
+    # Mag 7 Laggard — cohort rotation strategy 지원 (사용자 요구 2026-05-03)
+    # Mag 7 중 cohort 평균 대비 -10%p 이상 후행 + thesis 유지 종목 발굴
+    render_mag7_laggard_section()
+
     # 금일 신규 발굴 후보 (Discovery 큐별 raw 시그널 — 정밀 검토 전 단계)
     render_brief_discovery_section()
 
@@ -2924,6 +2928,63 @@ def render_stock_detail():
 
     # ================== Alpha Score (통합 투자 매력도) ==================
     render_alpha_score_section(detail.get("alpha_score"))
+
+    # Mag 7 Cohort Relative Performance chip — Mag 7 종목만 표시
+    try:
+        from src.cohort import (
+            MAG7_TICKERS, compute_mag7_cohort_returns, get_relative_performance,
+            detect_mag7_laggard,
+        )
+        if ticker in MAG7_TICKERS:
+            cohort = compute_mag7_cohort_returns(rows)
+            rel = get_relative_performance(ticker, row.get("market_data") or {}, cohort)
+            laggard_check = detect_mag7_laggard(
+                ticker, row.get("market_data") or {}, cohort, row.get("news_agg"),
+            )
+
+            def _fmt(v):
+                if v is None:
+                    return "—"
+                color = "#0F4C75" if v >= 0 else "#9F1239"
+                return f'<b style="color:{color};">{v*100:+.1f}%p</b>'
+
+            laggard_pill = ""
+            if laggard_check.get("is_laggard"):
+                laggard_pill = (
+                    '<span style="margin-left:12px; padding:2px 8px; '
+                    'border-radius:6px; font-size:12px; font-weight:600; '
+                    'background:#EFF6FF; color:#1E40AF; '
+                    'border:1px solid #1E40AF;">'
+                    f'Mag 7 Laggard · score {laggard_check.get("score", 0):.0f}'
+                    "</span>"
+                )
+
+            cohort_html = (
+                '<div class="card" style="background:#F8FAFC; border-color:#E2E8F0; '
+                'margin-top:-6px; margin-bottom:14px;">'
+                '<div style="display:flex; justify-content:space-between; '
+                'align-items:center; flex-wrap:wrap; gap:12px;">'
+                '<div style="font-size:13px; color:var(--muted);">'
+                'Mag 7 cohort 대비 상대 수익률'
+                f'{laggard_pill}'
+                "</div>"
+                '<div style="font-size:13px;">'
+                f'<span style="margin-right:14px;">1Y {_fmt(rel.get("rel_1y"))}</span>'
+                f'<span style="margin-right:14px;">3M {_fmt(rel.get("rel_3m"))}</span>'
+                f'<span>1M {_fmt(rel.get("rel_1m"))}</span>'
+                "</div>"
+                "</div>"
+                '<div style="font-size:11px; color:var(--muted); margin-top:6px;">'
+                f'Cohort 평균: 1Y {(cohort.get("avg_1y") or 0)*100:+.1f}% · '
+                f'3M {(cohort.get("avg_3m") or 0)*100:+.1f}% · '
+                f'1M {(cohort.get("avg_1m") or 0)*100:+.1f}% '
+                f'(Mag 7 중 {cohort.get("n_available", 0)} 종목 평균)'
+                "</div>"
+                "</div>"
+            )
+            st.markdown(cohort_html, unsafe_allow_html=True)
+    except Exception as e:
+        log.debug(f"cohort chip 렌더 실패: {e}")
 
     # 이 회사는 쉽게 말해
     st.markdown(
@@ -3930,6 +3991,138 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
         )
     body += "</div>"
     st.markdown(body, unsafe_allow_html=True)
+
+
+def render_mag7_laggard_section():
+    """Mag 7 Laggard — cohort 평균 대비 후행하는 Mag 7 종목 발굴.
+
+    형우의 cohort rotation strategy 지원:
+    - "시장이 가는데 Mag 7 중 안 가는 종목은 결국 시장이 끌고 간다"
+    - 인덱스 일부 매도 → laggard Mag 7 매수 → 평균회귀 시 outperform
+
+    조건:
+        - ticker in Mag 7 (AAPL/MSFT/GOOGL/GOOG/AMZN/META/NVDA/TSLA)
+        - 3M return < cohort 평균 - 10%p
+        - urgent risk 부재 (thesis 유지)
+    """
+    try:
+        from src.cohort import find_all_laggards
+        laggards = find_all_laggards(rows)
+    except Exception as e:
+        log.warning(f"Mag 7 Laggard 계산 실패: {e}")
+        return
+
+    if not laggards:
+        # Laggard 없음 — 안내 정보만 (전체 Mag 7 cohort 상황 요약)
+        try:
+            from src.cohort import compute_mag7_cohort_returns, MAG7_TICKERS
+            cohort = compute_mag7_cohort_returns(rows)
+            n = cohort.get("n_available", 0)
+            if n == 0:
+                return  # 데이터 부재 시 섹션 자체 표시 X
+
+            avg_3m = cohort.get("avg_3m")
+            avg_3m_str = f"{avg_3m*100:+.1f}%" if avg_3m is not None else "N/A"
+            st.markdown(
+                '<div class="section-title">Mag 7 Laggard'
+                '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
+                '— cohort 평균 대비 후행하는 Mag 7 발굴'
+                "</span></div>"
+                f'<div class="card" style="background:#F0FDF4; border-color:#BBF7D0; '
+                f'color:#166534;">'
+                f'현재 Mag 7 cohort 가 균형 — 평균 3M {avg_3m_str}, '
+                f'cohort 대비 -10%p 이상 후행 종목 없음. '
+                "구조적 rotation 기회는 시장 변동 후 다시 점검."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
+        return
+
+    # Laggard 발견 — 카드 렌더
+    from src.cohort import compute_mag7_cohort_returns
+    cohort = compute_mag7_cohort_returns(rows)
+    avg_3m = cohort.get("avg_3m")
+    avg_3m_str = f"{avg_3m*100:+.1f}%" if avg_3m is not None else "N/A"
+
+    st.markdown(
+        '<div class="section-title">Mag 7 Laggard'
+        '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
+        '— cohort 평균 대비 후행하는 Mag 7 발굴 (mean reversion 후보)'
+        "</span></div>"
+        '<div class="info-row check" style="background:#EFF6FF; border-left-color:#1E40AF; '
+        'color:#1E40AF; margin-bottom:8px;">'
+        f'※ 현재 Mag 7 cohort 평균 3M 수익률 {avg_3m_str}. 아래는 cohort 대비 -10%p 이상 후행 + '
+        'thesis 유지 종목입니다. 형우의 cohort rotation strategy (시장이 가는데 안 가는 종목 매수) 적용 후보.'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    for i, lg in enumerate(laggards):
+        ticker = lg["ticker"]
+        name_ko = lg.get("name_ko", "")
+        lag_3m = lg["lag_3m"]
+        lag_1m = lg.get("lag_1m")
+        score = lg["score"]
+        reason = lg["reason"]
+        row_data = lg.get("row")
+
+        name_full = display_name(name_ko, ticker) if name_ko else ticker
+
+        lag_3m_pct = lag_3m * 100
+        lag_1m_pct = (lag_1m * 100) if lag_1m is not None else None
+
+        # 절대 수익률 (참고용)
+        md = (row_data or {}).get("market_data") or {}
+        r_3m = md.get("3m_return")
+        r_1m = md.get("1m_return")
+        r_3m_str = f"{r_3m*100:+.1f}%" if r_3m is not None else "N/A"
+        r_1m_str = f"{r_1m*100:+.1f}%" if r_1m is not None else "N/A"
+
+        # Score color
+        score_color = "#0F4C75" if score >= 70 else (
+            "#1B6FC0" if score >= 50 else "#6B7280"
+        )
+
+        body = (
+            '<div class="card" style="border-left:3px solid #1E40AF;">'
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; '
+            'gap:12px; margin-bottom:8px; flex-wrap:wrap;">'
+            f'<div><div style="font-size:16px; font-weight:600;">{name_full}</div>'
+            f'<div style="margin-top:4px;">'
+            f'<span class="chip chip-needs-check" style="font-size:11px;">Mag 7 Laggard</span>'
+            "</div></div>"
+            '<div style="text-align:right; flex-shrink:0;">'
+            f'<div style="font-size:24px; font-weight:700; color:{score_color}; line-height:1.1;">'
+            f'{score:.0f}<span style="font-size:13px; color:var(--muted); font-weight:500;">/100</span>'
+            "</div>"
+            '<div style="font-size:11px; color:var(--muted); margin-top:2px;">Laggard Score</div>'
+            "</div></div>"
+            '<div class="para-row">'
+            '<span class="para-label">cohort 대비</span>'
+            '<span class="para-text">'
+            f'3M <b style="color:#9F1239;">{lag_3m_pct:+.1f}%p</b>'
+            + (f' · 1M <b style="color:#9F1239;">{lag_1m_pct:+.1f}%p</b>'
+               if lag_1m_pct is not None else "")
+            + " 후행"
+            "</span></div>"
+            '<div class="para-row">'
+            '<span class="para-label">절대 수익률</span>'
+            f'<span class="para-text">3M {r_3m_str} · 1M {r_1m_str}</span>'
+            "</div>"
+            '<div class="para-row">'
+            '<span class="para-label">판정 근거</span>'
+            f'<span class="para-text">{reason}</span>'
+            "</div>"
+            "</div>"
+        )
+        st.markdown(body, unsafe_allow_html=True)
+
+        if st.button(f"{ticker} 상세 보기", key=f"mag7lag_{ticker}_{i}",
+                     use_container_width=True):
+            navigate_to("detail", ticker=ticker)
+            st.rerun()
 
 
 def render_unified_top_picks(manual_picks: list[dict] | None):
