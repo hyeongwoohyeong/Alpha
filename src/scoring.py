@@ -338,6 +338,10 @@ def compute_scores(
             "available": False,
             "thesis": None, "evidence": None, "price": None,
             "financial": None, "event": None, "risk": None,
+            # alpha_score.py 가 사용하는 long-name alias (2026-05 호환)
+            "thesis_strength": None, "evidence_strength": None,
+            "price_opportunity": None, "financial_quality": None,
+            "event_freshness": None, "risk_control": None,
             "final_score": None,
         }
 
@@ -371,6 +375,15 @@ def compute_scores(
         "financial": round(f, 1),
         "event": round(ev, 1),
         "risk": round(r, 1),
+        # alpha_score.py 가 사용하는 long-name alias (2026-05 — Alpha Score 변별력 재설계 호환)
+        # 두 이름 모두 동시 노출 — 기존 호출처 (scoring rules / brief_generator) 와
+        # 신규 호출처 (alpha_score._component_*) 가 동일 dict 에서 작동하도록.
+        "thesis_strength": round(t, 1),
+        "evidence_strength": round(e, 1),
+        "price_opportunity": round(p, 1),
+        "financial_quality": round(f, 1),
+        "event_freshness": round(ev, 1),
+        "risk_control": round(r, 1),
         "final_score": round(final, 1),
     }
 
