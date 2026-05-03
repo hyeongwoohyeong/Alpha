@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -406,9 +407,16 @@ def step_calculate_scores(
     return score_map
 
 
-def step_generate_stock_research(conn, run_id: str, date_iso: str, score_map: dict) -> int:
+def step_generate_stock_research(
+    conn, run_id: str, date_iso: str, score_map: dict
+) -> tuple[int, dict[str, dict]]:
+    """stock_research 빌드 + DB 저장 + 메모리 dict 반환 (Auditor 가 alpha_score 사용).
+
+    Returns: (n_built, research_map: ticker → research dict)
+    """
     log.info("[10/12] generating stock research bodies...")
     n = 0
+    research_map: dict[str, dict] = {}
     for ticker, s in score_map.items():
         rc = s["row_context"]
         if not (rc.get("market_data") or {}).get("available"):
@@ -419,10 +427,184 @@ def step_generate_stock_research(conn, run_id: str, date_iso: str, score_map: di
         try:
             research = build_stock_research(rc)
             db.upsert_stock_research(conn, run_id, date_iso, ticker, research)
+            research_map[ticker] = research
             n += 1
         except Exception as e:
             log.warning("[%s] stock research failed: %s", ticker, e)
     log.info("[10/12] research done: %d", n)
+    return n, research_map
+
+
+def step_auto_curate(
+    conn,
+    run_id: str,
+    date_iso: str,
+    *,
+    promoted: list[dict],
+    score_map: dict,
+    research_map: dict[str, dict],
+    cfg,
+    budget,
+    max_age_days: int = 60,
+    max_calls_per_run: int = 5,
+) -> dict[str, int]:
+    """Auto-Curation — 큐레이션 미등록 종목의 자동 LLM 큐레이션 생성.
+
+    선정 우선순위 (사용자 권장안 A — Promoted Candidate 5 종목/일):
+        1. Promoted Candidate (Discovery → Promotion 통과한 종목 — wide universe)
+        2. (확장 시) Daily Brief Top picks 중 큐레이션 미등록
+        3. (확장 시) Alpha Score >= 70 인데 큐레이션 미등록
+
+    캐시 정책:
+        - max_age_days (default 60일) 이내 fresh 한 종목 skip
+        - max_calls_per_run (default 5) 으로 LLM 호출 상한
+        - 전역 LLM budget (cfg.max_llm_calls_per_run) 도 동시 적용
+
+    Returns: {"candidates": int, "cache_hits": int, "generated": int, "failed": int,
+              "total_cost_usd": float}
+    """
+    log.info("[AC] auto-curation 시작 (max_age=%d일, budget=%d)",
+             max_age_days, max_calls_per_run)
+
+    if not cfg.llm_enabled:
+        log.info("[AC] LLM 비활성화 — auto-curation skip")
+        return {"candidates": 0, "cache_hits": 0, "generated": 0, "failed": 0,
+                "total_cost_usd": 0.0}
+
+    if not os.environ.get("OPENAI_API_KEY"):
+        log.info("[AC] OPENAI_API_KEY 미설정 — auto-curation skip")
+        return {"candidates": 0, "cache_hits": 0, "generated": 0, "failed": 0,
+                "total_cost_usd": 0.0}
+
+    # 1) 큐레이션 대상 종목 추리기 — 우선순위 순서로
+    from src.curated import EARNINGS_QUALITY_KO, INVESTMENT_THESIS_KO
+    from src.auto_curation import generate_auto_curation
+
+    curated_set = set(EARNINGS_QUALITY_KO.keys()) | set(INVESTMENT_THESIS_KO.keys())
+
+    candidates: list[tuple[str, str | None]] = []  # (ticker, queue_type)
+    seen: set[str] = set()
+
+    # 1-1. Promoted Candidate
+    for p in promoted or []:
+        t = (p.get("ticker") or "").upper()
+        if not t or t in seen or t in curated_set:
+            continue
+        seen.add(t)
+        candidates.append((t, p.get("queue_type")))
+
+    # 1-2. (보강) Top picks / High Alpha 추후 추가 — 지금은 Promoted 만
+
+    log.info("[AC] %d candidates (curated 제외, 중복 제거)", len(candidates))
+
+    # 2) 각 후보에 대해 캐시 hit / fresh 검사 + 신규 생성
+    cache_hits = 0
+    generated = 0
+    failed = 0
+    total_cost = 0.0
+
+    calls_used = 0
+    for ticker, queue_type in candidates:
+        if calls_used >= max_calls_per_run:
+            log.info("[AC] max_calls_per_run %d 도달 — 나머지 %d 종목 다음 run 으로",
+                     max_calls_per_run, len(candidates) - calls_used)
+            break
+
+        # 캐시 fresh ?
+        if db.auto_curation_is_fresh(conn, ticker, max_age_days=max_age_days):
+            cache_hits += 1
+            log.debug("[AC] %s cache hit (skip)", ticker)
+            continue
+
+        # budget 확인
+        if not budget.can_call():
+            log.info("[AC] global LLM budget 소진 — 나머지 %d 종목 다음 run 으로",
+                     len(candidates) - calls_used)
+            break
+
+        # 시장 데이터에서 market_cap 조회 (있으면)
+        mc = None
+        if ticker in score_map:
+            md = (score_map[ticker].get("row_context") or {}).get("market_data") or {}
+            mc = md.get("market_cap")
+
+        # 생성 시도
+        try:
+            log.info("[AC] generating curation for %s (queue=%s)", ticker, queue_type)
+            result = generate_auto_curation(
+                conn, ticker, market_cap=mc, force=False, max_age_days=max_age_days,
+            )
+            calls_used += 1
+            budget.record()
+            if result is None:
+                failed += 1
+                continue
+            generated += 1
+            # 비용 가져오기
+            row = db.fetch_auto_curation(conn, ticker)
+            if row:
+                total_cost += float(row["cost_estimate_usd"] or 0)
+        except Exception as e:
+            log.warning("[AC] %s 생성 실패: %s", ticker, e)
+            failed += 1
+
+    summary = {
+        "candidates": len(candidates),
+        "cache_hits": cache_hits,
+        "generated": generated,
+        "failed": failed,
+        "total_cost_usd": round(total_cost, 4),
+    }
+    log.info("[AC] done: %s", summary)
+    return summary
+
+
+def step_record_alpha_decisions(
+    conn, run_id: str, date_iso: str,
+    universe: list[dict], score_map: dict,
+    research_map: dict[str, dict],
+    promoted_queue_map: dict[str, str] | None = None,
+) -> int:
+    """Logic Auditor — Alpha 의 매일 자동 판단을 decision_log 에 기록.
+
+    벤치마크 (SPY/QQQ/QLD) 가격을 fetch 해 entry 시점 가격으로 함께 저장.
+    """
+    from src.performance_tracker import (
+        record_decisions_for_run,
+        fetch_benchmark_prices,
+    )
+    log.info("[Auditor] recording alpha decisions...")
+
+    # rows 재구성 (brief_generator 재사용 형태)
+    rows: list[dict] = []
+    promoted_queue_map = promoted_queue_map or {}
+    for u in universe:
+        ticker = u["ticker"]
+        s = score_map.get(ticker) or {}
+        rc = s.get("row_context") or {}
+        if not rc:
+            continue
+        action_tag = s.get("action_tag", "Watchlist")
+        rows.append({
+            **u, **rc,
+            "scores": {k: v for k, v in s.items() if k not in ("row_context", "rationale")},
+            "action_tag": action_tag,
+            "company_type": s.get("company_type"),
+            "queue_type": promoted_queue_map.get(ticker),
+        })
+
+    bench_prices = fetch_benchmark_prices()
+    n = record_decisions_for_run(
+        conn,
+        run_id=run_id,
+        date_iso=date_iso,
+        rows=rows,
+        research_map=research_map,
+        benchmark_prices=bench_prices,
+        logic_version="v1.0",
+    )
+    log.info("[Auditor] %d decisions recorded (SPY=%s, QQQ=%s, QLD=%s)",
+             n, bench_prices.get("SPY"), bench_prices.get("QQQ"), bench_prices.get("QLD"))
     return n
 
 
@@ -473,60 +655,20 @@ def step_generate_daily_brief(
 
 
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
-    """지난 결정들에 대해 1w/1m/3m 수익률 계산.
+    """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
-    구현: decision_log 의 결정 시점 가격 vs 현재가 비교.
-    SPY/QQQ 상대 수익률은 향후 보강 (지금은 단순 수익률만).
+    SPY / QQQ / QLD 대비 초과수익 + max drawdown / max gain / volatility / hit_status 까지.
+    365일 이내 결정만 — fetch 부하 절감.
     """
-    log.info("[12/12] updating performance tracking...")
-    decisions = db.fetch_decisions(conn, limit=200)
-    n = 0
-    today_iso = today.isoformat()
-    for d in decisions:
-        decision_id = d["decision_id"]
-        ticker = d["ticker"]
-        decision_date = d["date"]
-        entry_price = d["price"]
-        if not entry_price:
-            continue
-        # 현재가는 최신 price_snapshot에서
-        latest = db.fetch_latest_price_snapshot(conn, ticker)
-        if not latest or not latest[0]["current_price"]:
-            continue
-        current_price = latest[0]["current_price"]
-        try:
-            d_date = _dt.date.fromisoformat(decision_date)
-        except Exception:
-            continue
-        days_held = (today - d_date).days
-        if days_held <= 0:
-            continue
-
-        ret_total = (current_price / entry_price) - 1.0
-        metrics = {
-            "return_1w": ret_total if days_held <= 7 else None,
-            "return_1m": ret_total if days_held <= 30 else None,
-            "return_3m": ret_total if days_held <= 90 else None,
-            "return_6m": ret_total if days_held <= 180 else None,
-            "outcome_tag": (
-                "맞음" if (
-                    (d["action_tag"] in ("Research Now", "Quality Dislocation") and ret_total >= 0.05)
-                    or (d["action_tag"] == "Avoid" and ret_total <= -0.05)
-                ) else (
-                    "틀림" if (
-                        (d["action_tag"] in ("Research Now", "Quality Dislocation") and ret_total <= -0.10)
-                        or (d["action_tag"] == "Avoid" and ret_total >= 0.10)
-                    ) else "진행 중"
-                )
-            ),
-        }
-        try:
-            db.upsert_performance(conn, decision_id, today_iso, metrics)
-            n += 1
-        except Exception as e:
-            log.debug("perf upsert failed for decision %s: %s", decision_id, e)
-    log.info("[12/12] perf tracking updated: %d decisions", n)
-    return n
+    log.info("[12/12] Auditor — performance tracking (1D/1W/2W/1M/3M/6M/12M)...")
+    try:
+        from src.performance_tracker import update_performance_tracking_all
+        result = update_performance_tracking_all(conn, today=today)
+        log.info("[12/12] perf tracking: %s", result)
+        return int(result.get("updated", 0))
+    except Exception as e:
+        log.warning("[12/12] performance tracking failed: %s", e)
+        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -626,10 +768,31 @@ def run_research(
         )
         summary["scores"] = len(score_map)
 
-        n_research = step_generate_stock_research(conn, run_id, date_iso, score_map)
+        n_research, research_map = step_generate_stock_research(conn, run_id, date_iso, score_map)
         summary["research"] = n_research
 
+        # Auto-Curation — Promoted Candidate 5종목/일 LLM 자동 큐레이션 (60일 캐시)
+        ac_summary = step_auto_curate(
+            conn, run_id, date_iso,
+            promoted=promoted,
+            score_map=score_map,
+            research_map=research_map,
+            cfg=cfg,
+            budget=budget,
+            max_age_days=60,
+            max_calls_per_run=5,
+        )
+        summary["auto_curation"] = ac_summary
+
         step_generate_daily_brief(conn, run_id, date_iso, all_deep_dive, score_map, market_summary)
+
+        # Logic Auditor — Alpha 의 매일 자동 판단 기록 (decision_log)
+        promoted_queue_map = {p["ticker"]: p.get("queue_type") for p in promoted}
+        n_decisions = step_record_alpha_decisions(
+            conn, run_id, date_iso, all_deep_dive, score_map, research_map,
+            promoted_queue_map=promoted_queue_map,
+        )
+        summary["decisions_recorded"] = n_decisions
 
         step_update_performance_tracking(conn, run_id, today)
 

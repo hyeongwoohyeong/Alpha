@@ -801,6 +801,25 @@ CUSTOM_CSS = """
     .alpha-comp-value {
         font-size: 13px; font-weight: 700; text-align: right;
     }
+    .alpha-comp-na {
+        font-style: italic; opacity: 0.85;
+    }
+    .alpha-coverage-note {
+        background: #FFFBEB;
+        border: 1px solid #FDE68A;
+        color: #92400E;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        line-height: 1.55;
+        margin-top: 12px;
+    }
+    .alpha-coverage-note b {
+        color: #78350F;
+    }
+    .alpha-score-coverage {
+        font-weight: 600;
+    }
     /* ───────── Earnings Quality 8 차원 grid ───────── */
     .eq-grid {
         display: grid;
@@ -2075,22 +2094,71 @@ def render_alpha_score_section(alpha: dict | None):
     if not alpha:
         return
 
-    score = alpha.get("alpha_score", 50)
+    score = alpha.get("alpha_score")  # None 가능
     rating_en = alpha.get("alpha_rating_en", "Low Priority")
     rating_ko = alpha.get("alpha_rating_ko", "")
     confidence = alpha.get("data_confidence", "Medium")
     is_provisional = alpha.get("is_provisional", False)
     interpretation = alpha.get("interpretation", "")
     components = alpha.get("components", {}) or {}
+    coverage_pct = alpha.get("scored_coverage_pct", 100)
+    missing = alpha.get("missing_components", []) or []
+    raw_alpha = alpha.get("raw_alpha_score")
+    penalty = alpha.get("missing_data_penalty", 0.0)
 
-    color = _alpha_score_color(score)
+    # 점수 표시 — None 이면 N/A
+    if score is None:
+        score_str = "N/A"
+        color = "#9F1239"
+    else:
+        score_str = f"{score:.0f}"
+        color = _alpha_score_color(score)
 
-    # 헤더 카드 — 점수 + 판정 + Data Confidence
+    # 헤더 — Data Confidence + Coverage chip
     confidence_chip_color = {
-        "High": "#1E40AF", "Medium": "#6B7280", "Low": "#B45309",
+        "Manual Override": "#5B21B6",   # purple — 사용자 수동 큐레이션 (최우선)
+        "LLM Researched": "#1E40AF",    # navy — LLM 자동 큐레이션 (SEC 10-K + 뉴스)
+        "High": "#1E40AF",              # 하위 호환
+        "Medium": "#6B7280",
+        "Heuristic": "#B45309",         # amber — auto_profile (산업 + 정량)
+        "Low": "#9F1239",               # rose — 데이터 부족
     }.get(confidence, "#6B7280")
 
+    # tier 별 시각 강조 — Manual Override 는 purple solid border, Heuristic 은 dashed amber
+    if confidence == "Manual Override":
+        confidence_extra_style = (
+            "; border:1px solid #5B21B6; background:#F5F3FF; padding:2px 8px; border-radius:6px;"
+        )
+    elif confidence == "LLM Researched":
+        confidence_extra_style = (
+            "; border:1px solid #1E40AF; background:#EFF6FF; padding:2px 8px; border-radius:6px;"
+        )
+    elif confidence == "Heuristic":
+        confidence_extra_style = (
+            "; border:1px dashed #D97706; background:#FFFBEB; padding:2px 8px; border-radius:6px;"
+        )
+    else:
+        confidence_extra_style = ""
+
     provisional_label = " · Provisional" if is_provisional else ""
+
+    # Coverage chip — 산정된 컴포넌트 비율
+    if coverage_pct >= 85:
+        cov_color = "#1E40AF"
+    elif coverage_pct >= 70:
+        cov_color = "#6B7280"
+    elif coverage_pct >= 50:
+        cov_color = "#B45309"
+    else:
+        cov_color = "#9F1239"
+
+    coverage_chip = (
+        f'<span class="alpha-score-coverage" style="color:{cov_color}; '
+        f'margin-left:12px; font-size:13px;">'
+        f'Scored Coverage: {coverage_pct}% ({len(WEIGHTS_LABELS) - len(missing)}/'
+        f'{len(WEIGHTS_LABELS)})'
+        "</span>"
+    )
 
     st.markdown(
         '<div class="alpha-score-card">'
@@ -2098,12 +2166,13 @@ def render_alpha_score_section(alpha: dict | None):
         '<div class="alpha-score-eyebrow">Alpha Score'
         '<span class="alpha-score-eyebrow-sub"> · 통합 투자 매력도</span>'
         '</div>'
-        '<div class="alpha-score-confidence" style="color:' + confidence_chip_color + ';">'
+        '<div class="alpha-score-confidence" style="color:' + confidence_chip_color + confidence_extra_style + ';">'
         f'Data Confidence: {confidence}{provisional_label}'
+        f'{coverage_chip}'
         "</div>"
         "</div>"
         '<div class="alpha-score-main">'
-        f'<div class="alpha-score-value" style="color:{color};">{score:.0f}'
+        f'<div class="alpha-score-value" style="color:{color};">{score_str}'
         '<span class="alpha-score-denom">/ 100</span></div>'
         f'<div class="alpha-score-rating" style="color:{color};">{rating_en}</div>'
         f'<div class="alpha-score-rating-ko">{rating_ko}</div>'
@@ -2113,42 +2182,83 @@ def render_alpha_score_section(alpha: dict | None):
         unsafe_allow_html=True,
     )
 
-    # 8 컴포넌트 breakdown — horizontal bars
-    label_map_en = {
-        "thesis_strength": "Thesis Strength",
-        "earnings_quality": "Earnings Quality",
-        "moat_lockin": "Moat / Lock-in",
-        "price_opportunity": "Price Opportunity",
-        "event_catalyst": "Event / Catalyst",
-        "industry_bottleneck": "Industry / Bottleneck",
-        "financial_quality": "Financial Quality",
-        "risk_control": "Risk Control",
-    }
-    weight_map = {
-        "thesis_strength": 15, "earnings_quality": 15, "moat_lockin": 15,
-        "price_opportunity": 15, "event_catalyst": 10, "industry_bottleneck": 10,
-        "financial_quality": 10, "risk_control": 10,
-    }
-
+    # 8 컴포넌트 breakdown — score / N/A + status badge + reason tooltip
     bar_html = []
-    for key, label in label_map_en.items():
-        v = float(components.get(key, 50))
-        bar_color = _alpha_score_color(v)
-        weight = weight_map.get(key, 10)
-        bar_html.append(
-            f'<div class="alpha-comp-row">'
-            f'<div class="alpha-comp-label">{label}'
-            f'<span class="alpha-comp-weight">{weight}%</span></div>'
-            f'<div class="alpha-comp-bar-wrap">'
-            f'<div class="alpha-comp-bar" style="width:{v:.0f}%; background:{bar_color};"></div>'
-            "</div>"
-            f'<div class="alpha-comp-value" style="color:{bar_color};">{v:.0f}</div>'
-            "</div>"
-        )
+    for key, label in WEIGHTS_LABELS.items():
+        comp = components.get(key)
+        if not isinstance(comp, dict):
+            # 하위 호환 — 옛날 dict[str, float] 구조였던 경우
+            comp = {"score": comp if isinstance(comp, (int, float)) else None,
+                    "status": "Scored", "confidence": "Medium", "reason": ""}
+
+        c_score = comp.get("score")
+        c_status = comp.get("status", "Scored")
+        c_conf = comp.get("confidence", "Medium")
+        c_reason = (comp.get("reason") or "").replace('"', "'")
+        weight = WEIGHTS_PCT.get(key, 10)
+
+        # status → badge style
+        status_badge_style, status_badge_text = _component_status_badge(c_status, c_conf)
+
+        if c_score is None:
+            # N/A 표시
+            bar_html.append(
+                f'<div class="alpha-comp-row">'
+                f'<div class="alpha-comp-label">{label}'
+                f'<span class="alpha-comp-weight">{weight}%</span>'
+                f'{status_badge_style}'
+                "</div>"
+                '<div class="alpha-comp-bar-wrap">'
+                '<div class="alpha-comp-bar alpha-comp-bar-na" style="width:100%; '
+                'background:repeating-linear-gradient(45deg, #FEE2E2, #FEE2E2 6px, #FCA5A5 6px, #FCA5A5 10px);"></div>'
+                "</div>"
+                f'<div class="alpha-comp-value alpha-comp-na" style="color:#9F1239;" title="{c_reason}">N/A</div>'
+                "</div>"
+            )
+        else:
+            v = float(c_score)
+            bar_color = _alpha_score_color(v)
+            bar_html.append(
+                f'<div class="alpha-comp-row" title="{c_reason}">'
+                f'<div class="alpha-comp-label">{label}'
+                f'<span class="alpha-comp-weight">{weight}%</span>'
+                f'{status_badge_style}'
+                "</div>"
+                '<div class="alpha-comp-bar-wrap">'
+                f'<div class="alpha-comp-bar" style="width:{v:.0f}%; background:{bar_color};"></div>'
+                "</div>"
+                f'<div class="alpha-comp-value" style="color:{bar_color};" title="{c_reason}">{v:.0f}</div>'
+                "</div>"
+            )
+
     st.markdown(
         '<div class="alpha-comp-grid">' + "".join(bar_html) + "</div>",
         unsafe_allow_html=True,
     )
+
+    # Coverage / Penalty 안내
+    if coverage_pct < 85 or missing:
+        n_total = len(WEIGHTS_LABELS)
+        n_scored = n_total - len(missing)
+        missing_labels = ", ".join(WEIGHTS_LABELS.get(k, k) for k in missing[:5])
+        if len(missing) > 5:
+            missing_labels += f" 외 {len(missing) - 5}개"
+
+        coverage_msg_html = (
+            '<div class="alpha-coverage-note">'
+            f'※ 총 {n_total}개 항목 중 <b>{n_scored}개</b>가 산정되었으며, '
+            f'<b>{len(missing)}개</b>가 데이터 부족으로 제외되었습니다 '
+            f'(Scored Coverage <b>{coverage_pct}%</b>'
+        )
+        if penalty < 0:
+            coverage_msg_html += f', Missing Data Penalty <b>{penalty:.0f}점</b>'
+        if raw_alpha is not None and raw_alpha != score and score is not None:
+            coverage_msg_html += f', Raw {raw_alpha:.0f} → 조정 {score:.0f}'
+        coverage_msg_html += ').'
+        if missing:
+            coverage_msg_html += f' 제외: {missing_labels}.'
+        coverage_msg_html += "</div>"
+        st.markdown(coverage_msg_html, unsafe_allow_html=True)
 
     # 점수 가이드 expander
     with st.expander("Alpha Score 판정 기준 보기", expanded=False):
@@ -2161,14 +2271,75 @@ def render_alpha_score_section(alpha: dict | None):
             "**45~53** Low Priority — 현재 우선순위 낮음\n\n"
             "**0~44** Avoid / Not Enough Evidence — 회피 또는 근거 부족\n\n"
             "---\n\n"
+            "**Component Status**\n\n"
+            "- **Scored** — 충분한 데이터로 점수 산정됨\n"
+            "- **Neutral** — 명확한 긍정/부정 근거 없음, 평균 수준 — 50점 부여\n"
+            "- **Insufficient Data** — 판단에 필요한 데이터 부족 → N/A, 가중평균에서 제외\n"
+            "- **Calculation Error** — 데이터 오류 또는 계산 실패 → N/A\n\n"
+            "**Missing Data Penalty** — 산정 제외 비중에 따라 자동 차감\n\n"
+            "- ≥ 85% 산정 → 페널티 없음\n"
+            "- 70~84% → -3점\n"
+            "- 50~69% → -7점\n"
+            "- < 50% → -12점 + Provisional Score 표시\n\n"
             "Alpha Score 는 **자동 매수 추천** 이 아니라 Alpha 로직상 리서치 우선순위와 "
             "투자 매력도를 정량화한 보조 지표입니다. 88점 이상도 \"무조건 매수\"가 아닌 "
             "\"최우선 정밀 검토\" 의미이며, 실제 매수 전 valuation / 포지션 사이징 / "
-            "리스크 체크가 필요합니다.\n\n"
-            "8 컴포넌트 중 일부 (가격 / 이벤트 / 리스크) 는 데이터 부족 시 중립 50 으로 "
-            "fallback 되는 구조 특성상, 80+ 도 매우 강하게 정렬된 후보로 봐야 합니다."
+            "리스크 체크가 필요합니다."
         )
     st.markdown('<div class="section-spacer"></div>', unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Alpha Score 컴포넌트 라벨 / 가중치 (UI 내부 매핑)
+# ---------------------------------------------------------------------------
+
+WEIGHTS_LABELS: dict[str, str] = {
+    "thesis_strength": "Thesis Strength",
+    "earnings_quality": "Earnings Quality",
+    "moat_lockin": "Moat / Lock-in",
+    "price_opportunity": "Price Opportunity",
+    "event_catalyst": "Event / Catalyst",
+    "industry_bottleneck": "Industry / Bottleneck",
+    "financial_quality": "Financial Quality",
+    "risk_control": "Risk Control",
+}
+
+WEIGHTS_PCT: dict[str, int] = {
+    "thesis_strength": 15, "earnings_quality": 15, "moat_lockin": 15,
+    "price_opportunity": 15, "event_catalyst": 10, "industry_bottleneck": 10,
+    "financial_quality": 10, "risk_control": 10,
+}
+
+
+def _component_status_badge(status: str, confidence: str) -> tuple[str, str]:
+    """status / confidence → HTML chip + 텍스트.
+
+    Returns: (html_chip, badge_text)
+    """
+    if status == "Scored":
+        if confidence == "High":
+            color, bg, label = "#065F46", "#D1FAE5", "Scored · High"
+        elif confidence == "Medium":
+            color, bg, label = "#1E40AF", "#DBEAFE", "Scored · Med"
+        else:
+            color, bg, label = "#92400E", "#FEF3C7", "Scored · Low"
+    elif status == "Neutral":
+        color, bg, label = "#374151", "#F3F4F6", "Neutral"
+    elif status == "Insufficient Data":
+        color, bg, label = "#9F1239", "#FEE2E2", "N/A"
+    elif status == "Not Applicable":
+        color, bg, label = "#6B7280", "#F3F4F6", "N/A"
+    elif status == "Calculation Error":
+        color, bg, label = "#9F1239", "#FEE2E2", "Error"
+    else:
+        color, bg, label = "#6B7280", "#F3F4F6", status[:8]
+
+    chip = (
+        f'<span style="margin-left:8px; padding:1px 7px; border-radius:8px; '
+        f'font-size:11px; font-weight:600; background:{bg}; color:{color};">'
+        f'{label}</span>'
+    )
+    return chip, label
 
 
 def render_earnings_quality_section(eq: dict | None):
@@ -2180,6 +2351,9 @@ def render_earnings_quality_section(eq: dict | None):
     tier = eq.get("earnings_durability_tier", "Moderate")
     color = _tier_color(tier)
     is_curated = eq.get("is_curated", False)
+    is_manually_curated = eq.get("is_manually_curated", False)
+    is_llm_researched = eq.get("is_llm_researched", False)
+    is_auto_profiled = eq.get("is_auto_profiled", False)
 
     st.markdown(
         '<div class="section-title">Earnings Quality & Moat Assessment'
@@ -2188,12 +2362,40 @@ def render_earnings_quality_section(eq: dict | None):
         unsafe_allow_html=True,
     )
 
-    # 상단 — Earnings Durability Score 배지
-    note = "" if is_curated else (
-        '<div style="font-size:12px; color:var(--muted); margin-top:4px;">'
-        '※ 큐레이션 미등록 종목 — 8 차원 모두 "확인 필요" 로 표시됩니다.'
-        "</div>"
-    )
+    # 상단 — Earnings Durability Score 배지 (4 단계 라벨)
+    if is_manually_curated:
+        note = (
+            '<div style="font-size:12px; color:#5B21B6; margin-top:4px; '
+            'padding:4px 8px; background:#F5F3FF; border:1px solid #5B21B6; '
+            'border-radius:6px; display:inline-block;">'
+            '※ Manual Override — 사용자가 직접 검토 / 입력한 큐레이션 데이터입니다.'
+            "</div>"
+        )
+    elif is_llm_researched:
+        note = (
+            '<div style="font-size:12px; color:#1E40AF; margin-top:4px; '
+            'padding:4px 8px; background:#EFF6FF; border:1px solid #1E40AF; '
+            'border-radius:6px; display:inline-block;">'
+            '※ LLM Researched — SEC 10-K (Item 1 / 1A / 7) + yfinance 사업 요약 + 최근 뉴스 '
+            '한국어 요약을 기반으로 LLM (gpt-4o-mini) 이 자동 생성한 큐레이션입니다. '
+            '60일 마다 재생성되며, 형우의 검토 후 curated.py 에 직접 입력하면 Manual Override 로 우선됩니다.'
+            "</div>"
+        )
+    elif is_auto_profiled:
+        note = (
+            '<div style="font-size:12px; color:#B45309; margin-top:4px; '
+            'padding:4px 8px; background:#FFFBEB; border:1px dashed #D97706; '
+            'border-radius:6px; display:inline-block;">'
+            '※ Heuristic — 큐레이션 미등록 종목으로, 산업 keyword + 정량 지표 (margin / FCF / ROE) '
+            '기반 자동 추정 결과입니다. LLM 큐레이션 또는 사용자 수동 입력으로 보강 권장.'
+            "</div>"
+        )
+    else:
+        note = (
+            '<div style="font-size:12px; color:var(--muted); margin-top:4px;">'
+            '※ 큐레이션 미등록 종목 — 8 차원 모두 "확인 필요" 로 표시됩니다.'
+            "</div>"
+        )
     st.markdown(
         '<div class="card" style="margin-bottom:14px;">'
         '<div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">'
@@ -2385,14 +2587,20 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
         _alpha = calculate_alpha_score(
             ticker=row["ticker"], market_data=md, scores=row.get("scores"),
             earnings_quality=_eq, bottleneck_thesis=_bn, news_agg=row.get("news_agg"),
+            curated_events=row.get("curated_events"),
         )
         _alpha = reconcile_with_action_tag(_alpha, tag, too_crowded=(tag == "Too Crowded"))
-        _score = _alpha.get("alpha_score", 0)
-        _color = _alpha_score_color(_score)
+        _score = _alpha.get("alpha_score")
+        if _score is None:
+            _score_str = "N/A"
+            _color = "#9F1239"
+        else:
+            _score_str = f"{_score:.0f}"
+            _color = _alpha_score_color(_score)
         alpha_badge_html = (
             f'<div class="pick-alpha-badge" style="border-color:{_color}; color:{_color};">'
             f'<span class="pick-alpha-label">Alpha</span>'
-            f'<span class="pick-alpha-score">{_score:.0f}</span>'
+            f'<span class="pick-alpha-score">{_score_str}</span>'
             "</div>"
         )
     except Exception:

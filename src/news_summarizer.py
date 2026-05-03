@@ -141,23 +141,44 @@ def summarize_news_to_korean(
             }
 
     # 2) LLM 모드 판단
+    #    LLM_PROVIDER 환경변수로 명시 선택 가능 (openai / anthropic / auto)
+    #    auto 또는 미설정 시 OpenAI 우선 시도 → 실패하면 Anthropic 폴백
     payload: dict[str, Any] | None = None
     model_used = "rule-based"
+    provider = (os.environ.get("LLM_PROVIDER") or "auto").strip().lower()
+
+    def _try_openai() -> str | None:
+        nonlocal payload
+        if not os.environ.get("OPENAI_API_KEY"):
+            return None
+        try:
+            payload = _summarize_with_openai(news_item, stock_context)
+            budget.record()
+            return "gpt-4o-mini" if not cfg.use_high_quality_llm else "gpt-4o"
+        except Exception as e:
+            log.warning("OpenAI 요약 실패: %s", e)
+            return None
+
+    def _try_anthropic() -> str | None:
+        nonlocal payload
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            return None
+        try:
+            payload = _summarize_with_anthropic(news_item, stock_context)
+            budget.record()
+            return "claude-haiku-4-5" if not cfg.use_high_quality_llm else "claude-opus-4"
+        except Exception as e:
+            log.warning("Anthropic 요약 실패: %s", e)
+            return None
+
     if cfg.llm_enabled and budget.can_call():
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            try:
-                payload = _summarize_with_anthropic(news_item, stock_context)
-                budget.record()
-                model_used = "claude-haiku-4-5" if not cfg.use_high_quality_llm else "claude-opus-4"
-            except Exception as e:
-                log.warning("Anthropic 요약 실패 → 폴백: %s", e)
-        if payload is None and os.environ.get("OPENAI_API_KEY"):
-            try:
-                payload = _summarize_with_openai(news_item, stock_context)
-                budget.record()
-                model_used = "gpt-4o-mini" if not cfg.use_high_quality_llm else "gpt-4o"
-            except Exception as e:
-                log.warning("OpenAI 요약 실패 → 폴백: %s", e)
+        if provider == "openai":
+            model_used = _try_openai() or "rule-based"
+        elif provider == "anthropic":
+            model_used = _try_anthropic() or "rule-based"
+        else:
+            # auto — OpenAI 먼저, 실패 시 Anthropic 폴백
+            model_used = _try_openai() or _try_anthropic() or "rule-based"
 
     if payload is None:
         payload = _summarize_rule_based(news_item, stock_context)

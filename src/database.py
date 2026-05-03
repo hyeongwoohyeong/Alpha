@@ -300,6 +300,88 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_discovery_date ON discovery_scores(date, queue_type)",
     "CREATE INDEX IF NOT EXISTS idx_promotion_date ON promotion_candidates(date, promoted_to_deep_dive)",
     "CREATE INDEX IF NOT EXISTS idx_article_url ON article_summaries(article_url)",
+    # ── Logic Auditor — 로직 버전 / 실험 / 개선 제안 ──────────────────
+    """
+    CREATE TABLE IF NOT EXISTS logic_versions (
+        version_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        version_name      TEXT NOT NULL,
+        effective_date    TEXT NOT NULL,
+        change_summary    TEXT,
+        score_weights_json TEXT,
+        queue_rules_json  TEXT,
+        filters_json      TEXT,
+        created_by        TEXT,
+        approved_by_user  INTEGER NOT NULL DEFAULT 0,
+        rollback_available INTEGER NOT NULL DEFAULT 1,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        parent_version_id INTEGER,
+        created_at        TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS logic_experiments (
+        experiment_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_date        TEXT NOT NULL,
+        end_date          TEXT,
+        hypothesis        TEXT,
+        change_applied    TEXT,
+        control_version   TEXT,
+        test_version      TEXT,
+        target_metric     TEXT,
+        result_json       TEXT,
+        decision          TEXT,
+        created_at        TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS logic_improvements (
+        improvement_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+        proposal_date     TEXT NOT NULL,
+        category          TEXT NOT NULL,
+        problem           TEXT,
+        evidence_json     TEXT,
+        proposed_change   TEXT,
+        expected_effect   TEXT,
+        risk              TEXT,
+        auto_apply        INTEGER NOT NULL DEFAULT 0,
+        approval_required INTEGER NOT NULL DEFAULT 1,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        applied_version_id INTEGER,
+        created_at        TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS logic_audit_reports (
+        report_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        report_date       TEXT NOT NULL,
+        report_type       TEXT NOT NULL,
+        body_json         TEXT,
+        created_at        TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_logic_versions_status ON logic_versions(status, effective_date)",
+    "CREATE INDEX IF NOT EXISTS idx_logic_experiments_date ON logic_experiments(start_date)",
+    "CREATE INDEX IF NOT EXISTS idx_logic_improvements_status ON logic_improvements(status, proposal_date)",
+    "CREATE INDEX IF NOT EXISTS idx_logic_audit_type_date ON logic_audit_reports(report_type, report_date)",
+    # ── Auto-Curation — LLM 기반 자동 큐레이션 캐시 ──────────────────
+    """
+    CREATE TABLE IF NOT EXISTS auto_curation (
+        ticker            TEXT PRIMARY KEY,
+        generated_at      TEXT NOT NULL,
+        fields_json       TEXT NOT NULL,
+        model_used        TEXT,
+        token_input       INTEGER,
+        token_output      INTEGER,
+        cost_estimate_usd REAL,
+        sources_json      TEXT,
+        sec_filing_date   TEXT,
+        data_confidence   TEXT,
+        uncertainty_flags_json TEXT,
+        version           INTEGER NOT NULL DEFAULT 1,
+        created_at        TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_auto_curation_generated ON auto_curation(generated_at)",
 )
 
 
@@ -324,6 +406,41 @@ def init_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE stock_research ADD COLUMN alpha_score_json TEXT",
         # stock_research — Bottleneck Thesis (해당 종목만)
         "ALTER TABLE stock_research ADD COLUMN bottleneck_thesis_json TEXT",
+        # ── Logic Auditor — decision_log 확장 ─────────────────────
+        # 기존 decision_log 는 사용자 수동 결정 저장용 — Auditor 는 동일 테이블에
+        # Alpha 자동 판단도 함께 기록 (auto_recorded=1 로 구분)
+        "ALTER TABLE decision_log ADD COLUMN run_id TEXT",
+        "ALTER TABLE decision_log ADD COLUMN company_name TEXT",
+        "ALTER TABLE decision_log ADD COLUMN alpha_score REAL",
+        "ALTER TABLE decision_log ADD COLUMN alpha_rating TEXT",
+        "ALTER TABLE decision_log ADD COLUMN queue_type TEXT",
+        "ALTER TABLE decision_log ADD COLUMN thesis_type TEXT",
+        "ALTER TABLE decision_log ADD COLUMN core_thesis TEXT",
+        "ALTER TABLE decision_log ADD COLUMN key_risks_json TEXT",
+        "ALTER TABLE decision_log ADD COLUMN follow_up_items_json TEXT",
+        "ALTER TABLE decision_log ADD COLUMN entry_price REAL",
+        "ALTER TABLE decision_log ADD COLUMN spy_price REAL",
+        "ALTER TABLE decision_log ADD COLUMN qqq_price REAL",
+        "ALTER TABLE decision_log ADD COLUMN qld_price REAL",
+        "ALTER TABLE decision_log ADD COLUMN data_confidence TEXT",
+        "ALTER TABLE decision_log ADD COLUMN reason_json TEXT",
+        "ALTER TABLE decision_log ADD COLUMN auto_recorded INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE decision_log ADD COLUMN logic_version TEXT",
+        # ── Logic Auditor — performance_tracking 확장 ─────────────
+        "ALTER TABLE performance_tracking ADD COLUMN holding_period TEXT",
+        "ALTER TABLE performance_tracking ADD COLUMN entry_price REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN current_price REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN absolute_return REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN spy_return REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN qqq_return REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN qld_return REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN excess_return_vs_spy REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN excess_return_vs_qqq REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN excess_return_vs_qld REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN max_drawdown_since_decision REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN max_gain_since_decision REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN volatility REAL",
+        "ALTER TABLE performance_tracking ADD COLUMN hit_status TEXT",
     )
     for s in _ALTER_STATEMENTS:
         try:
@@ -926,6 +1043,27 @@ def fetch_stock_research(
     return cur.fetchone()
 
 
+def fetch_latest_stock_research_all(
+    conn: sqlite3.Connection, limit: int | None = None
+) -> list[sqlite3.Row]:
+    """가장 최신 일자의 모든 stock_research 행 반환 (alpha_score 비교 / Outsider 선정용).
+
+    같은 종목이 여러 날 저장돼 있을 경우 가장 최근 일자 한 행만 선택.
+    """
+    sql = """
+        SELECT s.* FROM stock_research s
+        INNER JOIN (
+            SELECT ticker, MAX(date) AS max_date
+            FROM stock_research
+            GROUP BY ticker
+        ) latest ON s.ticker = latest.ticker AND s.date = latest.max_date
+    """
+    if limit is not None:
+        sql += f" LIMIT {int(limit)}"
+    cur = conn.execute(sql)
+    return list(cur.fetchall())
+
+
 # ---------------------------------------------------------------------------
 # daily_brief
 # ---------------------------------------------------------------------------
@@ -983,11 +1121,12 @@ def insert_decision(
     user_note: str = "",
     date_iso: str | None = None,
 ) -> int:
+    """[하위 호환] 사용자 수동 결정 저장. Auditor 자동 기록은 record_alpha_decision 사용."""
     cur = conn.execute(
         """
         INSERT INTO decision_log (date, ticker, action_tag, final_score, price,
-                                  reason, user_note, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                  reason, user_note, auto_recorded, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
         """,
         (
             date_iso or today_kst(),
@@ -1004,13 +1143,112 @@ def insert_decision(
     return cur.lastrowid
 
 
-def fetch_decisions(conn: sqlite3.Connection, limit: int = 100) -> list[sqlite3.Row]:
-    return list(
-        conn.execute(
-            "SELECT * FROM decision_log ORDER BY date DESC, decision_id DESC LIMIT ?",
-            (limit,),
+def record_alpha_decision(
+    conn: sqlite3.Connection,
+    *,
+    run_id: str | None,
+    date_iso: str,
+    ticker: str,
+    company_name: str | None,
+    action_tag: str | None,
+    final_score: float | None,
+    alpha_score: float | None,
+    alpha_rating: str | None,
+    queue_type: str | None,
+    thesis_type: str | None,
+    core_thesis: str | None,
+    key_risks: list[str] | None,
+    follow_up_items: list[str] | None,
+    entry_price: float | None,
+    spy_price: float | None,
+    qqq_price: float | None,
+    qld_price: float | None,
+    data_confidence: str | None,
+    reason: dict[str, Any] | None,
+    logic_version: str | None = "v1.0",
+) -> int:
+    """Alpha 가 매일 내린 자동 판단 1 건을 decision_log 에 기록.
+
+    같은 (date, ticker, queue_type, action_tag) 조합은 하루에 1회만 — 중복 저장 방지.
+    """
+    # 중복 방지 — 같은 날 같은 종목 같은 액션은 1회
+    existing = conn.execute(
+        "SELECT decision_id FROM decision_log "
+        "WHERE date=? AND ticker=? AND COALESCE(action_tag,'')=COALESCE(?,'') "
+        "AND COALESCE(queue_type,'')=COALESCE(?,'') AND auto_recorded=1",
+        (date_iso, ticker, action_tag or "", queue_type or ""),
+    ).fetchone()
+    if existing:
+        return int(existing[0])
+
+    cur = conn.execute(
+        """
+        INSERT INTO decision_log (
+            date, ticker, action_tag, final_score, price, reason, user_note,
+            run_id, company_name, alpha_score, alpha_rating, queue_type,
+            thesis_type, core_thesis, key_risks_json, follow_up_items_json,
+            entry_price, spy_price, qqq_price, qld_price, data_confidence,
+            reason_json, auto_recorded, logic_version, created_at
         )
+        VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        """,
+        (
+            date_iso, ticker, action_tag, final_score,
+            entry_price,           # price (legacy column)
+            (core_thesis or "")[:500],  # reason (legacy column)
+            run_id, company_name, alpha_score, alpha_rating, queue_type,
+            thesis_type, core_thesis,
+            dump_json(key_risks), dump_json(follow_up_items),
+            entry_price, spy_price, qqq_price, qld_price,
+            data_confidence, dump_json(reason),
+            logic_version, now_iso(),
+        ),
     )
+    return int(cur.lastrowid)
+
+
+def fetch_decisions(
+    conn: sqlite3.Connection,
+    limit: int = 100,
+    *,
+    auto_only: bool | None = None,
+    since_date: str | None = None,
+    ticker: str | None = None,
+) -> list[sqlite3.Row]:
+    sql = "SELECT * FROM decision_log WHERE 1=1"
+    args: list[Any] = []
+    if auto_only is True:
+        sql += " AND auto_recorded=1"
+    elif auto_only is False:
+        sql += " AND auto_recorded=0"
+    if since_date:
+        sql += " AND date >= ?"
+        args.append(since_date)
+    if ticker:
+        sql += " AND ticker = ?"
+        args.append(ticker)
+    sql += " ORDER BY date DESC, decision_id DESC LIMIT ?"
+    args.append(limit)
+    return list(conn.execute(sql, args))
+
+
+def fetch_decisions_for_period(
+    conn: sqlite3.Connection,
+    start_date: str,
+    end_date: str | None = None,
+) -> list[sqlite3.Row]:
+    """기간 내 자동 기록 의사결정 전체."""
+    if end_date:
+        return list(conn.execute(
+            "SELECT * FROM decision_log WHERE auto_recorded=1 "
+            "AND date BETWEEN ? AND ? ORDER BY date, ticker",
+            (start_date, end_date),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM decision_log WHERE auto_recorded=1 AND date >= ? "
+        "ORDER BY date, ticker",
+        (start_date,),
+    ))
 
 
 def upsert_performance(
@@ -1019,12 +1257,22 @@ def upsert_performance(
     check_date: str,
     metrics: dict[str, Any],
 ) -> None:
+    """holding_period 별 성과 1 건 upsert.
+
+    primary key = (decision_id, check_date) — check_date 가 holding period 의
+    실제 측정일을 의미.
+    """
     conn.execute(
         """
         INSERT INTO performance_tracking (decision_id, check_date,
             return_1w, return_1m, return_3m, return_6m,
-            relative_return_spy, relative_return_qqq, outcome_tag)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            relative_return_spy, relative_return_qqq, outcome_tag,
+            holding_period, entry_price, current_price, absolute_return,
+            spy_return, qqq_return, qld_return,
+            excess_return_vs_spy, excess_return_vs_qqq, excess_return_vs_qld,
+            max_drawdown_since_decision, max_gain_since_decision, volatility,
+            hit_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(decision_id, check_date) DO UPDATE SET
             return_1w=excluded.return_1w,
             return_1m=excluded.return_1m,
@@ -1032,11 +1280,24 @@ def upsert_performance(
             return_6m=excluded.return_6m,
             relative_return_spy=excluded.relative_return_spy,
             relative_return_qqq=excluded.relative_return_qqq,
-            outcome_tag=excluded.outcome_tag
+            outcome_tag=excluded.outcome_tag,
+            holding_period=excluded.holding_period,
+            entry_price=excluded.entry_price,
+            current_price=excluded.current_price,
+            absolute_return=excluded.absolute_return,
+            spy_return=excluded.spy_return,
+            qqq_return=excluded.qqq_return,
+            qld_return=excluded.qld_return,
+            excess_return_vs_spy=excluded.excess_return_vs_spy,
+            excess_return_vs_qqq=excluded.excess_return_vs_qqq,
+            excess_return_vs_qld=excluded.excess_return_vs_qld,
+            max_drawdown_since_decision=excluded.max_drawdown_since_decision,
+            max_gain_since_decision=excluded.max_gain_since_decision,
+            volatility=excluded.volatility,
+            hit_status=excluded.hit_status
         """,
         (
-            decision_id,
-            check_date,
+            decision_id, check_date,
             metrics.get("return_1w"),
             metrics.get("return_1m"),
             metrics.get("return_3m"),
@@ -1044,8 +1305,279 @@ def upsert_performance(
             metrics.get("relative_return_spy"),
             metrics.get("relative_return_qqq"),
             metrics.get("outcome_tag"),
+            metrics.get("holding_period"),
+            metrics.get("entry_price"),
+            metrics.get("current_price"),
+            metrics.get("absolute_return"),
+            metrics.get("spy_return"),
+            metrics.get("qqq_return"),
+            metrics.get("qld_return"),
+            metrics.get("excess_return_vs_spy"),
+            metrics.get("excess_return_vs_qqq"),
+            metrics.get("excess_return_vs_qld"),
+            metrics.get("max_drawdown_since_decision"),
+            metrics.get("max_gain_since_decision"),
+            metrics.get("volatility"),
+            metrics.get("hit_status"),
         ),
     )
+
+
+def fetch_performance_join_decisions(
+    conn: sqlite3.Connection,
+    *,
+    holding_period: str | None = None,
+    queue_type: str | None = None,
+    action_tag: str | None = None,
+    since_date: str | None = None,
+) -> list[sqlite3.Row]:
+    """decision_log JOIN performance_tracking — Auditor 분석용."""
+    sql = """
+        SELECT d.*,
+               p.holding_period, p.check_date AS perf_check_date,
+               p.absolute_return, p.spy_return, p.qqq_return, p.qld_return,
+               p.excess_return_vs_spy, p.excess_return_vs_qqq, p.excess_return_vs_qld,
+               p.max_drawdown_since_decision, p.max_gain_since_decision,
+               p.volatility, p.hit_status, p.outcome_tag
+        FROM decision_log d
+        JOIN performance_tracking p ON d.decision_id = p.decision_id
+        WHERE d.auto_recorded = 1
+    """
+    args: list[Any] = []
+    if holding_period:
+        sql += " AND p.holding_period = ?"
+        args.append(holding_period)
+    if queue_type:
+        sql += " AND d.queue_type = ?"
+        args.append(queue_type)
+    if action_tag:
+        sql += " AND d.action_tag = ?"
+        args.append(action_tag)
+    if since_date:
+        sql += " AND d.date >= ?"
+        args.append(since_date)
+    sql += " ORDER BY d.date DESC, d.decision_id DESC"
+    return list(conn.execute(sql, args))
+
+
+# ---------------------------------------------------------------------------
+# Logic Auditor — versions / experiments / improvements / reports
+# ---------------------------------------------------------------------------
+
+def insert_logic_version(
+    conn: sqlite3.Connection,
+    *,
+    version_name: str,
+    effective_date: str,
+    change_summary: str | None = None,
+    score_weights: dict | None = None,
+    queue_rules: dict | None = None,
+    filters: dict | None = None,
+    created_by: str = "auditor",
+    approved_by_user: bool = False,
+    parent_version_id: int | None = None,
+    status: str = "pending",
+) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO logic_versions (version_name, effective_date, change_summary,
+            score_weights_json, queue_rules_json, filters_json,
+            created_by, approved_by_user, status, parent_version_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            version_name, effective_date, change_summary,
+            dump_json(score_weights), dump_json(queue_rules), dump_json(filters),
+            created_by, 1 if approved_by_user else 0, status,
+            parent_version_id, now_iso(),
+        ),
+    )
+    return int(cur.lastrowid)
+
+
+def fetch_logic_versions(
+    conn: sqlite3.Connection, status: str | None = None,
+) -> list[sqlite3.Row]:
+    if status:
+        return list(conn.execute(
+            "SELECT * FROM logic_versions WHERE status=? ORDER BY effective_date DESC",
+            (status,),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM logic_versions ORDER BY effective_date DESC",
+    ))
+
+
+def update_logic_version_status(
+    conn: sqlite3.Connection, version_id: int, status: str,
+    approved_by_user: bool | None = None,
+) -> None:
+    if approved_by_user is None:
+        conn.execute(
+            "UPDATE logic_versions SET status=? WHERE version_id=?",
+            (status, version_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE logic_versions SET status=?, approved_by_user=? WHERE version_id=?",
+            (status, 1 if approved_by_user else 0, version_id),
+        )
+
+
+def insert_logic_experiment(
+    conn: sqlite3.Connection,
+    *,
+    start_date: str,
+    end_date: str | None,
+    hypothesis: str,
+    change_applied: str,
+    control_version: str,
+    test_version: str,
+    target_metric: str,
+) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO logic_experiments (start_date, end_date, hypothesis,
+            change_applied, control_version, test_version, target_metric,
+            created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (start_date, end_date, hypothesis, change_applied,
+         control_version, test_version, target_metric, now_iso()),
+    )
+    return int(cur.lastrowid)
+
+
+def update_logic_experiment_result(
+    conn: sqlite3.Connection, experiment_id: int,
+    *, result: dict, decision: str, end_date: str | None = None,
+) -> None:
+    if end_date:
+        conn.execute(
+            "UPDATE logic_experiments SET result_json=?, decision=?, end_date=? "
+            "WHERE experiment_id=?",
+            (dump_json(result), decision, end_date, experiment_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE logic_experiments SET result_json=?, decision=? "
+            "WHERE experiment_id=?",
+            (dump_json(result), decision, experiment_id),
+        )
+
+
+def fetch_logic_experiments(
+    conn: sqlite3.Connection, decision: str | None = None,
+) -> list[sqlite3.Row]:
+    if decision:
+        return list(conn.execute(
+            "SELECT * FROM logic_experiments WHERE decision=? ORDER BY start_date DESC",
+            (decision,),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM logic_experiments ORDER BY start_date DESC",
+    ))
+
+
+def insert_logic_improvement(
+    conn: sqlite3.Connection,
+    *,
+    proposal_date: str,
+    category: str,
+    problem: str,
+    evidence: dict,
+    proposed_change: str,
+    expected_effect: str,
+    risk: str,
+    auto_apply: bool = False,
+    approval_required: bool = True,
+) -> int:
+    # 같은 날 같은 카테고리 + 동일 problem 은 중복 방지
+    existing = conn.execute(
+        "SELECT improvement_id FROM logic_improvements "
+        "WHERE proposal_date=? AND category=? AND problem=?",
+        (proposal_date, category, problem),
+    ).fetchone()
+    if existing:
+        return int(existing[0])
+
+    cur = conn.execute(
+        """
+        INSERT INTO logic_improvements (proposal_date, category, problem,
+            evidence_json, proposed_change, expected_effect, risk,
+            auto_apply, approval_required, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        """,
+        (proposal_date, category, problem, dump_json(evidence),
+         proposed_change, expected_effect, risk,
+         1 if auto_apply else 0, 1 if approval_required else 0, now_iso()),
+    )
+    return int(cur.lastrowid)
+
+
+def fetch_logic_improvements(
+    conn: sqlite3.Connection, status: str | None = None, limit: int = 200,
+) -> list[sqlite3.Row]:
+    if status:
+        return list(conn.execute(
+            "SELECT * FROM logic_improvements WHERE status=? "
+            "ORDER BY proposal_date DESC, improvement_id DESC LIMIT ?",
+            (status, limit),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM logic_improvements "
+        "ORDER BY proposal_date DESC, improvement_id DESC LIMIT ?",
+        (limit,),
+    ))
+
+
+def update_logic_improvement_status(
+    conn: sqlite3.Connection, improvement_id: int, status: str,
+    applied_version_id: int | None = None,
+) -> None:
+    if applied_version_id is not None:
+        conn.execute(
+            "UPDATE logic_improvements SET status=?, applied_version_id=? "
+            "WHERE improvement_id=?",
+            (status, applied_version_id, improvement_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE logic_improvements SET status=? WHERE improvement_id=?",
+            (status, improvement_id),
+        )
+
+
+def insert_audit_report(
+    conn: sqlite3.Connection,
+    *,
+    report_date: str,
+    report_type: str,   # 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'challenge'
+    body: dict,
+) -> int:
+    cur = conn.execute(
+        """
+        INSERT INTO logic_audit_reports (report_date, report_type, body_json, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (report_date, report_type, dump_json(body), now_iso()),
+    )
+    return int(cur.lastrowid)
+
+
+def fetch_audit_reports(
+    conn: sqlite3.Connection, report_type: str | None = None, limit: int = 50,
+) -> list[sqlite3.Row]:
+    if report_type:
+        return list(conn.execute(
+            "SELECT * FROM logic_audit_reports WHERE report_type=? "
+            "ORDER BY report_date DESC LIMIT ?",
+            (report_type, limit),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM logic_audit_reports ORDER BY report_date DESC LIMIT ?",
+        (limit,),
+    ))
 
 
 def fetch_performance_for_decision(
@@ -1057,6 +1589,100 @@ def fetch_performance_for_decision(
             (decision_id,),
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Auto-Curation — LLM 기반 자동 큐레이션 캐시
+# ---------------------------------------------------------------------------
+
+def upsert_auto_curation(
+    conn: sqlite3.Connection,
+    *,
+    ticker: str,
+    fields: dict[str, Any],
+    model_used: str,
+    token_input: int = 0,
+    token_output: int = 0,
+    cost_estimate_usd: float = 0.0,
+    sources: dict[str, Any] | None = None,
+    sec_filing_date: str | None = None,
+    data_confidence: str = "Medium",
+    uncertainty_flags: list[str] | None = None,
+) -> None:
+    """LLM 이 생성한 큐레이션 데이터를 ticker key 로 upsert.
+
+    fields 는 12 항목 dict (easy_explanation / core_thesis / thesis_pillars /
+    core_kpis / key_risks / anti_thesis / earnings_quality / moat_map /
+    alpha_judgment / strategic_lens 등).
+    """
+    # 기존 row 의 version 을 +1 (재생성 시)
+    existing = conn.execute(
+        "SELECT version FROM auto_curation WHERE ticker=?", (ticker,)
+    ).fetchone()
+    new_version = (existing["version"] + 1) if existing else 1
+
+    conn.execute(
+        """
+        INSERT INTO auto_curation (ticker, generated_at, fields_json, model_used,
+            token_input, token_output, cost_estimate_usd, sources_json,
+            sec_filing_date, data_confidence, uncertainty_flags_json,
+            version, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(ticker) DO UPDATE SET
+            generated_at=excluded.generated_at,
+            fields_json=excluded.fields_json,
+            model_used=excluded.model_used,
+            token_input=excluded.token_input,
+            token_output=excluded.token_output,
+            cost_estimate_usd=excluded.cost_estimate_usd,
+            sources_json=excluded.sources_json,
+            sec_filing_date=excluded.sec_filing_date,
+            data_confidence=excluded.data_confidence,
+            uncertainty_flags_json=excluded.uncertainty_flags_json,
+            version=excluded.version,
+            created_at=excluded.created_at
+        """,
+        (
+            ticker, today_kst(), dump_json(fields), model_used,
+            token_input, token_output, cost_estimate_usd, dump_json(sources),
+            sec_filing_date, data_confidence, dump_json(uncertainty_flags),
+            new_version, now_iso(),
+        ),
+    )
+
+
+def fetch_auto_curation(
+    conn: sqlite3.Connection, ticker: str
+) -> sqlite3.Row | None:
+    cur = conn.execute(
+        "SELECT * FROM auto_curation WHERE ticker=?", (ticker,)
+    )
+    return cur.fetchone()
+
+
+def fetch_all_auto_curation(
+    conn: sqlite3.Connection, limit: int = 1000
+) -> list[sqlite3.Row]:
+    return list(conn.execute(
+        "SELECT * FROM auto_curation ORDER BY generated_at DESC LIMIT ?",
+        (limit,),
+    ))
+
+
+def auto_curation_is_fresh(
+    conn: sqlite3.Connection, ticker: str, max_age_days: int = 60
+) -> bool:
+    """ticker 의 auto_curation 이 max_age_days 이내인지."""
+    import datetime as _dt
+    row = fetch_auto_curation(conn, ticker)
+    if not row:
+        return False
+    try:
+        gen_date = _dt.date.fromisoformat(row["generated_at"])
+        age = (_dt.date.today() - gen_date).days
+        return age <= max_age_days
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------

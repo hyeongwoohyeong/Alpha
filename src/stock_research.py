@@ -137,6 +137,7 @@ def build_stock_research(row: dict[str, Any]) -> dict[str, Any]:
         earnings_quality=eq,
         bottleneck_thesis=bn_thesis,
         news_agg=row.get("news_agg"),
+        curated_events=row.get("curated_events"),
     )
     too_crowded = row.get("action_tag") == "Too Crowded"
     alpha_result = reconcile_with_action_tag(

@@ -4,14 +4,69 @@
 key_metrics_to_watch, 최근 주요 이벤트, 그리고 매크로·정책·지정학 이슈
 정적 데이터를 모은다.
 
-41종목 모두 풀 큐레이션 — 사용자 경험 일관성 + 모든 종목에서 동일 품질의
-리서치 코멘트를 보장한다.
+42 종목 큐레이션 (Manual Override) + auto_curation DB (LLM 자동 큐레이션) 의
+이중 lookup 구조 (2026-05-03 부터). 우선순위:
 
-향후 LLM/RSS 기반 자동 업데이트로 교체할 수 있도록 함수 시그니처를 분리한다.
+    1. curated.py 의 정적 dict (Manual Override) — 사용자가 직접 검토/입력한 데이터
+    2. auto_curation 테이블 (LLM Researched) — SEC 10-K + yfinance + 뉴스 기반 LLM 생성
+    3. None / 빈값
+
+이 구조 덕분에 사용자가 직접 적은 큐레이션은 항상 우선이고, 미등록 종목은
+auto_curation 으로 보강된다.
 """
 from __future__ import annotations
 
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# Auto-Curation 데이터 lookup helper — DB 에서 LLM 큐레이션 필드 조회
+# 정적 dict 가 비어있을 때만 호출 (Manual Override 우선)
+# ---------------------------------------------------------------------------
+
+def _ac_field(ticker: str, field_key: str) -> Any:
+    """auto_curation 테이블에서 특정 필드 값 조회.
+
+    DB 연결 / 모듈 import 실패 시 None 반환 — 정적 dict 만으로도 작동 보장.
+    """
+    try:
+        from . import database as _db
+        from .auto_curation import get_cached_field
+        with _db.db_session() as conn:
+            return get_cached_field(conn, ticker.upper(), field_key)
+    except Exception:
+        return None
+
+
+def is_manually_curated(ticker: str) -> bool:
+    """ticker 가 curated.py 정적 dict 에 등록돼있는지 (Manual Override).
+
+    Used to distinguish:
+        - Manual Override (formerly High) — 사용자 직접 입력 — 항상 우선
+        - LLM Researched — auto_curation 테이블 (Heuristic 보다 강함)
+        - Heuristic (auto_profile) — 산업 keyword + 정량
+        - Low — 데이터 부족
+    """
+    return any([
+        ticker in EARNINGS_QUALITY_KO,
+        ticker in MOAT_MAP_KO,
+        ticker in INVESTMENT_THESIS_KO,
+        ticker in THESIS_PILLARS,
+        ticker in CORE_KPIS_KO,
+        ticker in ANTI_THESIS_KO,
+        ticker in ALPHA_JUDGMENT_KO,
+    ])
+
+
+def is_llm_curated(ticker: str) -> bool:
+    """ticker 에 대해 auto_curation 테이블에 fresh 데이터가 있는지."""
+    try:
+        from . import database as _db
+        with _db.db_session() as conn:
+            row = _db.fetch_auto_curation(conn, ticker.upper())
+            return row is not None
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +372,14 @@ THESIS_PILLARS: dict[str, list[str]] = {
 
 
 def thesis_pillars(ticker: str) -> list[str]:
-    return list(THESIS_PILLARS.get(ticker, []))
+    """Manual Override (THESIS_PILLARS) → auto_curation.thesis_pillars → []."""
+    static = THESIS_PILLARS.get(ticker)
+    if static:
+        return list(static)
+    auto = _ac_field(ticker, "thesis_pillars")
+    if isinstance(auto, list) and auto:
+        return [str(x) for x in auto]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +666,12 @@ INVESTMENT_THESIS_KO: dict[str, str] = {
 
 
 def investment_thesis(ticker: str) -> str | None:
-    return INVESTMENT_THESIS_KO.get(ticker)
+    """Manual Override → auto_curation.core_thesis → None."""
+    static = INVESTMENT_THESIS_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "core_thesis")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -790,8 +857,14 @@ CORE_KPIS_KO: dict[str, list[str]] = {
 
 
 def core_kpis(ticker: str) -> list[str]:
-    """종목별 핵심 KPI. 없으면 KEY_METRICS fallback."""
-    return list(CORE_KPIS_KO.get(ticker) or KEY_METRICS.get(ticker, [
+    """종목별 핵심 KPI. Manual Override → auto_curation → KEY_METRICS → 기본 fallback."""
+    static = CORE_KPIS_KO.get(ticker)
+    if static:
+        return list(static)
+    auto = _ac_field(ticker, "core_kpis")
+    if isinstance(auto, list) and auto:
+        return [str(x) for x in auto]
+    return list(KEY_METRICS.get(ticker, [
         "실적 가이던스", "주요 catalyst", "Valuation 변화",
     ]))
 
@@ -981,8 +1054,14 @@ ANTI_THESIS_KO: dict[str, list[str]] = {
 
 
 def anti_thesis_specific(ticker: str) -> list[str]:
-    """종목별 anti-thesis. 없으면 빈 리스트 (caller 가 fallback)."""
-    return list(ANTI_THESIS_KO.get(ticker, []))
+    """종목별 anti-thesis. Manual Override → auto_curation → []."""
+    static = ANTI_THESIS_KO.get(ticker)
+    if static:
+        return list(static)
+    auto = _ac_field(ticker, "anti_thesis")
+    if isinstance(auto, list) and auto:
+        return [str(x) for x in auto]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -1397,7 +1476,15 @@ EARNINGS_QUALITY_KO: dict[str, dict[str, dict[str, str]]] = {
 
 
 def earnings_quality(ticker: str) -> dict[str, dict[str, str]] | None:
-    return EARNINGS_QUALITY_KO.get(ticker)
+    """Manual Override → auto_curation.earnings_quality → None."""
+    static = EARNINGS_QUALITY_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "earnings_quality")
+    if isinstance(auto, dict) and auto:
+        # auto_curation 의 dict 가 8 차원 dict 형태인지 확인 — 형식 보존
+        return auto
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1454,7 +1541,15 @@ MOAT_MAP_KO: dict[str, dict[str, str]] = {
 
 
 def moat_map(ticker: str) -> dict[str, str] | None:
-    return MOAT_MAP_KO.get(ticker)
+    """Manual Override → auto_curation.moat_map → None."""
+    static = MOAT_MAP_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "moat_map")
+    if isinstance(auto, dict) and auto:
+        # auto_curation 의 moat_map 은 {key: rating} dict
+        return auto
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1495,7 +1590,12 @@ ALPHA_JUDGMENT_KO: dict[str, str] = {
 
 
 def alpha_judgment(ticker: str) -> str | None:
-    return ALPHA_JUDGMENT_KO.get(ticker)
+    """Manual Override → auto_curation.alpha_judgment → None."""
+    static = ALPHA_JUDGMENT_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "alpha_judgment")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -1909,9 +2009,14 @@ SIMPLE_EXPLANATION: dict[str, str] = {
 
 
 def simple_explanation(ticker: str, fallback_theme_label: str | None = None) -> str | None:
+    """Manual Override (SIMPLE_EXPLANATION) → auto_curation.easy_explanation
+    → 카테고리 기반 generic fallback → None."""
     text = SIMPLE_EXPLANATION.get(ticker)
     if text:
         return text
+    auto = _ac_field(ticker, "easy_explanation")
+    if isinstance(auto, str) and auto.strip():
+        return auto
     if fallback_theme_label:
         return (
             f"이 종목은 {fallback_theme_label} 카테고리에 속한 회사입니다. "
