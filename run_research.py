@@ -795,6 +795,17 @@ def run_research(
             log.warning("매크로 이슈 자동 생성 실패: %s", e)
             summary["macro_issues_generated"] = 0
 
+        # 시장 환경 3 블록 자동 생성 — RSS + market_summary → LLM
+        try:
+            from src.market_env_summarizer import generate_market_env_blocks
+            env_blocks = generate_market_env_blocks(
+                conn, date_iso, market_summary=market_summary,
+            )
+            summary["market_env_generated"] = len(env_blocks) if env_blocks else 0
+        except Exception as e:
+            log.warning("시장 환경 자동 생성 실패: %s", e)
+            summary["market_env_generated"] = 0
+
         step_generate_daily_brief(conn, run_id, date_iso, all_deep_dive, score_map, market_summary)
 
         # Logic Auditor — Alpha 의 매일 자동 판단 기록 (decision_log)

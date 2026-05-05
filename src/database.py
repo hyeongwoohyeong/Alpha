@@ -395,6 +395,18 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         generated_at      TEXT
     )
     """,
+    # ── 시장 환경 3 블록 자동 생성 캐시 ───────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS market_env_auto (
+        date              TEXT PRIMARY KEY,
+        blocks_json       TEXT NOT NULL,
+        model_used        TEXT,
+        token_input       INTEGER,
+        token_output      INTEGER,
+        cost_estimate_usd REAL,
+        generated_at      TEXT
+    )
+    """,
 )
 
 

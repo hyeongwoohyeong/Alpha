@@ -302,6 +302,14 @@ Tone: 신중한 애널리스트 — confidently bullish 도 아니고 reflexivel
 8 EQ 차원 등급은 다음 중 하나로만: Strong | Medium~Strong | Medium | Weak~Medium | Weak
 7 Moat 차원 등급은 다음 중 하나로만: Strong | Medium~Strong | Medium | Weak~Medium | Weak
 data_confidence: High | Medium | Low
+
+Prose 필드 (core_debate / valuation_context / financial_context / final_view /
+price_interpretation) 는 모두 한국어 자연스러운 문장. 길이는:
+    - core_debate: 1~2 문장 (~80자) — "이 종목 매수 판단이 무엇으로 갈리는가"
+    - valuation_context: 한 단락 (~200자) — PE / EV/EBITDA 등 가치평가 해석
+    - financial_context: 한 단락 (~200자) — 매출 성장 / OPM / FCF 등 재무 추세
+    - final_view: 한 단락 (~250자) — 종합 판단 (alpha_judgment 와 다름; 더 실행 지향)
+    - price_interpretation: 1~2 문장 (~120자) — 최근 1~5년 장기 주가 흐름 해석
 """
 
 
@@ -371,6 +379,11 @@ CURATION_SCHEMA = {
             "additionalProperties": False,
         },
         "alpha_judgment": {"type": "string", "description": "한 단락 종합 판단 (~250자)"},
+        "core_debate": {"type": "string", "description": "1~2 문장 — 매수 판단이 무엇으로 갈리는가"},
+        "valuation_context": {"type": "string", "description": "한 단락 — PE / EV/EBITDA 등 가치평가 해석"},
+        "financial_context": {"type": "string", "description": "한 단락 — 매출 / OPM / FCF 추세"},
+        "final_view": {"type": "string", "description": "한 단락 — 종합 실행 판단 (alpha_judgment 와 다른 각도)"},
+        "price_interpretation": {"type": "string", "description": "1~2 문장 — 장기 주가 흐름 해석"},
         "data_confidence": {"type": "string", "enum": ["High", "Medium", "Low"]},
         "uncertainty_flags": {
             "type": "array",
@@ -381,7 +394,9 @@ CURATION_SCHEMA = {
     "required": [
         "easy_explanation", "core_thesis", "thesis_pillars", "core_kpis",
         "key_risks", "anti_thesis", "earnings_quality", "moat_map",
-        "alpha_judgment", "data_confidence", "uncertainty_flags",
+        "alpha_judgment", "core_debate", "valuation_context", "financial_context",
+        "final_view", "price_interpretation",
+        "data_confidence", "uncertainty_flags",
     ],
     "additionalProperties": False,
 }

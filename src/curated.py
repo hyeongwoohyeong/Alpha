@@ -1206,7 +1206,12 @@ CORE_DEBATE_KO: dict[str, str] = {
 
 
 def core_debate(ticker: str) -> str | None:
-    return CORE_DEBATE_KO.get(ticker)
+    """Manual Override → auto_curation.core_debate → None."""
+    static = CORE_DEBATE_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "core_debate")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -1265,7 +1270,12 @@ VALUATION_CONTEXT_KO: dict[str, str] = {
 
 
 def valuation_context(ticker: str) -> str | None:
-    return VALUATION_CONTEXT_KO.get(ticker)
+    """Manual Override → auto_curation.valuation_context → None."""
+    static = VALUATION_CONTEXT_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "valuation_context")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -1314,7 +1324,12 @@ FINANCIAL_CONTEXT_KO: dict[str, str] = {
 
 
 def financial_context(ticker: str) -> str | None:
-    return FINANCIAL_CONTEXT_KO.get(ticker)
+    """Manual Override → auto_curation.financial_context → None."""
+    static = FINANCIAL_CONTEXT_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "financial_context")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -1376,7 +1391,12 @@ FINAL_VIEW_KO: dict[str, str] = {
 
 
 def final_view_curated(ticker: str) -> str | None:
-    return FINAL_VIEW_KO.get(ticker)
+    """Manual Override → auto_curation.final_view → None."""
+    static = FINAL_VIEW_KO.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "final_view")
+    return auto if isinstance(auto, str) and auto.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -2398,9 +2418,13 @@ PRICE_INTERPRETATION: dict[str, str] = {
 
 
 def price_interpretation(ticker: str, fallback_theme_label: str | None = None) -> str:
-    text = PRICE_INTERPRETATION.get(ticker)
-    if text:
-        return text
+    """Manual Override → auto_curation.price_interpretation → 카테고리 fallback."""
+    static = PRICE_INTERPRETATION.get(ticker)
+    if static:
+        return static
+    auto = _ac_field(ticker, "price_interpretation")
+    if isinstance(auto, str) and auto.strip():
+        return auto
     base = (
         "장기 주가 흐름은 카테고리 사이클과 종목별 catalyst의 누적 결과로 형성됩니다. "
         "현 시점에서는 추세의 방향성과 함께 추정치 동반 여부, valuation 정합성을 함께 점검할 필요가 있습니다."
@@ -2437,10 +2461,24 @@ def parse_event_date(date_str):
 # ---------------------------------------------------------------------------
 
 def market_environment_blocks(market_summary: str | None = None) -> list[dict[str, str]]:
-    """금일 시장 환경 — 3개의 짧은 블록으로 분할.
+    """금일 시장 환경 — 3 블록.
 
-    market_summary 가 있으면 첫 블록에 함께 표시한다.
+    DB 의 market_env_auto (LLM 자동 합성) 우선 → static fallback.
     """
+    # 1) DB 의 오늘 자동 생성 결과 우선
+    try:
+        from . import database as _db
+        from .market_env_summarizer import fetch_today_market_env
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        with _db.db_session() as conn:
+            auto = fetch_today_market_env(conn, today)
+            if auto and len(auto) >= 3:
+                return list(auto)
+    except Exception:
+        pass
+
+    # 2) Static fallback (시드 예시)
     line1 = (
         "나스닥 중심의 위험자산 선호는 유지되고 있으나, 상승폭은 일부 대형 성장주에 집중되며 "
         "시장 폭은 좁아진 구간입니다."
