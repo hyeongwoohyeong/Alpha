@@ -382,6 +382,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_auto_curation_generated ON auto_curation(generated_at)",
+    # ── 매크로 이슈 자동 생성 캐시 (RSS + LLM) ────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS macro_issues_auto (
+        date              TEXT PRIMARY KEY,
+        issues_json       TEXT NOT NULL,
+        sources_count     INTEGER,
+        model_used        TEXT,
+        token_input       INTEGER,
+        token_output      INTEGER,
+        cost_estimate_usd REAL,
+        generated_at      TEXT
+    )
+    """,
 )
 
 

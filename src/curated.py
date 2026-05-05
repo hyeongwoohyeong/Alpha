@@ -2331,6 +2331,25 @@ MACRO_ISSUES: list[dict[str, str]] = [
 
 
 def macro_issues() -> list[dict[str, str]]:
+    """매크로 이슈 — DB (LLM 자동 생성) 우선 → static MACRO_ISSUES fallback.
+
+    매일 cron 에서 macro_summarizer.generate_macro_issues 가 RSS 50건 → GPT-4o-mini
+    합성 → DB 저장. 이 함수는 오늘 일자의 자동 생성 결과 우선 조회, 없으면 static.
+    """
+    # 1) DB 의 오늘 자동 생성 결과 우선
+    try:
+        from . import database as _db
+        from .macro_summarizer import fetch_today_macro_issues
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        with _db.db_session() as conn:
+            auto = fetch_today_macro_issues(conn, today)
+            if auto and len(auto) >= 3:
+                return list(auto)
+    except Exception:
+        pass
+
+    # 2) Static fallback (시드 예시)
     return list(MACRO_ISSUES)
 
 

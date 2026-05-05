@@ -784,6 +784,17 @@ def run_research(
         )
         summary["auto_curation"] = ac_summary
 
+        # 매크로 이슈 자동 생성 — RSS 50건 → GPT-4o-mini → 3 이슈 (월 ~$0.05)
+        try:
+            from src.macro_summarizer import generate_macro_issues
+            macro_issues_today = generate_macro_issues(conn, date_iso)
+            summary["macro_issues_generated"] = (
+                len(macro_issues_today) if macro_issues_today else 0
+            )
+        except Exception as e:
+            log.warning("매크로 이슈 자동 생성 실패: %s", e)
+            summary["macro_issues_generated"] = 0
+
         step_generate_daily_brief(conn, run_id, date_iso, all_deep_dive, score_map, market_summary)
 
         # Logic Auditor — Alpha 의 매일 자동 판단 기록 (decision_log)
