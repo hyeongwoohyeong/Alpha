@@ -188,16 +188,21 @@ def _get_repo_meta() -> tuple[str, str]:
 def _commit_watchlist_to_github(tickers: list[str]) -> tuple[bool, str]:
     """Streamlit Cloud → GitHub Contents API 자동 commit (영구 보존).
 
-    PAT 미설정 시 silently skip (return (False, "no_pat")).
-    실패해도 local file 저장은 그대로 진행됨.
+    requests 라이브러리 사용 — urllib 의 SSL 인증서 이슈 회피.
+    PAT 미설정 시 silently skip. 실패해도 local file 저장은 그대로 진행됨.
     """
     import base64
-    import urllib.error
-    import urllib.request
 
     pat = _get_pat()
     if not pat:
         return False, "no_pat"
+
+    # requests 라이브러리 시도
+    try:
+        import requests
+    except ImportError:
+        log.warning("requests 라이브러리 import 실패 — urllib fallback 시도")
+        return _commit_watchlist_via_urllib(tickers, pat)
 
     owner, repo = _get_repo_meta()
     file_path = "data/watchlist.json"
@@ -217,20 +222,111 @@ def _commit_watchlist_to_github(tickers: list[str]) -> tuple[bool, str]:
     # 1) 기존 파일의 sha 조회 (update 시 필수)
     sha: str | None = None
     try:
-        req = urllib.request.Request(api_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            existing = json.loads(resp.read())
-            sha = existing.get("sha")
-    except urllib.error.HTTPError as e:
-        if e.code != 404:
-            log.warning("GitHub API sha fetch 실패: %s", e)
-            return False, f"sha_fetch_error_{e.code}"
-        # 404 = 파일 없음 → create 로 진행
+        r = requests.get(api_url, headers=headers, timeout=15)
+        if r.status_code == 200:
+            try:
+                sha = r.json().get("sha")
+            except Exception as e:
+                log.warning("GitHub API sha JSON parse 실패: %s — body: %s", e, r.text[:200])
+                return False, "sha_json_parse_error"
+        elif r.status_code == 404:
+            # 파일 없음 → create 로 진행
+            sha = None
+        elif r.status_code == 401:
+            log.warning("GitHub API 401 Unauthorized — PAT 유효성 점검 필요")
+            return False, "auth_401_invalid_pat"
+        elif r.status_code == 403:
+            log.warning("GitHub API 403 Forbidden — PAT 권한 부족 (Contents: read+write 필요)")
+            return False, "auth_403_no_permission"
+        else:
+            log.warning("GitHub API sha fetch HTTP %d: %s", r.status_code, r.text[:200])
+            return False, f"sha_http_{r.status_code}"
+    except requests.exceptions.SSLError as e:
+        log.warning("GitHub API SSL 에러: %s", e)
+        return False, f"ssl_error: {str(e)[:80]}"
+    except requests.exceptions.ConnectionError as e:
+        log.warning("GitHub API 연결 실패: %s", e)
+        return False, "connection_error"
+    except requests.exceptions.Timeout:
+        log.warning("GitHub API timeout (sha fetch)")
+        return False, "timeout"
     except Exception as e:
-        log.warning("GitHub API sha fetch 예외: %s", e)
-        return False, "sha_fetch_exception"
+        log.warning("GitHub API sha fetch 예외: %s — %s", type(e).__name__, e)
+        return False, f"sha_exception: {type(e).__name__}"
 
     # 2) PUT — create or update
+    body: dict[str, Any] = {
+        "message": f"chore: update watchlist ({len(tickers)} tickers)",
+        "content": content_b64,
+    }
+    if sha:
+        body["sha"] = sha
+
+    try:
+        r = requests.put(
+            api_url,
+            json=body,
+            headers={**headers, "Content-Type": "application/json"},
+            timeout=20,
+        )
+        if r.status_code in (200, 201):
+            return True, "ok"
+        if r.status_code == 401:
+            return False, "put_auth_401"
+        if r.status_code == 403:
+            return False, "put_auth_403_permission"
+        if r.status_code == 422:
+            log.warning("GitHub API 422: %s", r.text[:300])
+            return False, "put_422_invalid_request"
+        log.warning("GitHub API PUT HTTP %d: %s", r.status_code, r.text[:300])
+        return False, f"put_http_{r.status_code}"
+    except requests.exceptions.SSLError as e:
+        log.warning("GitHub API PUT SSL 에러: %s", e)
+        return False, f"put_ssl_error: {str(e)[:80]}"
+    except Exception as e:
+        log.warning("GitHub API PUT 예외: %s — %s", type(e).__name__, e)
+        return False, f"put_exception: {type(e).__name__}"
+
+
+def _commit_watchlist_via_urllib(tickers: list[str], pat: str) -> tuple[bool, str]:
+    """requests 가 없을 때 urllib fallback — SSL context 명시 지정."""
+    import base64
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    try:
+        import certifi
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ssl_ctx = ssl.create_default_context()
+
+    owner, repo = _get_repo_meta()
+    file_path = "data/watchlist.json"
+    content_str = json.dumps(
+        sorted(set(t.upper() for t in tickers)), ensure_ascii=False, indent=2,
+    )
+    content_b64 = base64.b64encode(content_str.encode("utf-8")).decode("ascii")
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+    headers = {
+        "Authorization": f"Bearer {pat}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "Alpha-Engine-Watchlist-Sync",
+    }
+
+    sha: str | None = None
+    try:
+        req = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
+            sha = json.loads(resp.read()).get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            return False, f"urllib_sha_http_{e.code}"
+    except Exception as e:
+        return False, f"urllib_sha_exception: {type(e).__name__}"
+
     body: dict[str, Any] = {
         "message": f"chore: update watchlist ({len(tickers)} tickers)",
         "content": content_b64,
@@ -245,20 +341,13 @@ def _commit_watchlist_to_github(tickers: list[str]) -> tuple[bool, str]:
             headers={**headers, "Content-Type": "application/json"},
             method="PUT",
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=20, context=ssl_ctx) as resp:
             ok = resp.status in (200, 201)
-            return ok, "ok" if ok else f"status_{resp.status}"
+            return ok, "ok" if ok else f"urllib_put_status_{resp.status}"
     except urllib.error.HTTPError as e:
-        body_text = ""
-        try:
-            body_text = e.read().decode("utf-8", errors="replace")[:300]
-        except Exception:
-            pass
-        log.warning("GitHub API PUT 실패: %s — %s", e, body_text)
-        return False, f"put_error_{e.code}"
+        return False, f"urllib_put_http_{e.code}"
     except Exception as e:
-        log.warning("GitHub API PUT 예외: %s", e)
-        return False, "put_exception"
+        return False, f"urllib_put_exception: {type(e).__name__}"
 
 
 def load_watchlist() -> list[str]:
