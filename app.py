@@ -586,6 +586,141 @@ CUSTOM_CSS = """
         font-weight: 700;
         white-space: nowrap;
     }
+    /* ---------- 전날 글로벌 브리핑 ---------- */
+    .ob-empty {
+        background: var(--panel);
+        border: 1px dashed var(--line);
+        border-radius: 14px;
+        padding: 22px 26px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--muted);
+        margin-bottom: 24px;
+    }
+    .ob-cat {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--blue-2);
+        border-radius: 16px;
+        padding: 24px 30px 12px 30px;
+        margin-bottom: 20px;
+    }
+    .ob-cat-label {
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--blue-2);
+        letter-spacing: 0.8px;
+        margin-bottom: 18px;
+    }
+    .ob-event {
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--line);
+    }
+    .ob-event:last-child { border-bottom: none; }
+    .ob-event-headline {
+        font-size: 16px;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1.55;
+        margin-bottom: 8px;
+        word-break: keep-all;
+    }
+    .ob-event-detail {
+        font-size: 14.5px;
+        line-height: 1.8;
+        color: #334155;
+        margin-bottom: 10px;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+    }
+    .ob-noevent {
+        font-size: 14px;
+        color: var(--muted);
+        padding-bottom: 12px;
+    }
+    /* ---------- Bull / Bear 토론 ---------- */
+    .bbd-intro {
+        font-size: 14px;
+        line-height: 1.75;
+        color: var(--muted);
+        margin-bottom: 18px;
+        word-break: keep-all;
+    }
+    .bbd-side {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px 24px;
+        height: 100%;
+    }
+    .bbd-side-bull { border-top: 3px solid #15803D; }
+    .bbd-side-bear { border-top: 3px solid #B91C1C; }
+    .bbd-side-head {
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        margin-bottom: 14px;
+    }
+    .bbd-side-bull .bbd-side-head { color: #15803D; }
+    .bbd-side-bear .bbd-side-head { color: #B91C1C; }
+    .bbd-round-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 14px 0 6px 0;
+    }
+    .bbd-text {
+        font-size: 14.5px;
+        line-height: 1.8;
+        color: #334155;
+        word-break: keep-all;
+        overflow-wrap: break-word;
+    }
+    .bbd-swing {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--blue-2);
+        border-radius: 16px;
+        padding: 22px 26px;
+        margin-top: 18px;
+    }
+    .bbd-swing-label {
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--blue-2);
+        letter-spacing: 0.8px;
+        margin-bottom: 12px;
+    }
+    .bbd-swing ul { margin: 0; padding-left: 20px; }
+    .bbd-swing li {
+        font-size: 14.5px;
+        line-height: 1.75;
+        color: #334155;
+        margin-bottom: 7px;
+        word-break: keep-all;
+    }
+    .bbd-summary {
+        background: #F8FAFC;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 20px 26px;
+        margin-top: 16px;
+        font-size: 14.5px;
+        line-height: 1.8;
+        color: #334155;
+        word-break: keep-all;
+    }
+    .bbd-summary-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+    }
     /* ──────────────────────────────────────────────
        hanging indent 통합 클래스
        (매크로 / 최근 이벤트 / 주요 뉴스 본문에 공통 적용)
@@ -2377,6 +2512,93 @@ def _component_status_badge(status: str, confidence: str) -> tuple[str, str]:
     return chip, label
 
 
+def _fetch_bull_bear_debate(ticker: str | None) -> dict | None:
+    """auto_curation.fields_json 안의 bull_bear_debate 조회."""
+    if not ticker:
+        return None
+    try:
+        import json as _json
+        with db.db_session() as conn:
+            row = db.fetch_auto_curation(conn, ticker)
+        if not row:
+            return None
+        fields = _json.loads(row["fields_json"])
+        debate = fields.get("bull_bear_debate")
+        return debate if isinstance(debate, dict) else None
+    except Exception:
+        return None
+
+
+def render_bull_bear_debate_section(ticker: str | None):
+    """Bull / Bear 사실·메커니즘 토론 — TradingAgents 리서처 토론을 매매·예측
+    없이 리프레이밍한 적대적 검증 layer. auto_curation 종목에만 존재."""
+    debate = _fetch_bull_bear_debate(ticker)
+    if not debate:
+        return
+
+    bull_case = debate.get("bull_case", "")
+    bear_case = debate.get("bear_case", "")
+    bull_reb = debate.get("bull_rebuttal", "")
+    bear_reb = debate.get("bear_rebuttal", "")
+    swing = debate.get("swing_variables") or []
+    summary = debate.get("debate_summary", "")
+    if not (bull_case or bear_case):
+        return
+
+    st.markdown('<div class="section-title">Bull / Bear 토론</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="bbd-intro">두 분석가가 이 종목의 투자 논리를 사실·메커니즘 '
+        '관점에서 검증합니다. 매수·매도 판단이 아니라, thesis 가 성립하는 근거와 '
+        '약한 고리를 다툽니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    col_bull, col_bear = st.columns(2)
+    with col_bull:
+        st.markdown(
+            '<div class="bbd-side bbd-side-bull">'
+            '<div class="bbd-side-head">Bull 분석가 — thesis 성립 근거</div>'
+            f'<div class="bbd-text">{bull_case}</div>'
+            + (
+                '<div class="bbd-round-label">베어 지적에 대한 반론</div>'
+                f'<div class="bbd-text">{bull_reb}</div>' if bull_reb else ""
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+    with col_bear:
+        st.markdown(
+            '<div class="bbd-side bbd-side-bear">'
+            '<div class="bbd-side-head">Bear 분석가 — thesis 약한 고리</div>'
+            f'<div class="bbd-text">{bear_case}</div>'
+            + (
+                '<div class="bbd-round-label">불 반론에 대한 재반박</div>'
+                f'<div class="bbd-text">{bear_reb}</div>' if bear_reb else ""
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if swing:
+        swing_items = "".join(f"<li>{s}</li>" for s in swing)
+        st.markdown(
+            '<div class="bbd-swing">'
+            '<div class="bbd-swing-label">결론이 갈리는 핵심 관찰 변수</div>'
+            f"<ul>{swing_items}</ul>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if summary:
+        st.markdown(
+            '<div class="bbd-summary">'
+            '<div class="bbd-summary-label">쟁점 정리 (중립)</div>'
+            f"{summary}"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_earnings_quality_section(eq: dict | None, ticker: str | None = None):
     """Earnings Quality & Moat Assessment 카드 그리드."""
     if not eq:
@@ -2771,32 +2993,45 @@ def render_today_brief():
                         unsafe_allow_html=True,
                     )
 
-    # 금일 주요 매크로·정책·지정학 이슈
-    macro = brief.get("macro_issues") or []
-    if macro:
+    # 전날 글로벌 브리핑 — 어젯밤 글로벌 이벤트 리캡 (4 카테고리)
+    briefing = brief.get("overnight_briefing") or []
+    st.markdown(
+        '<div class="section-title">전날 글로벌 브리핑</div>',
+        unsafe_allow_html=True,
+    )
+    _has_events = any((c.get("events") for c in briefing))
+    if not _has_events:
         st.markdown(
-            '<div class="section-title">금일 주요 매크로·정책·지정학 이슈</div>',
+            '<div class="ob-empty">전날 글로벌 브리핑이 아직 생성되지 않았습니다. '
+            '데이터 업데이트(자동 리서치)가 실행되면 어젯밤 전 세계에서 일어난 '
+            '지정학·기업 실적·정책·시장 이벤트가 카테고리별로 정리됩니다.</div>',
             unsafe_allow_html=True,
         )
-        for m in macro:
+    else:
+        for cat in briefing:
+            events = cat.get("events") or []
+            if events:
+                rows_html = ""
+                for ev in events:
+                    rows_html += (
+                        '<div class="ob-event">'
+                        f'<div class="ob-event-headline">{ev.get("headline", "")}</div>'
+                        f'<div class="ob-event-detail">{ev.get("detail", "")}</div>'
+                        '<div class="para-row">'
+                        '<span class="para-label">시장 함의</span>'
+                        f'<span class="para-text">{ev.get("implication", "")}</span>'
+                        "</div>"
+                        "</div>"
+                    )
+            else:
+                rows_html = (
+                    '<div class="ob-noevent">전날 시장에 영향을 줄 만한 '
+                    "특이사항이 보고되지 않았습니다.</div>"
+                )
             st.markdown(
-                '<div class="macro">'
-                '<div class="macro-head">'
-                f'<div class="macro-title">{m["title"]}</div>'
-                f'<div class="macro-cat">{m["category"]}</div>'
-                "</div>"
-                '<div class="para-row">'
-                '<span class="para-label">시장 영향</span>'
-                f'<span class="para-text">{m["impact"]}</span>'
-                "</div>"
-                '<div class="para-row">'
-                '<span class="para-label">관련 섹터</span>'
-                f'<span class="para-text">{m["sectors"]}</span>'
-                "</div>"
-                '<div class="para-row">'
-                '<span class="para-label">투자적 해석</span>'
-                f'<span class="para-text">{m["interpretation"]}</span>'
-                "</div>"
+                '<div class="ob-cat">'
+                f'<div class="ob-cat-label">{cat.get("label", "")}</div>'
+                f"{rows_html}"
                 "</div>",
                 unsafe_allow_html=True,
             )
@@ -3009,6 +3244,9 @@ def render_stock_detail():
 
     # ================== Strategic Lens ==================
     render_strategic_lens_section(detail.get("strategic_lens"))
+
+    # ================== Bull / Bear 토론 ==================
+    render_bull_bear_debate_section(ticker)
 
     # ================== 장기 주가 흐름 (이동: 핵심 투자 논리 직후) ==================
     st.markdown(

@@ -532,6 +532,32 @@ def call_openai_for_curation(
 # Step 6 — 통합 entry point
 # ---------------------------------------------------------------------------
 
+def _attach_debate(
+    conn, ticker: str, parsed: dict[str, Any], *, resave: bool,
+) -> dict[str, Any]:
+    """parsed 에 Bull/Bear 토론을 생성·부착.
+
+    resave=True 면 DB 의 fields_json 을 갱신 (구 캐시 backfill 용 —
+    generated_at 은 건드리지 않아 60일 캐시 lifecycle 유지).
+    resave=False 면 부착만 하고 호출측 upsert 가 저장하도록 둠.
+    """
+    try:
+        from .bull_bear_debate import generate_debate
+        debate = generate_debate(ticker, parsed)
+        if debate:
+            parsed["bull_bear_debate"] = debate
+            if resave:
+                conn.execute(
+                    "UPDATE auto_curation SET fields_json=? WHERE ticker=?",
+                    (json.dumps(parsed, ensure_ascii=False), ticker),
+                )
+                conn.commit()
+                log.info("[%s] bull_bear_debate backfill 저장", ticker)
+    except Exception as e:
+        log.warning("[%s] bull_bear_debate 부착 실패 (무시): %s", ticker, e)
+    return parsed
+
+
 def generate_auto_curation(
     conn,
     ticker: str,
@@ -555,7 +581,12 @@ def generate_auto_curation(
         log.info("[%s] auto_curation cache hit (fresh)", ticker)
         cached = db.fetch_auto_curation(conn, ticker)
         if cached:
-            return json.loads(cached["fields_json"])
+            parsed = json.loads(cached["fields_json"])
+            # Bull/Bear 토론이 없는 구(舊) 캐시면 lazy backfill
+            #   (60일 캐시 lifecycle 은 유지 — generated_at 갱신 안 함)
+            if "bull_bear_debate" not in parsed:
+                parsed = _attach_debate(conn, ticker, parsed, resave=True)
+            return parsed
 
     log.info("[%s] auto_curation 신규 생성 시작", ticker)
 
@@ -591,6 +622,10 @@ def generate_auto_curation(
     if not parsed:
         log.warning("[%s] LLM 호출 실패 — skip", ticker)
         return None
+
+    # 6b. Bull/Bear 토론 라운드 — 사실·메커니즘 적대적 검증
+    #     (TradingAgents 의 리서처 토론을 매매·예측 없이 리프레이밍하여 통합)
+    parsed = _attach_debate(conn, ticker, parsed, resave=False)
 
     # 7. 저장
     sources = {

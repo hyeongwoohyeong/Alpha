@@ -39,7 +39,7 @@ from src.brief_generator import (
     daily_alerts,
     daily_check_items,
     daily_judgment,
-    macro_issues,
+    overnight_briefing,
     market_environment_blocks,
     select_top_picks,
 )
@@ -633,14 +633,14 @@ def step_generate_daily_brief(
     picks = select_top_picks(rows, n=5)
     judgment = daily_judgment(rows, picks)
     blocks = market_environment_blocks(market_summary)
-    macros = macro_issues()
+    overnight = overnight_briefing()
     alerts = daily_alerts(rows, n=3)
     checks = daily_check_items(picks, n=3)
 
     brief = {
         "headline": judgment,
         "market_environment": blocks,
-        "macro_issues": macros,
+        "overnight_briefing": overnight,
         "top_stocks": [{"ticker": p["ticker"], "company_type": p.get("company_type"),
                         "action_tag": p.get("action_tag")} for p in picks],
         "alerts": alerts,
@@ -686,6 +686,8 @@ def run_research(
     today = today or _dt.date.today()
     date_iso = today.isoformat()
     cfg = load_config()
+    # run 단위 LLM 호출 한도 — step_auto_curate 등에서 공유
+    budget = make_budget(cfg)
     log.info("AlphaConfig: llm_mode=%s budget=%d cache=%s discovery=%s",
              cfg.llm_mode, cfg.max_llm_calls_per_run, cfg.enable_summary_cache, cfg.enable_discovery)
 
@@ -784,16 +786,18 @@ def run_research(
         )
         summary["auto_curation"] = ac_summary
 
-        # 매크로 이슈 자동 생성 — RSS 50건 → GPT-4o-mini → 3 이슈 (월 ~$0.05)
+        # 전날 글로벌 브리핑 자동 생성 — Google News RSS (4 카테고리, when:1d)
+        # → GPT-4o-mini 이벤트 리캡 (월 ~$0.06)
         try:
-            from src.macro_summarizer import generate_macro_issues
-            macro_issues_today = generate_macro_issues(conn, date_iso)
-            summary["macro_issues_generated"] = (
-                len(macro_issues_today) if macro_issues_today else 0
+            from src.overnight_briefing import generate_overnight_briefing
+            briefing_today = generate_overnight_briefing(conn, date_iso)
+            summary["overnight_briefing_generated"] = (
+                sum(len(c.get("events") or []) for c in briefing_today)
+                if briefing_today else 0
             )
         except Exception as e:
-            log.warning("매크로 이슈 자동 생성 실패: %s", e)
-            summary["macro_issues_generated"] = 0
+            log.warning("전날 글로벌 브리핑 자동 생성 실패: %s", e)
+            summary["overnight_briefing_generated"] = 0
 
         # 시장 환경 3 블록 자동 생성 — RSS + market_summary → LLM
         try:

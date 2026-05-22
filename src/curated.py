@@ -2316,61 +2316,29 @@ def recent_events(ticker: str) -> list[dict[str, Any]]:
 # 매크로·정책·지정학 이슈 (정적 큐레이션)
 # ---------------------------------------------------------------------------
 
-MACRO_ISSUES: list[dict[str, str]] = [
-    {
-        "title": "미국 10년물 금리 반등",
-        "category": "금리 / 채권 / 매크로",
-        "impact": "고멀티플 성장주 할인율 부담 확대.",
-        "sectors": "AI 인프라, 소프트웨어, 장기 성장주",
-        "interpretation": (
-            "Momentum이 강한 종목이라도 실적 추정치 상향이 동반되지 않으면 Multiple 압축 가능성이 존재합니다. "
-            "단기적으로는 quality compounder와 valuation 합리적 구간을 우선 점검하는 접근이 유효합니다."
-        ),
-    },
-    {
-        "title": "이란·중동 지정학 리스크 재부각",
-        "category": "지정학 / 에너지",
-        "impact": "유가 및 해운 운임 상승 압력, 방산·LNG·에너지 안보 관련 종목 재평가 가능성.",
-        "sectors": "에너지, LNG, 방산, 해운, 사이버보안",
-        "interpretation": (
-            "단기적으로는 유가 민감 섹터와 방산주에 수급이 유입될 수 있으나, 이미 반영된 종목은 Valuation 부담을 "
-            "함께 점검할 필요가 있습니다."
-        ),
-    },
-    {
-        "title": "미·중 반도체 수출 규제 / 무역 긴장",
-        "category": "정책 / 반도체",
-        "impact": "첨단 반도체·장비 수출 통제 강화로 Greater China 매출 비중이 큰 종목의 short-term overhang 가능성.",
-        "sectors": "반도체, 반도체 장비, AI 인프라",
-        "interpretation": (
-            "수출 통제 영향이 제한적인 종목과 미국·동맹국 매출 비중이 큰 종목 중심의 선별이 필요합니다. "
-            "관세·제재 헤드라인에 의한 단기 변동성과 구조적 매출 영향을 분리 판단하는 접근이 유효합니다."
-        ),
-    },
-]
+def overnight_briefing() -> list[dict[str, Any]]:
+    """전날 글로벌 브리핑 — DB (LLM 자동 생성) 우선.
 
+    매일 cron 에서 overnight_briefing.generate_overnight_briefing 가
+    Google News RSS (4 카테고리, when:1d) → GPT-4o-mini 합성 → DB 저장.
+    이 함수는 오늘 일자의 자동 생성 결과를 조회. 없으면 빈 리스트 (UI 가
+    "데이터 미생성" 안내를 표시) — 과거처럼 상시 테마 fallback 을 보여주지 않음.
 
-def macro_issues() -> list[dict[str, str]]:
-    """매크로 이슈 — DB (LLM 자동 생성) 우선 → static MACRO_ISSUES fallback.
-
-    매일 cron 에서 macro_summarizer.generate_macro_issues 가 RSS 50건 → GPT-4o-mini
-    합성 → DB 저장. 이 함수는 오늘 일자의 자동 생성 결과 우선 조회, 없으면 static.
+    Returns: [{key, label, events:[{headline, detail, implication}]}] 또는 [].
     """
-    # 1) DB 의 오늘 자동 생성 결과 우선
     try:
         from . import database as _db
-        from .macro_summarizer import fetch_today_macro_issues
+        from .overnight_briefing import fetch_today_overnight_briefing
         import datetime as _dt
-        today = _dt.date.today().isoformat()
+        # 오늘 + 어제 둘 다 시도 (cron 시점/타임존 차이 흡수)
         with _db.db_session() as conn:
-            auto = fetch_today_macro_issues(conn, today)
-            if auto and len(auto) >= 3:
-                return list(auto)
+            for d in (_dt.date.today(), _dt.date.today() - _dt.timedelta(days=1)):
+                auto = fetch_today_overnight_briefing(conn, d.isoformat())
+                if auto:
+                    return list(auto)
     except Exception:
         pass
-
-    # 2) Static fallback (시드 예시)
-    return list(MACRO_ISSUES)
+    return []
 
 
 # ---------------------------------------------------------------------------

@@ -153,11 +153,15 @@ def generate_market_env_blocks(
 
     log.info("market_env 3 블록 자동 생성 시작 (%s)", date_iso)
 
-    # macro 뉴스 (이미 fetch 했으면 재사용 위해 macro_fetcher 호출)
-    macro_news = []
+    # macro 뉴스 — Google News RSS (4 카테고리) 를 flatten 해서 컨텍스트로 사용
+    macro_news: list[dict[str, Any]] = []
     try:
-        from .macro_fetcher import fetch_macro_news
-        macro_news = fetch_macro_news(max_per_source=10, max_total=15, only_macro=True)
+        from .macro_fetcher import fetch_overnight_news
+        by_cat = fetch_overnight_news()
+        for items in by_cat.values():
+            macro_news.extend(items)
+        macro_news.sort(key=lambda x: x.get("published_at", ""), reverse=True)
+        macro_news = macro_news[:15]
     except Exception as e:
         log.warning("market_env: macro 뉴스 fetch 실패: %s", e)
 

@@ -407,6 +407,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         generated_at      TEXT
     )
     """,
+    # ── 전날 글로벌 브리핑 자동 생성 캐시 (Google News RSS + LLM) ──────
+    """
+    CREATE TABLE IF NOT EXISTS overnight_briefing_auto (
+        date              TEXT PRIMARY KEY,
+        briefing_json     TEXT NOT NULL,
+        sources_count     INTEGER,
+        model_used        TEXT,
+        token_input       INTEGER,
+        token_output      INTEGER,
+        cost_estimate_usd REAL,
+        generated_at      TEXT
+    )
+    """,
 )
 
 
@@ -1118,7 +1131,7 @@ def upsert_daily_brief(
             date_iso, run_id,
             brief.get("headline"),
             dump_json(brief.get("market_environment")),
-            dump_json(brief.get("macro_issues")),
+            dump_json(brief.get("overnight_briefing")),
             dump_json(brief.get("top_stocks")),
             dump_json(brief.get("alerts")),
             dump_json(brief.get("check_items")),

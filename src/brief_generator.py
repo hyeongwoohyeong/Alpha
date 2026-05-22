@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .curated import macro_issues as _curated_macro_issues
+from .curated import overnight_briefing as _curated_overnight_briefing
 from .curated import market_environment_blocks as _curated_market_blocks
 from .universe import category_label_ko, theme_label_ko
 from .utils import display_name, fmt_pct
@@ -357,9 +357,9 @@ def market_environment_blocks(market_summary: str | None = None) -> list[dict[st
     return _curated_market_blocks(market_summary)
 
 
-def macro_issues() -> list[dict[str, str]]:
-    """금일 주요 매크로·정책·지정학 이슈 (최대 3개)."""
-    return _curated_macro_issues()[:3]
+def overnight_briefing() -> list[dict[str, Any]]:
+    """전날 글로벌 브리핑 — 4 카테고리 이벤트 리캡."""
+    return _curated_overnight_briefing()
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +376,7 @@ def build_daily_brief(
         "judgment": daily_judgment(rows, picks),
         "market_environment": market_environment(market_summary),
         "market_blocks": market_environment_blocks(market_summary),
-        "macro_issues": macro_issues(),
+        "overnight_briefing": overnight_briefing(),
         "picks": picks,
         "alerts": daily_alerts(rows, n=3),
         "check_items": daily_check_items(picks, n=3),

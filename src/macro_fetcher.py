@@ -1,21 +1,23 @@
-"""매크로·정책·지정학 뉴스 수집 — RSS 기반.
+"""전날 글로벌 이벤트 수집 — Google News RSS 기반.
 
-소스 (사용자 요구 2026-05-04: A + B 혼합):
-    A. 미국 매체
-        - Yahoo Finance "Top Stories"
-        - MarketWatch "Top Stories"
-    B. 한국 매체
-        - 한국경제 (경제 헤드라인)
-        - 매일경제 (경제 헤드라인)
+기존 Yahoo Finance / MarketWatch RSS 피드가 폐기·차단되어 매일 동일 fallback 이
+노출되던 문제를 해결 (2026-05-22). news_fetcher.py 가 이미 사용 중인 Google News
+RSS (검증된 소스) 로 전면 교체.
 
-이 함수는 RSS 만 fetch — LLM 합성은 macro_summarizer.py 에서.
+4 카테고리별 전용 검색 쿼리 + `when:1d` 시간 필터로 "어제 발생한 사건" 만 수집:
+    geopolitics — 지정학·전쟁
+    earnings    — 주요 기업 실적·이벤트
+    policy      — 정책·트럼프 발언
+    market      — 시장·매크로 지표
+
+이 모듈은 RSS fetch 만 담당 — LLM 합성은 overnight_briefing.py 에서.
 """
 from __future__ import annotations
 
+import re
 import time
-import urllib.error
-import urllib.request
-from datetime import datetime, timezone
+import urllib.parse
+from datetime import datetime
 from typing import Any
 
 from .utils import get_logger
@@ -23,79 +25,59 @@ from .utils import get_logger
 log = get_logger("macro_fetcher")
 
 
-# ---------------------------------------------------------------------------
-# RSS Source 설정
-# ---------------------------------------------------------------------------
+GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 
-RSS_SOURCES: list[dict[str, str]] = [
+
+# ---------------------------------------------------------------------------
+# 카테고리별 검색 쿼리
+# ---------------------------------------------------------------------------
+# 각 카테고리는 여러 쿼리로 분산 수집 — 한 쿼리에 OR 를 너무 많이 넣으면
+# Google News 가 결과를 좁히는 경향이 있어 2~3개 쿼리로 나눔.
+# `when:1d` = 최근 24시간 (전날 사건 위주).
+
+BRIEFING_CATEGORIES: list[dict[str, Any]] = [
     {
-        "name": "Yahoo Finance",
-        "url": "https://finance.yahoo.com/news/rssindex",
-        "lang": "en",
-        "region": "US",
+        "key": "geopolitics",
+        "label": "지정학·전쟁",
+        "queries": [
+            "Israel OR Iran OR Gaza OR Lebanon when:1d",
+            "Ukraine OR Russia OR ceasefire OR airstrike when:1d",
+            "China Taiwan OR North Korea OR sanctions OR military when:1d",
+        ],
     },
     {
-        "name": "MarketWatch",
-        "url": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
-        "lang": "en",
-        "region": "US",
+        "key": "earnings",
+        "label": "주요 기업 실적·이벤트",
+        "queries": [
+            "earnings results when:1d stock",
+            "guidance OR forecast OR merger OR acquisition when:1d company",
+            "Nvidia OR Apple OR Microsoft OR Tesla OR Amazon when:1d",
+        ],
     },
     {
-        "name": "한국경제",
-        "url": "https://www.hankyung.com/feed/economy",
-        "lang": "ko",
-        "region": "KR",
+        "key": "policy",
+        "label": "정책·트럼프 발언",
+        "queries": [
+            "Trump when:1d",
+            "Federal Reserve OR Fed OR FOMC OR rate cut when:1d",
+            "tariff OR trade OR executive order OR regulation when:1d",
+        ],
     },
     {
-        "name": "매일경제",
-        "url": "https://www.mk.co.kr/rss/30000001/",
-        "lang": "ko",
-        "region": "KR",
+        "key": "market",
+        "label": "시장·매크로 지표",
+        "queries": [
+            "stock market OR Nasdaq OR S&P 500 OR Dow Jones when:1d",
+            "oil price OR Treasury yield OR dollar OR gold when:1d",
+            "inflation OR CPI OR jobs report OR GDP when:1d",
+        ],
     },
 ]
 
-# 매크로 키워드 — 헤드라인 / 요약에 이 중 하나라도 매칭되면 "매크로 관련" 으로 분류
-MACRO_KEYWORDS: dict[str, list[str]] = {
-    "interest_rate": [
-        "fed", "fomc", "interest rate", "rate cut", "rate hike",
-        "treasury", "yield", "10-year", "bond market",
-        "연준", "금리", "기준금리", "국채", "수익률", "장단기",
-    ],
-    "inflation": [
-        "inflation", "cpi", "ppi", "core inflation",
-        "물가", "인플레이션", "소비자물가",
-    ],
-    "geopolitical": [
-        "trump", "biden", "iran", "israel", "ukraine", "russia", "china",
-        "taiwan", "geopolitical", "war", "conflict", "sanction",
-        "트럼프", "바이든", "이란", "이스라엘", "우크라", "중국", "대만",
-        "지정학", "전쟁", "분쟁", "제재", "포격", "충돌",
-    ],
-    "trade_tariff": [
-        "tariff", "trade war", "trade deal", "export control", "import",
-        "관세", "무역", "수출 통제", "수출규제", "통상",
-    ],
-    "energy_oil": [
-        "oil price", "opec", "crude oil", "wti", "brent", "natural gas",
-        "유가", "opec", "원유", "lng", "에너지",
-    ],
-    "ai_chip_policy": [
-        "semiconductor", "chip act", "nvidia export", "ai chip",
-        "반도체", "칩스법", "nvda 수출", "ai 칩", "장비 규제",
-    ],
-    "fiscal_policy": [
-        "fiscal policy", "stimulus", "debt ceiling", "shutdown", "tax",
-        "재정", "부양", "부채한도", "셧다운", "세제",
-    ],
-    "central_bank": [
-        "ecb", "boj", "pboc", "bok", "central bank",
-        "유럽중앙은행", "일본은행", "한국은행", "중앙은행",
-    ],
-    "market_volatility": [
-        "vix", "volatility", "selloff", "rally", "correction",
-        "변동성", "급락", "급등", "조정",
-    ],
-}
+# 카테고리당 LLM 으로 넘길 최대 헤드라인 수
+MAX_ITEMS_PER_CATEGORY = 18
+# 쿼리당 fetch 상한
+MAX_ITEMS_PER_QUERY = 12
 
 
 # ---------------------------------------------------------------------------
@@ -111,127 +93,101 @@ def _safe_feedparser():
         return None
 
 
-def _entry_to_dict(entry: Any, source: dict[str, str]) -> dict[str, Any]:
-    """feedparser entry → 표준 dict."""
-    title = (entry.get("title") or "").strip()
-    summary = (entry.get("summary") or entry.get("description") or "").strip()
-    link = entry.get("link") or ""
-    published_at = ""
+def _strip_html(text: str) -> str:
+    if not text:
+        return ""
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&[a-z]+;", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
-    # published_parsed 가 가장 일관됨
+
+def _parse_published(entry: Any) -> str:
     pp = entry.get("published_parsed") or entry.get("updated_parsed")
     if pp:
         try:
-            dt = datetime(*pp[:6], tzinfo=timezone.utc)
-            published_at = dt.isoformat()
+            return datetime(*pp[:6]).isoformat()
         except Exception:
             pass
+    for k in ("published", "updated"):
+        v = entry.get(k)
+        if v:
+            return str(v)
+    return ""
 
-    if not published_at:
-        # ISO 형식 string 시도
-        for k in ("published", "updated"):
-            v = entry.get(k)
-            if v:
-                published_at = str(v)
-                break
 
-    # HTML 태그 단순 strip (description 안에 종종 들어있음)
-    summary_clean = _strip_html_basic(summary)
+def _extract_source(entry: Any, title: str) -> str:
+    src = entry.get("source")
+    if src:
+        if hasattr(src, "get"):
+            return src.get("title", "") or ""
+        if hasattr(src, "title"):
+            return src.title or ""
+    # Google News 제목은 보통 "... - SOURCE" 형태
+    m = re.search(r" - ([^-]+)$", title)
+    return m.group(1).strip() if m else ""
 
+
+def _entry_to_dict(entry: Any, category: dict[str, str]) -> dict[str, Any]:
+    title = (entry.get("title") or "").strip()
+    summary = _strip_html(entry.get("summary") or entry.get("description") or "")
     return {
         "title": title,
-        "summary": summary_clean[:500],
-        "link": link,
-        "published_at": published_at,
-        "source_name": source.get("name", ""),
-        "source_lang": source.get("lang", "en"),
-        "source_region": source.get("region", ""),
+        "summary": summary[:400],
+        "link": entry.get("link") or "",
+        "published_at": _parse_published(entry),
+        "source_name": _extract_source(entry, title),
+        "category_key": category["key"],
+        "category_label": category["label"],
     }
 
 
-def _strip_html_basic(text: str) -> str:
-    """간단한 HTML tag 제거."""
-    import re
-    if not text:
-        return ""
-    text = re.sub(r"<[^>]+>", "", text)
-    text = re.sub(r"&nbsp;", " ", text)
-    text = re.sub(r"&[a-z]+;", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def _is_macro_relevant(item: dict[str, Any]) -> tuple[bool, list[str]]:
-    """헤드라인 + 요약을 매크로 키워드와 매칭. 한국 매체는 모두 매크로로 가정."""
-    if item.get("source_region") == "KR":
-        # 한국 경제지의 경제 헤드라인은 기본적으로 매크로 / 시장 관련
-        return True, ["korean_economic_news"]
-
-    text = (item.get("title", "") + " " + item.get("summary", "")).lower()
-    matched_categories: list[str] = []
-    for cat, keywords in MACRO_KEYWORDS.items():
-        if any(kw.lower() in text for kw in keywords):
-            matched_categories.append(cat)
-    return bool(matched_categories), matched_categories
-
-
-def fetch_rss_source(
-    source: dict[str, str], max_items: int = 30,
-) -> list[dict[str, Any]]:
-    """단일 RSS source fetch."""
+def _fetch_query(query: str, category: dict[str, str], limit: int) -> list[dict[str, Any]]:
     fp = _safe_feedparser()
     if fp is None:
         return []
+    url = GOOGLE_NEWS_RSS.format(query=urllib.parse.quote(query))
     try:
-        feed = fp.parse(source["url"])
+        feed = fp.parse(url)
     except Exception as e:
-        log.warning("RSS fetch 실패 (%s): %s", source["name"], e)
+        log.warning("RSS fetch 실패 (%s): %s", query, e)
         return []
-
-    items: list[dict[str, Any]] = []
-    for entry in (feed.entries or [])[:max_items]:
+    out: list[dict[str, Any]] = []
+    for entry in (feed.entries or [])[:limit]:
         try:
-            items.append(_entry_to_dict(entry, source))
+            d = _entry_to_dict(entry, category)
+            if d["title"]:
+                out.append(d)
         except Exception:
             continue
-    return items
+    return out
 
 
-def fetch_macro_news(
-    *,
-    max_per_source: int = 20,
-    max_total: int = 60,
-    only_macro: bool = True,
-) -> list[dict[str, Any]]:
-    """모든 RSS source 에서 매크로 뉴스 수집.
+def fetch_overnight_news() -> dict[str, list[dict[str, Any]]]:
+    """4 카테고리별 전날 글로벌 뉴스 수집.
 
-    Args:
-        max_per_source: 각 source 당 최대 fetch 개수
-        max_total: 합산 최대 개수 (LLM token 절감)
-        only_macro: True 면 매크로 키워드 매칭된 것만 (한국 매체는 모두 통과)
-
-    Returns: 매크로 관련 뉴스 list of dicts
+    Returns: {category_key: [news_item, ...]} — 카테고리당 최대 MAX_ITEMS_PER_CATEGORY.
+    각 item 은 title / summary / link / published_at / source_name /
+    category_key / category_label 키를 가짐.
     """
-    all_items: list[dict[str, Any]] = []
-    for source in RSS_SOURCES:
-        items = fetch_rss_source(source, max_items=max_per_source)
-        for item in items:
-            if only_macro:
-                is_macro, cats = _is_macro_relevant(item)
-                if not is_macro:
-                    continue
-                item["macro_categories"] = cats
-            all_items.append(item)
-        # rate limit — 0.5 sec 간격 (RSS 서버 친절히)
-        time.sleep(0.5)
+    result: dict[str, list[dict[str, Any]]] = {}
+    for cat in BRIEFING_CATEGORIES:
+        collected: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for q in cat["queries"]:
+            items = _fetch_query(q, cat, MAX_ITEMS_PER_QUERY)
+            for it in items:
+                key = it["title"].strip().lower()
+                if key and key not in seen:
+                    seen.add(key)
+                    collected.append(it)
+            time.sleep(0.3)  # RSS 서버 부하 완화
+        # 발행 시간 desc 정렬 후 상한
+        collected.sort(key=lambda x: x.get("published_at", ""), reverse=True)
+        result[cat["key"]] = collected[:MAX_ITEMS_PER_CATEGORY]
+        log.info("fetch_overnight_news[%s]: %d items", cat["key"], len(result[cat["key"]]))
+    return result
 
-    # 발행 시간 desc 정렬 (가장 최근 우선)
-    def _key(it: dict) -> str:
-        return it.get("published_at", "")
-    all_items.sort(key=_key, reverse=True)
 
-    log.info(
-        "fetch_macro_news: %d items (sources=%d, only_macro=%s)",
-        len(all_items[:max_total]), len(RSS_SOURCES), only_macro,
-    )
-    return all_items[:max_total]
+def total_news_count(news_by_cat: dict[str, list[dict[str, Any]]]) -> int:
+    return sum(len(v) for v in (news_by_cat or {}).values())
