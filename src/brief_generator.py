@@ -239,7 +239,26 @@ def check_items(row: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 def daily_judgment(rows: list[dict[str, Any]], picks: list[dict[str, Any]]) -> str:
-    """금일 핵심 판단 — 한 단락 (3~4 문장)."""
+    """금일 핵심 판단 — DB(LLM 합성) 우선 → 룰 기반 6문단 템플릿 fallback.
+
+    매일 cron 에서 market_env_summarizer.generate_daily_judgment 가 그날 picks +
+    시장 데이터로 LLM 합성 → daily_judgment_auto 에 저장. 이 함수는 그 결과를
+    우선 조회, 없으면 아래 룰 기반 템플릿으로 fallback.
+    """
+    # 1) DB 의 오늘(또는 어제) LLM 합성 결과 우선
+    try:
+        from . import database as _db
+        from .market_env_summarizer import fetch_today_daily_judgment
+        import datetime as _dt
+        with _db.db_session() as conn:
+            for d in (_dt.date.today(), _dt.date.today() - _dt.timedelta(days=1)):
+                auto = fetch_today_daily_judgment(conn, d.isoformat())
+                if auto:
+                    return auto
+    except Exception:
+        pass
+
+    # 2) 룰 기반 fallback (기존 6문단 템플릿)
     if not picks:
         return (
             "금일은 명확히 부각되는 신규 후보가 부족합니다. 신규 진입보다 보유 종목의 thesis 재확인과 "

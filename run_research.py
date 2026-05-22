@@ -611,6 +611,7 @@ def step_record_alpha_decisions(
 def step_generate_daily_brief(
     conn, run_id: str, date_iso: str,
     universe: list[dict], score_map: dict, market_summary: str,
+    proxies: dict | None = None,
 ) -> dict:
     log.info("[11/12] generating daily brief...")
 
@@ -631,6 +632,16 @@ def step_generate_daily_brief(
         })
 
     picks = select_top_picks(rows, n=5)
+
+    # 금일 핵심 판단 — LLM 합성 (그날 picks + 시장 데이터 근거). 실패 시 daily_judgment
+    # 가 룰 기반 템플릿으로 자동 fallback.
+    try:
+        from src.market_env_summarizer import generate_daily_judgment
+        avoid_count = sum(1 for r in rows if r.get("action_tag") == "Avoid")
+        generate_daily_judgment(conn, date_iso, picks, proxies, avoid_count=avoid_count)
+    except Exception as e:
+        log.warning("금일 핵심 판단 LLM 합성 실패: %s", e)
+
     judgment = daily_judgment(rows, picks)
     blocks = market_environment_blocks(market_summary)
     overnight = overnight_briefing()
@@ -799,18 +810,21 @@ def run_research(
             log.warning("전날 글로벌 브리핑 자동 생성 실패: %s", e)
             summary["overnight_briefing_generated"] = 0
 
-        # 시장 환경 3 블록 자동 생성 — RSS + market_summary → LLM
+        # 시장 환경 3 블록 자동 생성 — 자산 수익률(proxies) + RSS → LLM
         try:
             from src.market_env_summarizer import generate_market_env_blocks
             env_blocks = generate_market_env_blocks(
-                conn, date_iso, market_summary=market_summary,
+                conn, date_iso, proxies=proxies, market_summary=market_summary,
             )
             summary["market_env_generated"] = len(env_blocks) if env_blocks else 0
         except Exception as e:
             log.warning("시장 환경 자동 생성 실패: %s", e)
             summary["market_env_generated"] = 0
 
-        step_generate_daily_brief(conn, run_id, date_iso, all_deep_dive, score_map, market_summary)
+        step_generate_daily_brief(
+            conn, run_id, date_iso, all_deep_dive, score_map, market_summary,
+            proxies=proxies,
+        )
 
         # Logic Auditor — Alpha 의 매일 자동 판단 기록 (decision_log)
         promoted_queue_map = {p["ticker"]: p.get("queue_type") for p in promoted}

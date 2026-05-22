@@ -420,6 +420,18 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         generated_at      TEXT
     )
     """,
+    # ── 금일 핵심 판단 LLM 합성 캐시 (룰 템플릿 대체) ──────────────────
+    """
+    CREATE TABLE IF NOT EXISTS daily_judgment_auto (
+        date              TEXT PRIMARY KEY,
+        judgment          TEXT NOT NULL,
+        model_used        TEXT,
+        token_input       INTEGER,
+        token_output      INTEGER,
+        cost_estimate_usd REAL,
+        generated_at      TEXT
+    )
+    """,
 )
 
 
