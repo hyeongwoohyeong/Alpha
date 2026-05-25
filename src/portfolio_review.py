@@ -84,15 +84,44 @@ def diagnose_portfolio(holdings: list[dict]) -> dict[str, Any]:
     total_cost = sum(_f(h.get("cost_krw")) or 0.0 for h in holdings)
     total_pnl = sum(_f(h.get("pnl_krw")) or 0.0 for h in holdings)
 
+    # 비중은 전부 '순자산(net worth)' 기준으로 일관되게 계산한다.
+    # net_worth_pct 가 있는 종목에서 net_worth_krw = value_krw / (pct/100)
+    # 를 역산하고, 견고성을 위해 그런 종목들의 중앙값을 쓴다.
+    # net_worth_krw 를 못 구하면 (net_worth_pct 가 전혀 없으면) 기존처럼
+    # portfolio-relative(value/total_value) 로 fallback.
+    _nw_estimates: list[float] = []
+    for h in holdings:
+        pct = _f(h.get("net_worth_pct"))
+        v = _f(h.get("value_krw"))
+        if pct is not None and pct != 0 and v is not None:
+            _nw_estimates.append(v / (pct / 100.0))
+    net_worth_krw: float | None = None
+    if _nw_estimates:
+        _nw_estimates.sort()
+        _m = len(_nw_estimates) // 2
+        net_worth_krw = (
+            _nw_estimates[_m] if len(_nw_estimates) % 2 == 1
+            else (_nw_estimates[_m - 1] + _nw_estimates[_m]) / 2.0
+        )
+
+    def _holding_pct(h: dict) -> float | None:
+        """순자산 기준 비중(%). 일관된 단일 분모만 사용."""
+        pct = _f(h.get("net_worth_pct"))
+        if pct is not None:
+            return pct
+        v = _f(h.get("value_krw"))
+        if net_worth_krw and net_worth_krw > 0 and v is not None:
+            return v / net_worth_krw * 100.0
+        # net_worth_krw 를 못 구한 경우에만 portfolio-relative fallback
+        if net_worth_krw is None and total_value > 0 and v is not None:
+            return v / total_value * 100.0
+        return None
+
     # 집중도 — 최대 비중 종목
     top = None
     top_pct = None
     for h in holdings:
-        pct = _f(h.get("net_worth_pct"))
-        # net_worth_pct 없으면 value 기준 비중으로 근사
-        if pct is None and total_value > 0:
-            v = _f(h.get("value_krw"))
-            pct = (v / total_value * 100.0) if v is not None else None
+        pct = _holding_pct(h)
         if pct is not None and (top_pct is None or pct > top_pct):
             top_pct = pct
             top = h
@@ -103,10 +132,7 @@ def diagnose_portfolio(holdings: list[dict]) -> dict[str, Any]:
     has_lev_pct = False
     for h in holdings:
         if h.get("leverage"):
-            pct = _f(h.get("net_worth_pct"))
-            if pct is None and total_value > 0:
-                v = _f(h.get("value_krw"))
-                pct = (v / total_value * 100.0) if v is not None else None
+            pct = _holding_pct(h)
             if pct is not None:
                 lev_pct += pct
                 has_lev_pct = True

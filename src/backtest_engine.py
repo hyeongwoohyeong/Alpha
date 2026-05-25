@@ -672,16 +672,19 @@ def backtest_drawdown_deployment_strategy(conn) -> dict[str, Any]:
         # 보유: 각 자산별 (매입가 인덱스, 투입금액)
         positions: list[tuple[str, int, float]] = []
         triggered: set[float] = set()
+        # 지금까지 도달한 가장 높은 누적 목표비중. _DEPLOY_STEPS 의 두 번째
+        # 값은 누적(cumulative) 목표이므로 추가 투입분은
+        # cum_w - (이미 도달한 최대 누적비중) 으로 계산해야 한다.
+        deployed_w = 0.0
         equity: list[float] = []
         for i in range(n_days):
             dd = dd_series[i]
             for thr, cum_w, asset in _DEPLOY_STEPS:
                 if dd <= thr and thr not in triggered:
                     triggered.add(thr)
-                    # cum_w 대비 추가 투입분
-                    prev_w = sum(w for t, w, _ in _DEPLOY_STEPS
-                                 if t in triggered and t != thr)
-                    add_w = max(0.0, cum_w - prev_w)
+                    # cum_w 대비 추가 투입분 — 이미 도달한 최대 누적비중 기준
+                    add_w = max(0.0, cum_w - deployed_w)
+                    deployed_w = max(deployed_w, cum_w)
                     invest = min(cash, add_w)
                     if invest > 0:
                         a = asset if use_leverage else "QQQ"
@@ -956,11 +959,18 @@ def generate_backtest_summary(conn) -> dict[str, Any]:
         d_mdd = dep.get("max_drawdown")
         b_mdd = bh.get("max_drawdown")
         if d_mdd is not None and b_mdd is not None:
+            # MDD 는 음수로 저장됨 → d_mdd > b_mdd 이면 단계투입 MDD 가 더 얕음(우수).
+            # 1%p 이내 차이는 '차이 작음' 으로 본다.
+            _tol = 0.01
+            if d_mdd - b_mdd > _tol:
+                _mdd_note = "단계투입이 MDD 를 줄였습니다."
+            elif b_mdd - d_mdd > _tol:
+                _mdd_note = "단계투입이 오히려 MDD 를 키웠습니다."
+            else:
+                _mdd_note = "표본 구간에서는 차이가 작았습니다."
             comments.append(
                 f"낙폭 단계투입 전략의 최대낙폭은 {d_mdd*100:.0f}%, "
-                f"QQQ Buy&Hold 는 {b_mdd*100:.0f}% — "
-                + ("단계투입이 MDD 를 줄였습니다."
-                   if d_mdd > b_mdd else "표본 구간에서는 차이가 작았습니다.")
+                f"QQQ Buy&Hold 는 {b_mdd*100:.0f}% — " + _mdd_note
             )
     if not comments:
         comments.append(

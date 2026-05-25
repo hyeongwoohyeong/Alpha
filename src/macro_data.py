@@ -35,6 +35,31 @@ MEGA_CAP_TICKERS: list[str] = [
     "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO",
 ]
 
+# 시장 폭(breadth) 측정용 광범위 유니버스 — 11개 GICS 섹터 전반의 large/mid-cap.
+# mega-cap 7종만으로 breadth 를 재면 좁은 쏠림장에서 신호가 반전되므로
+# (mega-cap 은 쏠림장에서도 200일선 위에 머무름) 섹터 전반의 종목으로 측정한다.
+BREADTH_UNIVERSE_TICKERS: list[str] = [
+    # Tech / Communication
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "ORCL",
+    "CRM", "ADBE", "CSCO", "ACN", "TXN", "QCOM", "AMD", "INTC",
+    "NFLX", "DIS", "CMCSA", "TMUS", "VZ", "T",
+    # Financials
+    "JPM", "BAC", "WFC", "GS", "MS", "BLK", "SCHW", "AXP", "C", "SPGI",
+    # Health Care
+    "UNH", "JNJ", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY",
+    "AMGN", "MDT", "ISRG", "GILD",
+    # Consumer Discretionary
+    "HD", "MCD", "NKE", "LOW", "SBUX", "TJX", "BKNG", "TSLA",
+    # Consumer Staples
+    "WMT", "PG", "KO", "PEP", "COST", "MDLZ", "CL", "MO",
+    # Industrials
+    "CAT", "HON", "UNP", "GE", "BA", "RTX", "DE", "LMT", "UPS", "MMM",
+    # Energy
+    "XOM", "CVX", "COP", "SLB", "EOG",
+    # Utilities / Real Estate / Materials
+    "NEE", "DUK", "SO", "AMT", "PLD", "EQIX", "LIN", "SHW", "FCX", "APD",
+]
+
 FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 
@@ -213,6 +238,19 @@ def fetch_megacap_market_data() -> dict[str, dict[str, Any]]:
         return {}
 
 
+def fetch_breadth_market_data() -> dict[str, dict[str, Any]]:
+    """시장 폭(breadth) 측정용 광범위 유니버스 가격이력 batch fetch.
+
+    200일선 상회 비율을 megacap 7종이 아닌 섹터 전반 ~80종목으로 계산하기
+    위함. enrich 불필요(가격이력만 쓰면 됨). 실패해도 빈 dict 안전.
+    """
+    try:
+        return fetch_universe(BREADTH_UNIVERSE_TICKERS, period="1y", enrich=False)
+    except Exception as e:
+        log.warning("breadth universe market data fetch 실패: %s", e)
+        return {}
+
+
 def _closes(md: dict[str, Any]):
     """market_data 레코드에서 Close 시리즈 추출. 없으면 None."""
     if not md or not md.get("available"):
@@ -307,7 +345,7 @@ def collect_regime_inputs() -> dict[str, Any]:
     """Portfolio Regime 계산에 필요한 모든 원천 데이터를 한 번에 수집.
 
     파이프라인 / UI 진입점. 어떤 부분이 실패해도 나머지는 채워진다.
-    Returns dict 키: fred, etf, megacap, collected_at.
+    Returns dict 키: fred, etf, megacap, breadth, collected_at.
     """
     out: dict[str, Any] = {
         "collected_at": _dt.datetime.now().isoformat(timespec="seconds"),
@@ -327,4 +365,10 @@ def collect_regime_inputs() -> dict[str, Any]:
     except Exception as e:
         log.warning("megacap 수집 실패: %s", e)
         out["megacap"] = {}
+    try:
+        # breadth — 200일선 상회 비율을 섹터 전반 광범위 유니버스로 측정
+        out["breadth"] = fetch_breadth_market_data()
+    except Exception as e:
+        log.warning("breadth universe 수집 실패: %s", e)
+        out["breadth"] = {}
     return out

@@ -171,8 +171,10 @@ def generate_decision_grade(
     - 가격/벤치마크 누락 → "채점 보류".
     - BUY/ADD/HOLD (노출 취득·유지): 오르고 QQQ 이상 → 좋은 결정,
       내리고 QQQ 미달 → 아쉬운 결정, 그 외 중립.
-    - TRIM/SELL (노출 축소): 이후 종목이 부진하면 좋은 결정.
-    - SKIP/WATCH (매수 보류·관망): SELL 과 동일 — 종목이 내리거나 뒤처지면 좋은 결정.
+    - TRIM/SELL (노출 축소): 이후 종목의 절대수익으로 판단 —
+      줄인 대상이 하락하면 좋은 결정, 상승하면 놓친 수익(아쉬운 결정).
+      QQQ 상대수익은 보지 않는다(매도 후엔 절대수익이 본질).
+    - SKIP/WATCH (매수 보류·관망): SELL 과 동일 — 종목이 내리면 좋은 결정.
 
     Returns: {"return_pct", "relative_pct", "grade", "grade_note"}
     """
@@ -217,10 +219,14 @@ def generate_decision_grade(
             grade = GRADE_NEUTRAL
         verb = "매수·보유" if action != "HOLD" else "보유 유지"
     elif action in _REDUCE_ACTIONS:
-        # 노출을 줄였으니, 이후 종목이 부진해야 좋은 결정
-        if window_return < 0 or relative < 0:
+        # 노출을 줄였으니(자본보존 관점), 이후 종목의 '절대수익'으로 판단한다.
+        # 줄인 대상이 하락했으면 좋은 결정, 상승했으면 놓친 수익(아쉬운 결정).
+        # QQQ 상대수익은 reduce-action 판단에서 제외 — 매도 후엔 절대수익이 본질.
+        # ±2% 이내 거의 횡보는 중립 (EXPOSURE 분기와 대칭).
+        _REDUCE_FLAT_BAND = 2.0
+        if window_return < -_REDUCE_FLAT_BAND:
             grade = GRADE_GOOD
-        elif window_return > 0 and relative > 0:
+        elif window_return > _REDUCE_FLAT_BAND:
             grade = GRADE_POOR
         else:
             grade = GRADE_NEUTRAL
@@ -246,8 +252,8 @@ def generate_decision_grade(
             stance = ("노출을 줄인 것이" if action in ("TRIM", "SELL")
                       else "매수를 보류한 것이")
             grade_note = (
-                f"{verb} 이후 종목이 {_fmt_pct(window_return)} "
-                f"(QQQ 대비 {_fmt_pp(relative)}) — {stance} 적절했던 좋은 결정"
+                f"{verb} 이후 종목이 {_fmt_pct(window_return)} 하락 "
+                f"— {stance} 적절했던 좋은 결정"
             )
     elif grade == GRADE_POOR:
         if action in _EXPOSURE_ACTIONS:
@@ -260,13 +266,19 @@ def generate_decision_grade(
                       else "매수를 보류한 것이")
             grade_note = (
                 f"{verb} 이후 종목이 {_fmt_pct(window_return)} 상승 "
-                f"(QQQ 대비 {_fmt_pp(relative)}) — {stance} 아쉬운 결정"
+                f"— {stance} 놓친 수익이 된 아쉬운 결정"
             )
     else:
-        grade_note = (
-            f"{verb} 후 {_fmt_pct(window_return)} "
-            f"(QQQ 대비 {_fmt_pp(relative)}) — 뚜렷한 우열 없음, 중립"
-        )
+        if action in _REDUCE_ACTIONS:
+            grade_note = (
+                f"{verb} 이후 종목이 {_fmt_pct(window_return)} "
+                f"— 뚜렷한 등락 없음, 중립"
+            )
+        else:
+            grade_note = (
+                f"{verb} 후 {_fmt_pct(window_return)} "
+                f"(QQQ 대비 {_fmt_pp(relative)}) — 뚜렷한 우열 없음, 중립"
+            )
 
     return {
         "return_pct": round(window_return, 2),

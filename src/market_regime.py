@@ -5,6 +5,11 @@
 - 입력 데이터가 없는 sub-score 는 '확인 필요' 로 표시하고 가중치에서 제외,
   나머지로 재정규화. 절대 0 으로 처리하지 않는다 (점수 왜곡 방지).
 - 모든 함수는 예외를 던지지 않는다.
+
+Overheat Score 는 sub-score 6종의 가중합으로 설계됐으나, 그 중
+earnings_revision_risk(실적 추정 리스크)는 무료 데이터 소스가 없어
+현재 항상 '확인 필요'(None)로 처리된다. 즉 점수는 사실상 5개 factor 로
+계산되며, 빠진 0.15 가중치는 나머지 sub-score 에 재정규화된다.
 """
 from __future__ import annotations
 
@@ -15,7 +20,9 @@ from .utils import get_logger
 
 log = get_logger("market_regime")
 
-# Overheat Score sub-score 가중치 (합 = 1.0)
+# Overheat Score sub-score 가중치 (합 = 1.0).
+# 주의: earnings_revision_risk 는 데이터 소스 미연결 상태로 항상 None 이므로
+# 실제 점수는 나머지 5개 sub-score 에 가중치를 재정규화해 계산된다.
 SUBSCORE_WEIGHTS: dict[str, float] = {
     "valuation_stretch": 0.25,
     "sentiment_speculation": 0.20,
@@ -220,7 +227,11 @@ def _overheat_band_ko(score: float) -> str:
 def calculate_market_overheat_score(data: dict[str, Any]) -> dict[str, Any]:
     """Market Overheat Score 0~100 산정.
 
-    data: collect_regime_inputs() 의 출력 {fred, etf, megacap}.
+    sub-score 는 6종으로 정의돼 있으나 earnings_revision_risk 는
+    데이터 소스가 없어 항상 None — 실제로는 5개 factor 로 계산되고
+    빠진 가중치는 재정규화된다.
+
+    data: collect_regime_inputs() 의 출력 {fred, etf, megacap, breadth}.
     Returns dict: market_overheat_score, overheat_band_ko, 각 sub-score (*_score),
     각 sub-score 코멘트 (*_commentary_ko), used_weights, missing_subscores.
     """
@@ -228,9 +239,16 @@ def calculate_market_overheat_score(data: dict[str, Any]) -> dict[str, Any]:
     fred = data.get("fred") or {}
     etf = data.get("etf") or {}
     megacap = data.get("megacap") or {}
+    breadth = data.get("breadth") or {}
 
-    # breadth — universe 200일선 상회 비율 (megacap 으로 근사)
-    breadth_pct = _md.pct_above_ma(megacap, window=200)
+    # breadth — universe 200일선 상회 비율.
+    # FIX: 과거엔 megacap 7종으로 계산했으나, mega-cap 은 좁은 쏠림장에서도
+    # 200일선 위에 머물러 breadth 신호가 반전됐다. 이제 섹터 전반의
+    # 광범위 유니버스(collect_regime_inputs 의 'breadth')로 계산한다.
+    # breadth 유니버스가 비면 megacap 으로 fallback (그땐 mega-cap 근사치).
+    breadth_pct = _md.pct_above_ma(breadth, window=200)
+    if breadth_pct is None:
+        breadth_pct = _md.pct_above_ma(megacap, window=200)
 
     calculators = {
         "valuation_stretch": lambda: _score_valuation(etf, megacap),

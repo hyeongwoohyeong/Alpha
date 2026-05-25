@@ -975,7 +975,17 @@ def step_decision_grading(conn, run_id: str, date_iso: str) -> dict:
         return result
 
     today = _dt.date.fromisoformat(date_iso)
-    milestones = [("1M", 30), ("3M", 91), ("6M", 182)]
+    # milestone 은 실제 달력 개월 수로 측정한다. dateutil 이 있으면
+    # relativedelta(months=...) 로 정확한 1/3/6개월 후 날짜를 쓰고,
+    # 없으면 raw day-offset 으로 fallback.
+    try:
+        from dateutil.relativedelta import relativedelta as _relativedelta
+        _HAS_RELATIVEDELTA = True
+    except Exception:
+        _relativedelta = None  # type: ignore
+        _HAS_RELATIVEDELTA = False
+    # (label, months, fallback_days)
+    milestones = [("1M", 1, 30), ("3M", 3, 91), ("6M", 6, 182)]
 
     # 기존 채점 행 — (decision_id, milestone) -> grade
     try:
@@ -1024,16 +1034,18 @@ def step_decision_grading(conn, run_id: str, date_iso: str) -> dict:
             log.debug("[Decision Journal] %s decision_date 파싱 실패 — skip", decision_id)
             continue
 
-        for milestone, ms_days in milestones:
-            elapsed = (today - decision_date).days
-            if elapsed < ms_days:
+        for milestone, ms_months, ms_days in milestones:
+            if _HAS_RELATIVEDELTA:
+                milestone_date = decision_date + _relativedelta(months=ms_months)
+            else:
+                milestone_date = decision_date + _dt.timedelta(days=ms_days)
+            if today < milestone_date:
                 continue  # 아직 milestone 미도래
             prev_grade = existing.get((decision_id, milestone))
             if prev_grade is not None and prev_grade != GRADE_PENDING:
                 continue  # 이미 정상 채점됨
 
             result["checked"] += 1
-            milestone_date = decision_date + _dt.timedelta(days=ms_days)
 
             # 채점 — graceful: 어떤 실패든 '채점 보류' upsert
             grade_row: dict[str, Any]
