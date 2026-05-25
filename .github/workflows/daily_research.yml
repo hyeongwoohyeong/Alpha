@@ -42,6 +42,8 @@ jobs:
           # LLM provider — OpenAI 사용 (사용자 선택, 2026-05-03)
           # ANTHROPIC_API_KEY 는 미등록 상태로 두면 자동 비활성
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # FRED API 키 — Portfolio Regime 매크로 데이터 (미설정 시 graceful skip)
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'openai' }}
           LLM_MODE: ${{ vars.LLM_MODE || 'low_cost' }}
           MAX_LLM_CALLS_PER_RUN: ${{ vars.MAX_LLM_CALLS_PER_RUN || '30' }}
