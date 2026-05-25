@@ -3032,6 +3032,137 @@ def _fmt_regime_value(val: Any) -> str:
     return str(val)
 
 
+_ACTION_PRIORITY = {
+    "high":   ("#EF4444", "우선"),
+    "medium": ("#F59E0B", "점검"),
+    "low":    ("#64748B", "참고"),
+}
+
+
+def render_daily_action_plan(regime: Any, crash: Any):
+    """Portfolio review 최상단 — 아침·저녁 확인용 데일리 액션 플랜.
+
+    전날 대비 시장 변동 + 오늘 신경 쓸 것(우선순위)을 한 박스에 요약한다.
+    사용자는 이 박스만 보고도 '오늘 뭘 해야 하는지' 를 알 수 있어야 한다.
+    """
+    try:
+        from src.portfolio_review import (
+            load_portfolio, diagnose_portfolio, generate_daily_action_plan,
+        )
+    except Exception as e:
+        log.debug(f"액션플랜 import 실패: {e}")
+        return
+
+    # 전날 행 조회 (regime/crash 는 매일 갱신 — 2개 이상이면 비교 가능)
+    prev_regime = None
+    prev_crash = None
+    try:
+        with db.db_session() as conn:
+            regimes = db.fetch_recent_market_regimes(conn, 2)
+            crashes = db.fetch_recent_crash_deployment_plans(conn, 2)
+        if regimes and len(regimes) >= 2:
+            prev_regime = regimes[1]
+        if crashes and len(crashes) >= 2:
+            prev_crash = crashes[1]
+    except Exception as e:
+        log.debug(f"전일 regime 조회 실패: {e}")
+
+    # 포트폴리오 진단
+    diag: dict = {}
+    holdings: list = []
+    try:
+        pf = load_portfolio(PROJECT_ROOT)
+        if pf.get("available"):
+            holdings = pf.get("holdings") or []
+            diag = diagnose_portfolio(holdings)
+    except Exception as e:
+        log.debug(f"액션플랜 포트폴리오 로드 실패: {e}")
+
+    try:
+        plan = generate_daily_action_plan(
+            diag, holdings, regime, crash, prev_regime, prev_crash)
+    except Exception as e:
+        log.debug(f"액션플랜 생성 실패: {e}")
+        return
+
+    # 오늘 신경 쓸 것 — 우선순위별 행
+    action_rows = ""
+    for a in plan.get("actions", []):
+        color, plabel = _ACTION_PRIORITY.get(
+            a.get("priority"), _ACTION_PRIORITY["low"])
+        action_rows += (
+            '<div style="display:flex; gap:11px; padding:11px 0; '
+            'border-top:1px solid var(--line);">'
+            f'<div style="flex:0 0 5px; border-radius:3px; '
+            f'background:{color};"></div>'
+            '<div style="flex:1 1 auto;">'
+            '<div style="font-size:14px; font-weight:700; color:var(--text); '
+            'line-height:1.5;">'
+            f'<span style="color:{color}; font-size:11px; font-weight:700; '
+            f'letter-spacing:.04em; margin-right:8px;">{plabel}</span>'
+            f'{a.get("title", "")}</div>'
+            '<div style="font-size:13px; color:var(--muted); margin-top:3px; '
+            f'line-height:1.6;">{a.get("detail", "")}</div>'
+            '</div></div>'
+        )
+
+    # 전날 대비 변동 — chip
+    if plan.get("has_prev") and plan.get("deltas"):
+        chip_html = ""
+        for d in plan["deltas"]:
+            changed = d.get("changed")
+            dirn = d.get("dir")
+            arrow = "▲" if dirn == "up" else "▼" if dirn == "down" else ""
+            if d.get("delta"):
+                dcol = ("#22C55E" if dirn == "down"
+                        else "#EF4444" if dirn == "up" else "var(--muted)")
+                val = (f'{d["today"]} <span style="color:{dcol}; '
+                       f'font-size:12px;">{arrow}{d["delta"]}</span>')
+            elif changed:
+                val = f'{d["prev"]} → <b>{d["today"]}</b>'
+            else:
+                val = d["today"]
+            border = ("#475569" if changed else "var(--line)")
+            chip_html += (
+                f'<div style="border:1px solid {border}; '
+                'background:var(--panel-soft); border-radius:8px; '
+                'padding:8px 12px;">'
+                '<div style="font-size:11px; color:var(--muted); '
+                f'letter-spacing:.03em;">{d["label"]}</div>'
+                '<div style="font-size:14px; color:var(--text); '
+                f'margin-top:3px;">{val}</div></div>'
+            )
+        delta_block = (
+            '<div style="font-size:12px; color:var(--muted); '
+            'margin:16px 0 9px; letter-spacing:.03em;">전날 대비 변동'
+            + (f' · {plan.get("prev_date")} → {plan.get("today_date")}'
+               if plan.get("prev_date") else "")
+            + '</div>'
+            '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
+            + chip_html + '</div>'
+        )
+    else:
+        delta_block = (
+            '<div style="font-size:12px; color:var(--muted); '
+            'margin:16px 0 0; line-height:1.6;">전날 대비 변동 — 비교할 전일 '
+            '데이터가 아직 없습니다 (파이프라인이 2회 이상 실행되면 '
+            '표시됩니다).</div>'
+        )
+
+    st.markdown(
+        '<div class="env-block" style="min-height:auto; '
+        'border-left:3px solid var(--blue);">'
+        '<div class="env-block-title">오늘의 액션 플랜 · 아침·저녁 체크</div>'
+        '<div style="font-size:15px; font-weight:700; color:var(--text); '
+        f'margin:4px 0 2px; line-height:1.5;">오늘의 핵심 — '
+        f'{plan.get("headline", "—")}</div>'
+        f'<div style="margin-top:10px;">{action_rows}</div>'
+        f'{delta_block}'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_portfolio_regime():
     render_back_button("regime")
     page_header(
@@ -3063,6 +3194,9 @@ def render_portfolio_regime():
         return
 
     regime_date = _regime_row_get(regime, "date")
+
+    # ── 0) 오늘의 액션 플랜 — 최상단 (아침·저녁 체크) ────────────────
+    render_daily_action_plan(regime, crash)
 
     # ── 1) 상단 요약 ────────────────────────────────────────────────
     cur_regime = _regime_row_get(regime, "current_regime")
@@ -3512,24 +3646,29 @@ def render_my_portfolio_review(regime: Any | None):
     tot_ret = diag.get("total_return_pct")
 
     diag_cells = [
-        ("총 평가액", _fmt_krw(diag.get("total_value_krw"))),
-        ("보유 종목 수", f'{diag.get("n_holdings", 0)} 종목'),
+        ("총 평가액", _fmt_krw(diag.get("total_value_krw")), None),
+        ("보유 종목 수", f'{diag.get("n_holdings", 0)} 종목', None),
         ("최대 비중 (집중도)",
-         (f"{top_pct:.1f}%" if top_pct is not None else "확인 필요")
-         + f" · {top_name}"),
+         f"{top_pct:.1f}%" if top_pct is not None else "확인 필요",
+         top_name),
         ("레버리지 노출",
-         f"{lev_pct:.1f}%" if lev_pct is not None else "확인 필요"),
+         f"{lev_pct:.1f}%" if lev_pct is not None else "확인 필요",
+         None),
     ]
+    # C3: 위 코멘트 박스(5-0)와의 세로 여백 확보
+    st.markdown('<div style="height:20px;"></div>', unsafe_allow_html=True)
     dcols = st.columns(len(diag_cells))
-    for i, (label, value) in enumerate(diag_cells):
+    for i, (label, value, sub) in enumerate(diag_cells):
         with dcols[i]:
-            # C2: 최대 비중 박스 텍스트 줄바꿈으로 키가 커지므로 모든 박스에
-            # 충분한 min-height 를 주고 flex 로 내용을 정렬 — 높이 균일화.
+            # C2: Streamlit columns 는 형제 높이를 자동 정렬하지 않으므로
+            # height 를 명시해 4개 박스를 동일 높이로 통일한다.
+            sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
             st.markdown(
-                '<div class="metric-card" style="min-height:126px; '
-                'display:flex; flex-direction:column;">'
+                '<div class="metric-card" style="height:150px; '
+                'min-height:0; box-sizing:border-box;">'
                 f'<div class="metric-label">{label}</div>'
-                f'<div class="metric-value" style="font-size:17px;">{value}</div>'
+                f'<div class="metric-value">{value}</div>'
+                f"{sub_html}"
                 "</div>",
                 unsafe_allow_html=True,
             )

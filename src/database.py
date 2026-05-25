@@ -1986,6 +1986,27 @@ def fetch_latest_crash_deployment_plan(
     return cur.fetchone()
 
 
+def fetch_recent_market_regimes(
+    conn: sqlite3.Connection, limit: int = 2
+) -> list[sqlite3.Row]:
+    """최근 N개 market_regime 행 (date DESC). 전날 대비 비교용."""
+    cur = conn.execute(
+        "SELECT * FROM market_regime ORDER BY date DESC LIMIT ?", (int(limit),)
+    )
+    return cur.fetchall()
+
+
+def fetch_recent_crash_deployment_plans(
+    conn: sqlite3.Connection, limit: int = 2
+) -> list[sqlite3.Row]:
+    """최근 N개 crash_deployment_plan 행 (date DESC). 전날 대비 비교용."""
+    cur = conn.execute(
+        "SELECT * FROM crash_deployment_plan ORDER BY date DESC LIMIT ?",
+        (int(limit),),
+    )
+    return cur.fetchall()
+
+
 # ---------------------------------------------------------------------------
 # Phase 4-A — 백테스트: market_price_history / backtest_results /
 #             regime_forward_returns

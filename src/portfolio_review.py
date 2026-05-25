@@ -264,3 +264,239 @@ def generate_portfolio_commentary(
         )
 
     return " ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# 데일리 액션 플랜 — 전날 대비 변동 + 오늘 신경 쓸 것
+# ---------------------------------------------------------------------------
+
+def _rget(row: Any, key: str) -> Any:
+    """sqlite3.Row / dict 안전 접근."""
+    if row is None:
+        return None
+    try:
+        keys = row.keys()
+    except Exception:
+        return None
+    return row[key] if key in keys else None
+
+
+# Overheat 밴드 경계 — 밴드를 넘으면 '국면 신호 변화' 로 간주
+_OVERHEAT_BANDS = [
+    (0, 35, "안정"),
+    (35, 50, "중립"),
+    (50, 65, "주의"),
+    (65, 80, "과열"),
+    (80, 101, "극단 과열"),
+]
+
+
+def _overheat_band(score: float | None) -> str | None:
+    if score is None:
+        return None
+    for lo, hi, name in _OVERHEAT_BANDS:
+        if lo <= score < hi:
+            return name
+    return None
+
+
+def generate_daily_action_plan(
+    diag: dict[str, Any],
+    holdings: list[dict],
+    regime: Any | None,
+    crash: Any | None,
+    prev_regime: Any | None = None,
+    prev_crash: Any | None = None,
+) -> dict[str, Any]:
+    """아침·저녁 확인용 데일리 액션 플랜.
+
+    - deltas: 전날 대비 시장/국면 변동 (regime·crash 는 매일 갱신되므로 비교 가능)
+    - actions: 오늘 신경 쓸 것 — 우선순위(high/medium/low) 부여한 rule-based 콜아웃
+    - headline: 가장 중요한 한 줄
+
+    portfolio.json holdings 는 정적 스냅샷이라 보유액 자체의 일일 변동은
+    추적하지 않는다 — 일일 변동은 '시장' 쪽, 포트폴리오는 '신경 쓸 것' 으로 분리.
+    """
+    today_date = _rget(regime, "date")
+    prev_date = _rget(prev_regime, "date")
+    # prev 가 today 와 같은 행이면 (히스토리 1개뿐) 비교 불가
+    has_prev = bool(
+        prev_regime is not None and prev_date and prev_date != today_date
+    )
+
+    deltas: list[dict] = []
+    if has_prev:
+        oh_t = _f(_rget(regime, "market_overheat_score"))
+        oh_p = _f(_rget(prev_regime, "market_overheat_score"))
+        if oh_t is not None and oh_p is not None:
+            d = oh_t - oh_p
+            deltas.append({
+                "label": "Market Overheat Score",
+                "today": f"{oh_t:.0f}", "prev": f"{oh_p:.0f}",
+                "delta": f"{d:+.0f}",
+                "dir": "up" if d > 0 else "down" if d < 0 else "flat",
+                "changed": abs(d) >= 1,
+            })
+        rg_t = _rget(regime, "current_regime")
+        rg_p = _rget(prev_regime, "current_regime")
+        if rg_t or rg_p:
+            deltas.append({
+                "label": "시장 국면",
+                "today": rg_t or NEEDS_CHECK, "prev": rg_p or NEEDS_CHECK,
+                "delta": None, "dir": "flat",
+                "changed": bool(rg_t and rg_p and rg_t != rg_p),
+            })
+        pm_t = _rget(regime, "portfolio_mode")
+        pm_p = _rget(prev_regime, "portfolio_mode")
+        if pm_t or pm_p:
+            deltas.append({
+                "label": "권장 포트폴리오 모드",
+                "today": pm_t or NEEDS_CHECK, "prev": pm_p or NEEDS_CHECK,
+                "delta": None, "dir": "flat",
+                "changed": bool(pm_t and pm_p and pm_t != pm_p),
+            })
+        dd_t = _f(_rget(crash, "qqq_drawdown_from_high"))
+        dd_p = _f(_rget(prev_crash, "qqq_drawdown_from_high"))
+        if dd_t is not None and dd_p is not None:
+            d = dd_t - dd_p
+            deltas.append({
+                "label": "QQQ 고점 대비 낙폭",
+                "today": f"{dd_t:+.1f}%", "prev": f"{dd_p:+.1f}%",
+                "delta": f"{d:+.1f}%p",
+                "dir": "down" if d < 0 else "up" if d > 0 else "flat",
+                "changed": abs(d) >= 0.5,
+            })
+        zone_t = _rget(crash, "deployment_zone")
+        zone_p = _rget(prev_crash, "deployment_zone")
+        if (zone_t or zone_p) and zone_t != zone_p:
+            deltas.append({
+                "label": "Deployment Zone",
+                "today": zone_t or NEEDS_CHECK, "prev": zone_p or NEEDS_CHECK,
+                "delta": None, "dir": "flat", "changed": True,
+            })
+
+    # ── 오늘 신경 쓸 것 — 우선순위 콜아웃 ──────────────────────────
+    actions: list[dict] = []
+
+    cur_regime = _rget(regime, "current_regime")
+    overheat = _f(_rget(regime, "market_overheat_score"))
+    expensive = bool(cur_regime in _EXPENSIVE_REGIMES) or (
+        overheat is not None and overheat >= 65)
+    defensive = bool(cur_regime in _DEFENSIVE_REGIMES)
+
+    top_pct = diag.get("top_holding_pct")
+    top = diag.get("top_holding") or {}
+    top_name = top.get("name") or top.get("ticker") or "최대 비중 종목"
+    lev_pct = diag.get("leverage_exposure_pct")
+
+    # A) 국면·Zone 변화 (가장 우선)
+    for d in deltas:
+        if d["label"] == "시장 국면" and d.get("changed"):
+            actions.append({
+                "priority": "high",
+                "title": f"시장 국면 변화: {d['prev']} → {d['today']}",
+                "detail": "국면이 바뀌었습니다 — 권장 베타와 레버리지 노출이 "
+                          "현재 국면에 맞는지 먼저 점검하십시오.",
+            })
+        if d["label"] == "Deployment Zone" and d.get("changed"):
+            actions.append({
+                "priority": "high",
+                "title": f"Deployment Zone 변화: {d['prev']} → {d['today']}",
+                "detail": "Nasdaq 낙폭 단계가 바뀌었습니다 — 단계 매수"
+                          "(QQQ→QLD→TQQQ) 계획을 확인하십시오.",
+            })
+
+    # B) Overheat 밴드 이동
+    if has_prev:
+        oh_p = _f(_rget(prev_regime, "market_overheat_score"))
+        b_t = _overheat_band(overheat)
+        b_p = _overheat_band(oh_p)
+        if b_t and b_p and b_t != b_p:
+            up = (overheat or 0) > (oh_p or 0)
+            actions.append({
+                "priority": "high" if up else "medium",
+                "title": f"Overheat 신호 {'상승' if up else '하락'}: "
+                         f"{b_p} → {b_t} 밴드",
+                "detail": ("과열 쪽으로 이동 — 신규 베타 확대보다 수익 보호가 "
+                           "우선입니다." if up else
+                           "과열이 완화됐습니다 — 단계적 베타 확대 여지를 "
+                           "점검하십시오."),
+            })
+
+    # C) 집중도 (상시 — 변화 없어도 신경 쓸 것)
+    if top_pct is not None and top_pct >= 35:
+        actions.append({
+            "priority": "high" if expensive else "medium",
+            "title": f"단일 종목 과집중: {top_name} {top_pct:.1f}%",
+            "detail": ("순자산의 1/3 이상이 한 종목에 묶여 있습니다. "
+                       + ("시장이 비싼 국면이라 변동성 위험이 큽니다 — "
+                          "집중도 완화를 우선 검토하십시오." if expensive else
+                          "집중도 완화 계획을 미리 갖고 계십시오.")),
+        })
+
+    # D) 레버리지 노출
+    if lev_pct is not None and lev_pct >= 40:
+        actions.append({
+            "priority": "high" if (expensive or defensive) else "medium",
+            "title": f"레버리지 노출 {lev_pct:.1f}%",
+            "detail": ("레버리지 비중이 매우 높습니다. "
+                       + ("과열·조정 국면에서 레버리지는 하락을 증폭시킵니다 — "
+                          "부분 익절과 노출 축소를 함께 검토하십시오."
+                          if (expensive or defensive) else
+                          "국면이 악화되면 가장 먼저 축소할 후보입니다.")),
+        })
+
+    # E) 큰 수익 난 레버리지 포지션 — 부분 익절
+    big_lev: list[str] = []
+    for h in (holdings or []):
+        if h.get("leverage") and (_f(h.get("return_pct")) or 0.0) >= 25:
+            big_lev.append(
+                f"{h.get('name') or h.get('ticker')} "
+                f"({_f(h.get('return_pct')):+.0f}%)")
+    if big_lev:
+        actions.append({
+            "priority": "medium",
+            "title": "큰 수익 난 레버리지 포지션 — 수익 보호 검토",
+            "detail": ", ".join(big_lev)
+                      + " — 레버리지+큰 수익이 겹치면 부분 익절로 수익을 "
+                        "확정하는 것을 권고합니다.",
+        })
+
+    # F) 조정 국면 매수 기회
+    dd_now = _f(_rget(crash, "qqq_drawdown_from_high"))
+    if dd_now is not None and dd_now <= -10:
+        actions.append({
+            "priority": "medium",
+            "title": f"Nasdaq 낙폭 {dd_now:.1f}% — 단계 매수 구간",
+            "detail": "고점 대비 조정이 진행 중입니다 — 미리 정한 단계 매수"
+                      "(QQQ→QLD→TQQQ) 규칙에 따라 분할 진입을 점검하십시오.",
+        })
+
+    _order = {"high": 0, "medium": 1, "low": 2}
+    actions.sort(key=lambda a: _order.get(a["priority"], 9))
+
+    if not actions:
+        if regime is None:
+            actions.append({
+                "priority": "low",
+                "title": "시장 국면 데이터 없음",
+                "detail": "파이프라인(run_research) 실행 후 액션 플랜이 "
+                          "채워집니다.",
+            })
+        else:
+            actions.append({
+                "priority": "low",
+                "title": "특이 변동 없음 — 현 구조 유지",
+                "detail": "오늘은 국면·집중도·레버리지에서 즉시 대응할 신호가 "
+                          "없습니다. 기존 구조를 유지하며 투자 아이디어에 "
+                          "집중하셔도 좋습니다.",
+            })
+
+    return {
+        "has_prev": has_prev,
+        "today_date": today_date,
+        "prev_date": prev_date,
+        "deltas": deltas,
+        "actions": actions,
+        "headline": actions[0]["title"] if actions else "—",
+    }
