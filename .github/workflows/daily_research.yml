@@ -15,7 +15,7 @@ on:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: write     # alpha.db 커밋을 위해 필요
     steps:

@@ -687,6 +687,20 @@ def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
             regime.get("market_overheat_score"),
         )
 
+        # Phase 3 — Howard Marks 사이클 심리 + Buffett 기회 필터
+        cycle_psych: dict = {}
+        buffett: dict = {}
+        try:
+            from src.marks_cycle import evaluate_cycle_psychology
+            cycle_psych = evaluate_cycle_psychology(regime)
+        except Exception as e:
+            log.warning("[Regime] 사이클 심리 평가 실패 — skip: %s", e)
+        try:
+            from src.buffett_filter import evaluate_buffett_opportunity
+            buffett = evaluate_buffett_opportunity(regime)
+        except Exception as e:
+            log.warning("[Regime] Buffett 기회 필터 평가 실패 — skip: %s", e)
+
         # crash deployment — QQQ 가격이력 사용
         qqq_hist = ((data.get("etf") or {}).get("QQQ") or {}).get("history")
         from src.crash_deployment import calculate_nasdaq_drawdown_from_high
@@ -705,9 +719,9 @@ def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
             "liquidity_credit_score": regime.get("liquidity_credit_score"),
             "earnings_revision_risk_score": regime.get("earnings_revision_risk_score"),
             "technical_extension_score": regime.get("technical_extension_score"),
-            # cycle_psychology / buffett_opportunity 는 Phase 3 — 지금은 NULL
-            "cycle_psychology_score": None,
-            "buffett_opportunity_score": None,
+            # cycle_psychology / buffett_opportunity — Phase 3
+            "cycle_psychology_score": cycle_psych.get("cycle_psychology_score"),
+            "buffett_opportunity_score": buffett.get("buffett_opportunity_score"),
             "portfolio_mode": mode.get("portfolio_mode"),
             "recommended_beta_level": mode.get("recommended_beta_level"),
             "commentary_ko": regime.get("commentary_ko"),
@@ -725,15 +739,19 @@ def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
         })
 
         log.info(
-            "[Regime] regime=%s overheat=%s mode=%s zone=%s",
+            "[Regime] regime=%s overheat=%s mode=%s zone=%s cycle=%s buffett=%s",
             regime.get("current_regime"), regime.get("market_overheat_score"),
             mode.get("portfolio_mode"), plan.get("deployment_zone"),
+            cycle_psych.get("cycle_psychology_score"),
+            buffett.get("buffett_opportunity_score"),
         )
         return {
             "ok": True,
             "regime": regime.get("current_regime"),
             "overheat": regime.get("market_overheat_score"),
             "portfolio_mode": mode.get("portfolio_mode"),
+            "cycle_psychology": cycle_psych.get("cycle_psychology_score"),
+            "buffett_opportunity": buffett.get("buffett_opportunity_score"),
         }
     except Exception as e:
         log.warning("[Regime] portfolio regime 평가 실패 — skip: %s", e)

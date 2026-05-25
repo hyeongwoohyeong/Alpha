@@ -126,13 +126,82 @@ def fetch_fred_macro() -> dict[str, Any]:
 # yfinance 기반 시장 데이터 + 기술적 헬퍼
 # ---------------------------------------------------------------------------
 
-def fetch_regime_market_data() -> dict[str, dict[str, Any]]:
-    """Regime 추적 ETF 의 가격이력/거래량 batch fetch. 실패해도 빈 dict 안전."""
+# forward PE 를 별도 보강할 대상 (지수 ETF) — _score_valuation 이 사용
+_VALUATION_TICKERS: tuple[str, ...] = ("SPY", "QQQ")
+
+
+def _enrich_regime_etf_metadata(etf_map: dict[str, dict[str, Any]]) -> None:
+    """fetch_universe 의 enrich 가 rate-limit 등으로 forward PE 를 못 채운 경우
+    보강. SPY/QQQ 등에 대해 yfinance .info 를 직접 재시도해 forwardPE/trailingPE
+    를 etf dict 에 넣는다. 또 _score_sentiment 가 바로 쓸 수 있도록 volume_ratio
+    를 사전 계산해 'volume_ratio' 키로 캐싱한다.
+
+    yfinance .info 는 자주 실패하므로 try/except 로 격리 — graceful.
+    """
+    if not etf_map:
+        return
     try:
-        return fetch_universe(REGIME_TICKERS, period="2y", enrich=True)
+        from .market_data import _safe_yf  # type: ignore
+        yf = _safe_yf()
+    except Exception as e:
+        log.debug("yfinance import 실패 — ETF 메타 보강 skip: %s", e)
+        yf = None
+
+    for sym, md in etf_map.items():
+        if not isinstance(md, dict):
+            continue
+        # (1) volume_ratio 사전 계산 — history 만 있으면 계산 가능 (외부호출 X)
+        try:
+            vr = volume_ratio(md)
+            if vr is not None:
+                md["volume_ratio"] = vr
+        except Exception:
+            pass
+
+        # (2) forward PE — 지수 ETF 만, 이미 있으면 skip
+        if sym not in _VALUATION_TICKERS:
+            continue
+        fpe = md.get("forward_pe")
+        if fpe and 5 < fpe < 80:
+            continue
+        if yf is None:
+            continue
+        for attempt in range(2):
+            try:
+                from .utils import safe_float
+                info = yf.Ticker(sym).info or {}
+                if isinstance(info, dict):
+                    fp = safe_float(info.get("forwardPE"))
+                    tp = safe_float(info.get("trailingPE"))
+                    if fp and 5 < fp < 80:
+                        md["forward_pe"] = fp
+                    elif tp and 5 < tp < 80:
+                        # forward 없으면 trailing 으로 근사 (보수적)
+                        md["forward_pe"] = tp
+                    if tp:
+                        md["trailing_pe"] = md.get("trailing_pe") or tp
+                if md.get("forward_pe"):
+                    break
+            except Exception as e:
+                log.debug("[%s] forward PE 보강 시도 %d 실패: %s", sym, attempt + 1, e)
+
+
+def fetch_regime_market_data() -> dict[str, dict[str, Any]]:
+    """Regime 추적 ETF 의 가격이력/거래량 batch fetch. 실패해도 빈 dict 안전.
+
+    fetch_universe(enrich=True) 가 forward PE 를 못 채우는 경우가 잦아
+    _enrich_regime_etf_metadata 로 추가 보강 (forward PE + volume_ratio).
+    """
+    try:
+        etf = fetch_universe(REGIME_TICKERS, period="2y", enrich=True)
     except Exception as e:
         log.warning("regime market data fetch 실패: %s", e)
         return {}
+    try:
+        _enrich_regime_etf_metadata(etf)
+    except Exception as e:
+        log.warning("regime ETF 메타데이터 보강 실패 (graceful): %s", e)
+    return etf
 
 
 def fetch_megacap_market_data() -> dict[str, dict[str, Any]]:

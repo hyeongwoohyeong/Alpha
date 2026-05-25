@@ -3093,8 +3093,12 @@ def render_portfolio_regime():
             )
 
     # ── 2) Market Overheat Score 분해 — 6 sub-score ─────────────────
-    st.markdown('<div class="section-title">Market Overheat Score 분해</div>',
-                unsafe_allow_html=True)
+    # C1: 위 요약 박스와의 세로 여백 확보 (상단 26px / 하단 14px)
+    st.markdown(
+        '<div class="section-title" style="margin-top:26px; margin-bottom:14px;">'
+        'Market Overheat Score 분해</div>',
+        unsafe_allow_html=True,
+    )
     sub_cols = st.columns(3)
     for i, (col_key, label) in enumerate(_REGIME_SUBSCORES):
         val = _regime_row_get(regime, col_key)
@@ -3138,6 +3142,9 @@ def render_portfolio_regime():
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # ── 3b) Phase 3 — 사이클 심리 체크리스트 + Buffett 기회 필터 ──────
+    render_cycle_and_buffett(regime)
 
     # ── 4) Nasdaq Drawdown Deployment Plan ──────────────────────────
     st.markdown('<div class="section-title">Nasdaq Drawdown Deployment Plan</div>',
@@ -3188,6 +3195,155 @@ def render_portfolio_regime():
 
     # ── 5) 내 포트폴리오 리뷰 ────────────────────────────────────────
     render_my_portfolio_review(regime)
+
+
+def _regime_row_to_dict(regime: Any, crash: Any = None) -> dict:
+    """market_regime / crash_deployment_plan Row → Phase 3 평가용 dict.
+
+    marks_cycle / buffett_filter 가 읽는 키 (sub-score, overheat, regime,
+    qqq_drawdown_from_high) 로 정규화한다.
+    """
+    keys = (
+        "market_overheat_score", "current_regime",
+        "valuation_stretch_score", "sentiment_speculation_score",
+        "market_concentration_score", "liquidity_credit_score",
+        "earnings_revision_risk_score", "technical_extension_score",
+    )
+    out: dict = {k: _regime_row_get(regime, k) for k in keys}
+    out["qqq_drawdown_from_high"] = _regime_row_get(crash, "qqq_drawdown_from_high")
+    return out
+
+
+def render_cycle_and_buffett(regime: Any):
+    """Phase 3 — Howard Marks 사이클 심리 체크리스트 + Buffett 기회 필터.
+
+    DB market_regime 행의 sub-score 로부터 rule-based 재평가해 표시.
+    데이터 부족 시 graceful '확인 필요'.
+    """
+    try:
+        with db.db_session() as conn:
+            crash = db.fetch_latest_crash_deployment_plan(conn)
+    except Exception:
+        crash = None
+
+    rdict = _regime_row_to_dict(regime, crash)
+
+    cycle: dict = {}
+    buffett: dict = {}
+    try:
+        from src.marks_cycle import evaluate_cycle_psychology
+        cycle = evaluate_cycle_psychology(rdict)
+    except Exception as e:
+        log.debug(f"사이클 심리 평가 실패: {e}")
+    try:
+        from src.buffett_filter import evaluate_buffett_opportunity
+        buffett = evaluate_buffett_opportunity(rdict)
+    except Exception as e:
+        log.debug(f"Buffett 기회 필터 평가 실패: {e}")
+
+    # ── 사이클 심리 체크리스트 ──────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="margin-top:26px;">'
+        '사이클 심리 체크리스트 · Howard Marks 식</div>',
+        unsafe_allow_html=True,
+    )
+    if not cycle:
+        st.markdown('<div class="card">사이클 심리 데이터를 평가할 수 없습니다.</div>',
+                    unsafe_allow_html=True)
+    else:
+        c_cells = [
+            ("CYCLE PSYCHOLOGY SCORE",
+             (_fmt_regime_value(cycle.get("cycle_psychology_score")) + " / 100")
+             if cycle.get("cycle_psychology_score") is not None else "확인 필요"),
+            ("MARKET MOOD", cycle.get("market_mood") or "확인 필요"),
+            ("RISK POSTURE", cycle.get("risk_posture") or "확인 필요"),
+        ]
+        ccols = st.columns(len(c_cells))
+        for i, (label, value) in enumerate(c_cells):
+            with ccols[i]:
+                st.markdown(
+                    '<div class="metric-card" style="min-height:96px;">'
+                    f'<div class="metric-label">{label}</div>'
+                    f'<div class="metric-value" style="font-size:17px;">{value}</div>'
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+        # 10개 질문 체크리스트
+        rows_html = ""
+        for c in (cycle.get("checklist") or []):
+            sc = c.get("score")
+            if sc is None:
+                v_html = '<span class="tag tag-data-unavailable">확인 필요</span>'
+            else:
+                v_html = (f'<b>{sc:.0f}</b> '
+                          f'<span style="color:var(--muted);">· {c.get("verdict")}</span>')
+            rows_html += (
+                '<div class="kv"><span class="kv-k">'
+                f'{c.get("ko") or c.get("label")}</span>'
+                f'<span class="kv-v">{v_html}</span></div>'
+            )
+        st.markdown(
+            '<div class="card" style="margin-top:14px;">'
+            f"{rows_html}"
+            f'<div class="env-block-body" style="margin-top:14px;">'
+            f'{cycle.get("commentary_ko") or ""}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Buffett 기회 필터 ───────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="margin-top:26px;">'
+        'Buffett 기회 필터</div>',
+        unsafe_allow_html=True,
+    )
+    if not buffett:
+        st.markdown('<div class="card">Buffett 기회 데이터를 평가할 수 없습니다.</div>',
+                    unsafe_allow_html=True)
+    else:
+        do_nothing = buffett.get("do_nothing_recommended")
+        b_cells = [
+            ("BUFFETT OPPORTUNITY SCORE",
+             (_fmt_regime_value(buffett.get("buffett_opportunity_score")) + " / 100")
+             if buffett.get("buffett_opportunity_score") is not None else "확인 필요"),
+            ("OPPORTUNITY", buffett.get("opportunity_band") or "확인 필요"),
+            ("DO NOTHING 권고", "예 — 현금 보존 우위" if do_nothing else "아니오"),
+        ]
+        bcols = st.columns(len(b_cells))
+        for i, (label, value) in enumerate(b_cells):
+            with bcols[i]:
+                st.markdown(
+                    '<div class="metric-card" style="min-height:96px;">'
+                    f'<div class="metric-label">{label}</div>'
+                    f'<div class="metric-value" style="font-size:17px;">{value}</div>'
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+        rows_html = ""
+        for c in (buffett.get("checklist") or []):
+            sc = c.get("score")
+            if sc is None:
+                v_html = (f'<span class="tag tag-data-unavailable">'
+                          f'{c.get("verdict") or "확인 필요"}</span>')
+            else:
+                v_html = (f'<b>{sc:.0f}</b> '
+                          f'<span style="color:var(--muted);">· {c.get("verdict")}</span>')
+            rows_html += (
+                '<div class="kv"><span class="kv-k">'
+                f'{c.get("ko") or c.get("label")}</span>'
+                f'<span class="kv-v">{v_html}</span></div>'
+            )
+        cash_comment = buffett.get("cash_optionality_comment") or ""
+        st.markdown(
+            '<div class="card" style="margin-top:14px;">'
+            f"{rows_html}"
+            f'<div class="env-block-body" style="margin-top:14px;">'
+            f'<b>Cash Optionality:</b> {cash_comment}</div>'
+            f'<div class="env-block-body" style="margin-top:8px;">'
+            f'{buffett.get("commentary_ko") or ""}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def _fmt_krw(v: Any) -> str:
@@ -3322,6 +3478,31 @@ def render_my_portfolio_review(regime: Any | None):
     holdings = pf.get("holdings") or []
     diag = diagnose_portfolio(holdings)
 
+    # ── 5-0) C4: rule-based 포트폴리오 코멘트 — 지표 박스 *위*로 이동 ──
+    # 사용자가 요약을 먼저 읽고 숫자를 보도록. position_reviews 는 holdings
+    # 에서 직접 구성 (DB 점수 조회 전에도 코멘트 생성 가능).
+    early_reviews: list[dict] = [
+        {
+            "ticker": (h.get("ticker") or "").upper(),
+            "name": h.get("name") or (h.get("ticker") or "").upper(),
+            "return_pct": h.get("return_pct"),
+            "leverage": bool(h.get("leverage")),
+        }
+        for h in holdings
+    ]
+    try:
+        overview_commentary = generate_portfolio_commentary(
+            diag, regime, early_reviews)
+    except Exception as e:
+        overview_commentary = f"코멘트 생성 중 오류: {e}"
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        '<div class="env-block-title">PORTFOLIO REVIEW · 시장 국면 연계</div>'
+        f'<div class="env-block-body">{overview_commentary}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     # ── 5-1) 포트폴리오 레벨 진단 ────────────────────────────────────
     top = diag.get("top_holding") or {}
     top_name = top.get("name") or top.get("ticker") or "—"
@@ -3341,8 +3522,11 @@ def render_my_portfolio_review(regime: Any | None):
     dcols = st.columns(len(diag_cells))
     for i, (label, value) in enumerate(diag_cells):
         with dcols[i]:
+            # C2: 최대 비중 박스 텍스트 줄바꿈으로 키가 커지므로 모든 박스에
+            # 충분한 min-height 를 주고 flex 로 내용을 정렬 — 높이 균일화.
             st.markdown(
-                '<div class="metric-card" style="min-height:104px;">'
+                '<div class="metric-card" style="min-height:126px; '
+                'display:flex; flex-direction:column;">'
                 f'<div class="metric-label">{label}</div>'
                 f'<div class="metric-value" style="font-size:17px;">{value}</div>'
                 "</div>",
@@ -3355,9 +3539,10 @@ def render_my_portfolio_review(regime: Any | None):
         + (f' (총 수익률 {tot_ret:+.1f}%)' if tot_ret is not None else "")
         + f' · 수익 종목 {diag.get("n_winners", 0)} / 손실 종목 {diag.get("n_losers", 0)}'
     )
+    # C3: 위 지표 박스와의 여백 확보 (margin-top:18px)
     st.markdown(
-        f'<div class="card" style="padding:12px 16px; font-size:14px; '
-        f'color:var(--muted);">{pnl_line}</div>',
+        f'<div class="card" style="margin-top:18px; padding:12px 16px; '
+        f'font-size:14px; color:var(--muted);">{pnl_line}</div>',
         unsafe_allow_html=True,
     )
 
@@ -3493,17 +3678,8 @@ def render_my_portfolio_review(regime: Any | None):
         )
 
     # ── 5-3) Market Regime 연계 종합 코멘트 ──────────────────────────
-    try:
-        commentary = generate_portfolio_commentary(diag, regime, position_reviews)
-    except Exception as e:
-        commentary = f"코멘트 생성 중 오류: {e}"
-    st.markdown(
-        '<div class="env-block" style="min-height:auto;">'
-        '<div class="env-block-title">PORTFOLIO REVIEW · 시장 국면 연계</div>'
-        f'<div class="env-block-body">{commentary}</div>'
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    # C4: 코멘트는 지표 박스 위(5-0)로 이동 — 여기서는 중복 출력하지 않는다.
+    _ = position_reviews  # 포지션별 리뷰 수집 결과 (현재 추가 표시 없음)
 
 
 def render_brief_regime_section():
