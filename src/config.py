@@ -99,11 +99,26 @@ class AlphaConfig:
 # 키가 없으면 None 을 반환하고, macro_data 모듈은 FRED 호출을 graceful 하게 skip.
 
 def get_fred_api_key() -> str | None:
-    """FRED API 키를 환경변수에서 읽는다. 없으면 None.
+    """FRED API 키를 읽는다. 없으면 None.
 
-    Streamlit secrets 사용 시에도 환경변수로 주입하면 그대로 동작.
+    우선순위: 환경변수 → Streamlit secrets.
+    Streamlit Cloud Secrets UI 로 등록한 키는 st.secrets 로만 노출되므로
+    (os.environ 에는 안 들어감) st.secrets 도 확인해야 한다.
+    파이프라인이 Streamlit 런타임 밖(GitHub Actions 등)에서 돌 때는
+    st.secrets 접근이 예외를 던지므로 try/except 로 graceful 처리.
     """
-    return _env("FRED_API_KEY")
+    key = _env("FRED_API_KEY")
+    if key:
+        return key
+    try:
+        import streamlit as st  # type: ignore
+
+        val = st.secrets.get("FRED_API_KEY")  # type: ignore[attr-defined]
+        if val:
+            return str(val).strip() or None
+    except Exception:
+        pass
+    return None
 
 
 def load_config() -> AlphaConfig:
