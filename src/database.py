@@ -34,13 +34,34 @@ DB_PATH = DATA_DIR / "alpha.db"
 # ---------------------------------------------------------------------------
 
 def open_db(path: str | os.PathLike | None = None) -> sqlite3.Connection:
-    """DB 파일을 열고 외래키/스키마를 보장한다."""
+    """DB 파일을 열고 외래키/스키마를 보장한다.
+
+    DB 가 손상('database disk image is malformed' 등)된 경우 손상 파일
+    (+ -wal/-shm/-journal)을 제거하고 빈 DB 를 재생성한다(자가복구) — 앱이
+    손상 DB 때문에 죽지 않게. 데이터는 다음 파이프라인 실행이 다시 채운다.
+    """
     ensure_data_dir()
     p = str(path or DB_PATH)
-    conn = sqlite3.connect(p)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
+
+    def _connect_raw() -> sqlite3.Connection:
+        c = sqlite3.connect(p)
+        c.row_factory = sqlite3.Row
+        c.execute("PRAGMA foreign_keys = ON;")
+        c.execute("PRAGMA journal_mode = WAL;")
+        return c
+
+    try:
+        conn = _connect_raw()
+    except sqlite3.DatabaseError as e:
+        log.error("DB 손상 감지 (%s): %s — 손상 파일 제거 후 빈 DB 재생성", p, e)
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            try:
+                os.remove(p + suffix)
+            except FileNotFoundError:
+                pass
+            except Exception as rm_e:
+                log.warning("손상 파일 제거 실패 %s%s: %s", p, suffix, rm_e)
+        conn = _connect_raw()
     init_schema(conn)
     return conn
 
@@ -464,6 +485,60 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         liquidity_status         TEXT,
         commentary_ko            TEXT,
         created_at               TEXT
+    )
+    """,
+    # ── Capital Efficiency (Phase 2) — 종목별 자본효율 점수 ─────────────
+    """
+    CREATE TABLE IF NOT EXISTS capital_efficiency_scores (
+        date                       TEXT NOT NULL,
+        ticker                      TEXT NOT NULL,
+        capital_efficiency_score    REAL,
+        expected_return_potential   REAL,
+        time_to_target_probability  REAL,
+        downside_risk_score         REAL,
+        catalyst_visibility_score   REAL,
+        qld_relative_score          REAL,
+        liquidity_exit_score        REAL,
+        qld_relative_view           TEXT,
+        commentary_ko               TEXT,
+        created_at                  TEXT,
+        PRIMARY KEY (date, ticker)
+    )
+    """,
+    # ── Capital Efficiency (Phase 2) — 보유 종목 익절 필요성 ────────────
+    """
+    CREATE TABLE IF NOT EXISTS profit_protection (
+        date                        TEXT NOT NULL,
+        ticker                       TEXT NOT NULL,
+        current_gain                 REAL,
+        leverage_flag                INTEGER,
+        valuation_stretch_score      REAL,
+        technical_extension_score    REAL,
+        narrative_crowding_score     REAL,
+        profit_protection_score      REAL,
+        suggested_action             TEXT,
+        commentary_ko                TEXT,
+        created_at                   TEXT,
+        PRIMARY KEY (date, ticker)
+    )
+    """,
+    # ── Capital Efficiency (Phase 2) — 방어적 파킹 후보 ─────────────────
+    """
+    CREATE TABLE IF NOT EXISTS parking_candidates (
+        date                            TEXT NOT NULL,
+        ticker                           TEXT NOT NULL,
+        name                             TEXT,
+        parking_score                    REAL,
+        beta                             REAL,
+        drawdown_resilience_score        REAL,
+        earnings_stability_score         REAL,
+        valuation_reasonableness_score   REAL,
+        dividend_buyback_score           REAL,
+        technical_support_score          REAL,
+        why_parking_ko                   TEXT,
+        risk_ko                          TEXT,
+        created_at                       TEXT,
+        PRIMARY KEY (date, ticker)
     )
     """,
 )

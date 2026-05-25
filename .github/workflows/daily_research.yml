@@ -1,9 +1,10 @@
 name: Daily Research
 
-# 매일 한국시간 오전 7:30 (UTC 22:30) 자동 실행 + 수동 트리거 가능
+# 매일 한국시간 오전 7:30·오후 6:00 (UTC 22:30·09:00) 자동 실행 + 수동 트리거 가능
 on:
   schedule:
-    - cron: "30 22 * * *"
+    - cron: "30 22 * * *"   # 07:30 KST
+    - cron: "0 9 * * *"     # 18:00 KST
   workflow_dispatch:
     inputs:
       ticker:

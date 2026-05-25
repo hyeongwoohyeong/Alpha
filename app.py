@@ -13,10 +13,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import datetime as _dt
+import logging
 from typing import Any
 
 import pandas as pd
 import streamlit as st
+
+# 모듈 로거 — except 블록 등에서 log.warning(...) 호출 시 NameError 방지
+log = logging.getLogger("alpha_app")
 
 from src.brief_generator import (
     build_daily_brief,
