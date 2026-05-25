@@ -1387,6 +1387,19 @@ CUSTOM_CSS = """
         .market-row { font-size: 13px; padding: 10px 0; grid-template-columns: 1.4fr 0.8fr 0.8fr; }
         .market-name { font-size: 13px; }
     }
+
+    /* iframe embed 시 보이는 흰 테두리/외곽선 제거 — 모든 구조 컨테이너 */
+    html, body, .stApp, .main, section.main, .block-container,
+    [data-testid="stApp"], [data-testid="stAppViewContainer"],
+    [data-testid="stMain"], [data-testid="stMainBlockContainer"],
+    [data-testid="stHeader"], [data-testid="stToolbar"],
+    [data-testid="stBottomBlockContainer"], [data-testid="stSidebarContent"],
+    iframe {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    [data-testid="stDecoration"] { display: none !important; }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
