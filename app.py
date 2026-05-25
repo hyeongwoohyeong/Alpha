@@ -3414,8 +3414,7 @@ def render_portfolio_regime():
 
     regime_date = _regime_row_get(regime, "date")
 
-    # ── 0) 오늘의 판단 — 최상단 통합 블록 (헤드라인+시장+할일+근거) ──
-    render_today_decision(regime, crash)
+    # '오늘의 판단' 블록은 Daily Brief 에만 노출 — 중복 제거 (사용자 요청).
 
     # ── 1) 상단 요약 ────────────────────────────────────────────────
     cur_regime = _regime_row_get(regime, "current_regime")
