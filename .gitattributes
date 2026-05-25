@@ -1,0 +1,5 @@
+# SQLite DB 파일 — 바이너리로 고정. 텍스트 변환(autocrlf)·diff·merge 금지.
+# git rebase/merge 가 바이너리 DB 를 섞으면 "database disk image is malformed" 발생.
+*.db binary
+data/alpha.db binary
+data/alpha.db -merge -diff -text
