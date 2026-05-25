@@ -3824,8 +3824,11 @@ def render_my_portfolio_review(regime: Any | None):
 
 
 def render_brief_regime_section():
-    """Daily Brief 내 '오늘의 Portfolio review' 섹션 — DB rule-based 요약.
+    """Daily Brief 내 '오늘의 액션 플랜 + Portfolio review' 섹션.
 
+    Phase 4-C — 브리프를 '아침·저녁 통합 허브' 로: 사용자는 브리프만 봐도
+    오늘의 액션 플랜(전날 대비 변동 + 신경 쓸 것)과 시장 국면 요약을
+    한 화면에서 파악할 수 있어야 한다.
     데이터가 없으면 조용히 생략한다 (브리프 흐름을 깨지 않음).
     """
     try:
@@ -3837,6 +3840,10 @@ def render_brief_regime_section():
 
     if regime is None:
         return
+
+    # Phase 4-C — 오늘의 액션 플랜을 브리프 최상단 영역에 노출.
+    # Portfolio review 페이지와 동일한 박스를 재사용해 두 화면을 일관되게 유지.
+    render_daily_action_plan(regime, crash)
 
     cur_regime = _regime_row_get(regime, "current_regime")
     overheat = _regime_row_get(regime, "market_overheat_score")
