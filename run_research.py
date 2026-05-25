@@ -902,6 +902,159 @@ def step_backtest(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_decision_grading(conn, run_id: str, date_iso: str) -> dict:
+    """Phase 4-B — Decision Journal 사후 채점.
+
+    decision_journal.json 의 각 결정에 대해 1M/3M/6M milestone 이 도래했고
+    아직 채점되지 않았으면 (또는 기존 등급이 '채점 보류' 이면 재시도) 채점한다.
+
+    채점: 종목과 QQQ 의 yfinance 일봉을 받아 결정일·milestone일 종가로
+    window return 과 QQQ 대비 상대수익을 계산 → generate_decision_grade.
+    yfinance 실패 시 '채점 보류' 행을 upsert — 파이프라인은 절대 죽지 않는다.
+
+    Returns: {"checked": N, "graded": M, "pending": K}
+    """
+    log.info("[Decision Journal] Phase 4-B 결정 사후 채점 시작...")
+    result = {"checked": 0, "graded": 0, "pending": 0}
+    try:
+        from src.decision_journal import (
+            GRADE_PENDING,
+            generate_decision_grade,
+            load_decisions,
+        )
+        from src.market_data import fetch_max_history
+        from src.performance_tracker import _price_on_or_after, _price_on_or_before
+    except Exception as e:
+        log.warning("[Decision Journal] 모듈 import 실패 — skip: %s", e)
+        return result
+
+    decisions = load_decisions()
+    if not decisions:
+        log.info("[Decision Journal] 기록된 결정 없음 — skip")
+        return result
+
+    today = _dt.date.fromisoformat(date_iso)
+    milestones = [("1M", 30), ("3M", 91), ("6M", 182)]
+
+    # 기존 채점 행 — (decision_id, milestone) -> grade
+    try:
+        existing: dict[tuple[str, str], str] = {}
+        for r in db.fetch_decision_grades(conn):
+            existing[(r["decision_id"], r["milestone"])] = r["grade"]
+    except Exception as e:
+        log.warning("[Decision Journal] 기존 채점 조회 실패: %s", e)
+        existing = {}
+
+    # QQQ 일봉은 한 번만 받아 재사용
+    qqq_hist = None
+    qqq_fetch_failed = False
+
+    def _qqq():
+        nonlocal qqq_hist, qqq_fetch_failed
+        if qqq_hist is None and not qqq_fetch_failed:
+            try:
+                qqq_hist = fetch_max_history("QQQ")
+            except Exception as e:
+                log.warning("[Decision Journal] QQQ history fetch 실패: %s", e)
+            if qqq_hist is None:
+                qqq_fetch_failed = True
+        return qqq_hist
+
+    ticker_hist_cache: dict[str, Any] = {}
+
+    def _ticker_hist(tk: str):
+        if tk not in ticker_hist_cache:
+            try:
+                ticker_hist_cache[tk] = fetch_max_history(tk)
+            except Exception as e:
+                log.warning("[Decision Journal] %s history fetch 실패: %s", tk, e)
+                ticker_hist_cache[tk] = None
+        return ticker_hist_cache[tk]
+
+    for d in decisions:
+        decision_id = str(d.get("id") or "")
+        ticker = str(d.get("ticker") or "").upper().strip()
+        action = str(d.get("action") or "").upper().strip()
+        if not decision_id or not ticker:
+            continue
+        try:
+            decision_date = _dt.date.fromisoformat(str(d.get("decision_date")))
+        except Exception:
+            log.debug("[Decision Journal] %s decision_date 파싱 실패 — skip", decision_id)
+            continue
+
+        for milestone, ms_days in milestones:
+            elapsed = (today - decision_date).days
+            if elapsed < ms_days:
+                continue  # 아직 milestone 미도래
+            prev_grade = existing.get((decision_id, milestone))
+            if prev_grade is not None and prev_grade != GRADE_PENDING:
+                continue  # 이미 정상 채점됨
+
+            result["checked"] += 1
+            milestone_date = decision_date + _dt.timedelta(days=ms_days)
+
+            # 채점 — graceful: 어떤 실패든 '채점 보류' upsert
+            grade_row: dict[str, Any]
+            try:
+                tk_hist = _ticker_hist(ticker)
+                qqq = _qqq()
+                if tk_hist is None or qqq is None:
+                    grade_row = generate_decision_grade(action, None, None, None)
+                    note = (f"{ticker} 또는 QQQ 일봉 데이터를 받지 못해 "
+                            f"채점을 보류합니다.")
+                    grade_row["grade_note"] = note
+                    p_dec = p_ms = bench_ret = None
+                else:
+                    p_dec = (_price_on_or_after(tk_hist, decision_date)
+                             or _price_on_or_before(tk_hist, decision_date))
+                    p_ms = (_price_on_or_after(tk_hist, milestone_date)
+                            or _price_on_or_before(tk_hist, milestone_date))
+                    q_dec = (_price_on_or_after(qqq, decision_date)
+                             or _price_on_or_before(qqq, decision_date))
+                    q_ms = (_price_on_or_after(qqq, milestone_date)
+                            or _price_on_or_before(qqq, milestone_date))
+                    bench_ret = None
+                    if q_dec and q_ms and q_dec > 0:
+                        bench_ret = (q_ms / q_dec - 1.0) * 100.0
+                    grade_row = generate_decision_grade(
+                        action, p_dec, p_ms, bench_ret,
+                    )
+            except Exception as e:
+                log.warning("[Decision Journal] %s %s 채점 예외: %s",
+                            decision_id, milestone, e)
+                grade_row = generate_decision_grade(action, None, None, None)
+                grade_row["grade_note"] = (
+                    f"채점 중 오류가 발생해 보류합니다 ({type(e).__name__})."
+                )
+                p_dec = p_ms = bench_ret = None
+
+            try:
+                db.upsert_decision_grade(conn, {
+                    "decision_id": decision_id,
+                    "milestone": milestone,
+                    "graded_date": date_iso,
+                    "price_at_decision": p_dec,
+                    "price_at_milestone": p_ms,
+                    "return_pct": grade_row.get("return_pct"),
+                    "benchmark_return_pct": bench_ret,
+                    "relative_pct": grade_row.get("relative_pct"),
+                    "grade": grade_row.get("grade"),
+                    "grade_note": grade_row.get("grade_note"),
+                })
+                existing[(decision_id, milestone)] = grade_row.get("grade")
+                if grade_row.get("grade") == GRADE_PENDING:
+                    result["pending"] += 1
+                else:
+                    result["graded"] += 1
+            except Exception as e:
+                log.warning("[Decision Journal] %s %s upsert 실패: %s",
+                            decision_id, milestone, e)
+
+    log.info("[Decision Journal] done: %s", result)
+    return result
+
+
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
     """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
@@ -1100,6 +1253,19 @@ def run_research(
         except Exception as e:
             log.warning("백테스트 갱신 실패: %s", e)
             summary["backtest"] = None
+
+        # Phase 4-B — Decision Journal 사후 채점 (1M/3M/6M milestone 도래한
+        # 사용자 결정을 QQQ 대비로 채점해 decision_grades 테이블에 저장).
+        try:
+            dj_res = step_decision_grading(conn, run_id, date_iso)
+            summary["decision_grading"] = {
+                "checked": dj_res.get("checked"),
+                "graded": dj_res.get("graded"),
+                "pending": dj_res.get("pending"),
+            }
+        except Exception as e:
+            log.warning("Decision Journal 채점 실패: %s", e)
+            summary["decision_grading"] = None
 
         step_generate_daily_brief(
             conn, run_id, date_iso, all_deep_dive, score_map, market_summary,

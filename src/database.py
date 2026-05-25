@@ -596,8 +596,26 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (date, regime, asset)
     )
     """,
+    # ── Phase 4-B — Decision Journal: 사용자 결정 사후 채점 ─────────────
+    """
+    CREATE TABLE IF NOT EXISTS decision_grades (
+        decision_id          TEXT NOT NULL,
+        milestone            TEXT NOT NULL,
+        graded_date          TEXT,
+        price_at_decision    REAL,
+        price_at_milestone   REAL,
+        return_pct           REAL,
+        benchmark_return_pct REAL,
+        relative_pct         REAL,
+        grade                TEXT,
+        grade_note           TEXT,
+        created_at           TEXT,
+        PRIMARY KEY (decision_id, milestone)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
+    "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
 )
 
 
@@ -2168,6 +2186,69 @@ def fetch_regime_forward_returns(
     return list(conn.execute(
         "SELECT * FROM regime_forward_returns ORDER BY date"
     ))
+
+
+# ---------------------------------------------------------------------------
+# Phase 4-B — Decision Journal: decision_grades
+# ---------------------------------------------------------------------------
+
+_DECISION_GRADE_COLS: tuple[str, ...] = (
+    "decision_id", "milestone", "graded_date", "price_at_decision",
+    "price_at_milestone", "return_pct", "benchmark_return_pct",
+    "relative_pct", "grade", "grade_note", "created_at",
+)
+
+
+def upsert_decision_grade(
+    conn: sqlite3.Connection, fields: dict[str, Any]
+) -> None:
+    """decision_grades 행 upsert ((decision_id, milestone) PK)."""
+    placeholders = ", ".join("?" for _ in _DECISION_GRADE_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _DECISION_GRADE_COLS
+        if c not in ("decision_id", "milestone")
+    )
+    sql = (
+        f"INSERT INTO decision_grades ({', '.join(_DECISION_GRADE_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(decision_id, milestone) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = []
+    for c in _DECISION_GRADE_COLS:
+        v = fields.get(c)
+        if c == "created_at" and v is None:
+            v = now_iso()
+        params.append(v)
+    conn.execute(sql, params)
+    conn.commit()
+
+
+def fetch_decision_grades(
+    conn: sqlite3.Connection, decision_id: str | None = None
+) -> list[sqlite3.Row]:
+    """decision_grades 전체 또는 특정 결정의 채점 행 (milestone 순)."""
+    if decision_id:
+        return list(conn.execute(
+            "SELECT * FROM decision_grades WHERE decision_id=? "
+            "ORDER BY milestone", (decision_id,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM decision_grades ORDER BY decision_id, milestone"
+    ))
+
+
+def fetch_all_decision_grades_map(
+    conn: sqlite3.Connection
+) -> dict[str, list[sqlite3.Row]]:
+    """모든 채점 행을 decision_id 별로 묶어 반환."""
+    out: dict[str, list[sqlite3.Row]] = {}
+    try:
+        for r in fetch_decision_grades(conn):
+            did = r["decision_id"]
+            out.setdefault(did, []).append(r)
+    except Exception as e:
+        log.debug("fetch_all_decision_grades_map 실패: %s", e)
+    return out
 
 
 # ---------------------------------------------------------------------------

@@ -1612,6 +1612,7 @@ NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
     ("regime", "Portfolio review"),
     ("validation", "Validation Lab"),
+    ("journal", "Decision Journal"),
     ("discovery", "Discovery"),
     ("detail", "종목 상세"),
     ("dislocation", "우량주 과매도"),
@@ -6287,6 +6288,322 @@ def render_watchlist():
 
 
 # ---------------------------------------------------------------------------
+# 화면: Decision Journal (Phase 4-B)
+# ---------------------------------------------------------------------------
+
+# 액션별 한국어 라벨 + 뱃지 색상
+_DJ_ACTION_LABELS: list[tuple[str, str]] = [
+    ("BUY", "BUY 신규매수"),
+    ("ADD", "ADD 추가매수"),
+    ("TRIM", "TRIM 일부매도"),
+    ("SELL", "SELL 전량매도"),
+    ("HOLD", "HOLD 보유유지"),
+    ("SKIP", "SKIP 매수보류"),
+    ("WATCH", "WATCH 관망"),
+]
+_DJ_ACTION_LABEL_MAP = {k: v for k, v in _DJ_ACTION_LABELS}
+
+# 액션 뱃지 색 — 매수 계열 greenish / 매도·축소 reddish / 보류·관망 neutral
+_DJ_ACTION_BADGE: dict[str, tuple[str, str]] = {
+    "BUY": ("#14352A", "#86EFAC"),
+    "ADD": ("#14352A", "#86EFAC"),
+    "HOLD": ("#1E3A4A", "#93C5FD"),
+    "TRIM": ("#4A2A1F", "#FCA5A5"),
+    "SELL": ("#4A1F1F", "#FCA5A5"),
+    "SKIP": ("#2A2A33", "#9CA3AF"),
+    "WATCH": ("#2A2A33", "#9CA3AF"),
+}
+
+# 채점 등급 칩 색
+_DJ_GRADE_CHIP: dict[str, tuple[str, str]] = {
+    "좋은 결정": ("#14352A", "#86EFAC"),
+    "중립": ("#4A3A12", "#FCD34D"),
+    "아쉬운 결정": ("#4A1F1F", "#FCA5A5"),
+    "채점 보류": ("#26262E", "#9CA3AF"),
+}
+
+
+def _dj_badge(action: str) -> str:
+    bg, fg = _DJ_ACTION_BADGE.get(action, ("#2A2A33", "#9CA3AF"))
+    label = _DJ_ACTION_LABEL_MAP.get(action, action or "—")
+    return (f'<span class="tag" style="background:{bg};color:{fg};'
+            f'border-color:{bg};">{label}</span>')
+
+
+def _dj_grade_chip(grade: str) -> str:
+    bg, fg = _DJ_GRADE_CHIP.get(grade, ("#26262E", "#9CA3AF"))
+    return (f'<span class="tag" style="background:{bg};color:{fg};'
+            f'border-color:{bg};">{grade}</span>')
+
+
+def render_decision_journal():
+    """Decision Journal — 사용자 투자 의사결정 기록 + 1·3·6개월 사후 채점 (Phase 4-B)."""
+    from src import decision_journal as dj
+
+    render_back_button("journal")
+    page_header(
+        "Decision Journal",
+        meta="투자 의사결정 기록 · 1·3·6개월 사후 채점",
+    )
+
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        '<div class="env-block-title">의사결정 기록 — 정직한 사후 채점</div>'
+        '<div class="env-block-body">'
+        '매수·매도·보류 등 실제 내린 결정을 그 근거와 함께 기록하면, 엔진이 '
+        '1·3·6개월 뒤 QQQ 대비 성과로 사후 채점합니다. 등급은 좋은 결정·중립·'
+        '아쉬운 결정의 거친 버킷일 뿐이며, 미래 수익을 예측하지 않습니다. '
+        '내 결정이 실제로 가치를 더했는지를 시간이 지난 뒤 정직하게 비춰보기 위한 '
+        '기록장입니다.'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 데이터 로드 ─────────────────────────────────────────────────
+    try:
+        decisions = dj.load_decisions()
+    except Exception as e:
+        decisions = []
+        st.markdown(
+            f'<div class="card">결정 기록을 불러오는 중 오류: {e} — 확인 필요</div>',
+            unsafe_allow_html=True,
+        )
+
+    grades_by_id: dict[str, list] = {}
+    try:
+        with db.db_session() as conn:
+            grades_by_id = db.fetch_all_decision_grades_map(conn)
+    except Exception as e:
+        log.warning("decision_grades 조회 실패: %s", e)
+        grades_by_id = {}
+
+    # ── 스코어보드 요약 ─────────────────────────────────────────────
+    try:
+        summary = dj.summarize_decisions(decisions, grades_by_id)
+    except Exception:
+        summary = {"total": len(decisions), "graded": 0, "n_good": 0,
+                   "n_neutral": 0, "n_poor": 0, "hit_rate": None}
+
+    st.markdown('<div class="section-title first">스코어보드</div>',
+                unsafe_allow_html=True)
+    sc = st.columns(4)
+    _dj_metrics = [
+        ("총 기록", str(summary["total"])),
+        ("채점 완료", str(summary["graded"])),
+        ("좋은 결정", str(summary["n_good"])),
+        ("아쉬운 결정", str(summary["n_poor"])),
+    ]
+    for col, (label, value) in zip(sc, _dj_metrics):
+        with col:
+            st.markdown(
+                '<div class="metric-card">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="font-size:24px;">{value}</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+    if summary["graded"] == 0:
+        st.caption("채점 완료된 결정 없음 — 첫 결정 후 1개월 뒤 채점됩니다.")
+    elif summary.get("hit_rate") is not None:
+        st.caption(
+            f"적중률 {summary['hit_rate'] * 100:.0f}% "
+            f"(좋은 결정 {summary['n_good']} / 우열 있는 결정 "
+            f"{summary['n_good'] + summary['n_poor']} · 중립 "
+            f"{summary['n_neutral']} 제외) — 표본이 적을수록 신뢰도는 낮습니다."
+        )
+
+    # ── 결정 기록 폼 ────────────────────────────────────────────────
+    st.markdown('<div class="section-title">새 결정 기록</div>',
+                unsafe_allow_html=True)
+    with st.form("dj_add_form", clear_on_submit=True):
+        fc = st.columns([2, 3])
+        with fc[0]:
+            f_ticker = st.text_input("티커", key="dj_ticker",
+                                     placeholder="예: NVDA")
+        with fc[1]:
+            f_action = st.selectbox(
+                "결정 유형",
+                options=[k for k, _ in _DJ_ACTION_LABELS],
+                format_func=lambda k: _DJ_ACTION_LABEL_MAP.get(k, k),
+                key="dj_action",
+            )
+        f_conviction = st.selectbox(
+            "확신도", options=["High", "Med", "Low"], index=1, key="dj_conviction",
+        )
+        f_rationale = st.text_area(
+            "결정 근거", key="dj_rationale",
+            placeholder="이 결정을 내린 이유를 적어주세요. 시간이 지난 뒤 채점과 함께 돌아봅니다.",
+        )
+        submitted = st.form_submit_button("결정 기록", type="primary")
+
+    if submitted:
+        ticker_clean = (f_ticker or "").upper().strip()
+        if not ticker_clean:
+            st.toast("티커를 입력해 주세요.")
+        else:
+            # 현재 시장 국면 캡처
+            regime_val = None
+            overheat_val = None
+            try:
+                with db.db_session() as conn:
+                    mr = db.fetch_latest_market_regime(conn)
+                if mr is not None:
+                    try:
+                        regime_val = mr["current_regime"]
+                    except Exception:
+                        regime_val = None
+                    try:
+                        overheat_val = mr["market_overheat_score"]
+                    except Exception:
+                        overheat_val = None
+            except Exception as e:
+                log.warning("market_regime 캡처 실패: %s", e)
+
+            entry = {
+                "decision_date": _dt.date.today().isoformat(),
+                "ticker": ticker_clean,
+                "name": None,
+                "action": f_action,
+                "conviction": f_conviction,
+                "rationale": (f_rationale or "").strip(),
+                "regime_at_decision": regime_val,
+                "overheat_at_decision": overheat_val,
+            }
+            try:
+                res = dj.add_decision(entry)
+                if res.get("github"):
+                    st.toast(f"{ticker_clean} 결정 기록 ✓ (영구 저장)")
+                elif res.get("github_status") == "no_pat":
+                    st.toast(f"{ticker_clean} 결정 기록 (임시 — PAT 미설정)")
+                else:
+                    st.toast(f"{ticker_clean} 결정 기록 (영구 저장 실패 — "
+                             f"{res.get('github_status')})")
+            except Exception as e:
+                st.toast(f"결정 기록 실패: {e}")
+            st.rerun()
+
+    # ── 결정 목록 ───────────────────────────────────────────────────
+    st.markdown('<div class="section-title">기록된 결정</div>',
+                unsafe_allow_html=True)
+
+    if not decisions:
+        st.markdown(
+            '<div class="card">아직 기록된 결정이 없습니다. '
+            '위 양식에서 첫 투자 의사결정을 기록해 보세요.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # 최신순 — created_at 우선, 없으면 decision_date
+    def _sort_key(d: dict):
+        return (str(d.get("created_at") or ""), str(d.get("decision_date") or ""))
+
+    decisions_sorted = sorted(decisions, key=_sort_key, reverse=True)
+    today = _dt.date.today()
+    milestones = [("1M", 30), ("3M", 91), ("6M", 182)]
+
+    for d in decisions_sorted:
+        did = str(d.get("id") or "")
+        ticker = str(d.get("ticker") or "—")
+        name = d.get("name") or ticker
+        action = str(d.get("action") or "")
+        conviction = d.get("conviction") or "—"
+        decision_date = str(d.get("decision_date") or "—")
+        rationale = (d.get("rationale") or "").strip() or "(근거 미기재)"
+        regime = d.get("regime_at_decision")
+        overheat = d.get("overheat_at_decision")
+
+        regime_ctx = ""
+        if regime:
+            regime_ctx = f"국면 {regime}"
+            if overheat is not None:
+                try:
+                    regime_ctx += f" · Overheat {float(overheat):.0f}"
+                except (TypeError, ValueError):
+                    pass
+        else:
+            regime_ctx = "국면 정보 없음"
+
+        # 헤더 + 근거
+        header = (
+            '<div class="card">'
+            '<div style="display:flex;justify-content:space-between;'
+            'align-items:center;flex-wrap:wrap;gap:8px;">'
+            f'<div class="pick-name" style="font-size:18px;">{name} '
+            f'<span style="color:var(--text-mid);font-size:14px;">{ticker}</span></div>'
+            f'<div>{_dj_badge(action)}</div>'
+            "</div>"
+            f'<div class="pick-type">{decision_date} · 확신도 {conviction} · '
+            f'{regime_ctx}</div>'
+            '<div class="para-row" style="margin-top:8px;">'
+            '<span class="para-label">근거</span>'
+            f'<span class="para-text">{rationale}</span>'
+            "</div>"
+        )
+
+        # milestone 채점
+        try:
+            decision_dt = _dt.date.fromisoformat(decision_date)
+        except Exception:
+            decision_dt = None
+
+        grade_rows = grades_by_id.get(did) or []
+        grades_by_ms = {}
+        for r in grade_rows:
+            try:
+                grades_by_ms[r["milestone"]] = r
+            except Exception:
+                continue
+
+        ms_html_parts: list[str] = []
+        for ms, ms_days in milestones:
+            row = grades_by_ms.get(ms)
+            if row is not None:
+                grade = row["grade"] or "채점 보류"
+                note = row["grade_note"] or ""
+                ret = row["return_pct"]
+                rel = row["relative_pct"]
+                detail = ""
+                if ret is not None and rel is not None:
+                    detail = (f'<span style="color:var(--text-mid);'
+                              f'font-size:12px;">수익률 {ret:+.1f}% · '
+                              f'QQQ 대비 {rel:+.1f}%p</span>')
+                ms_html_parts.append(
+                    '<div style="padding:6px 0;border-top:1px solid var(--line);">'
+                    f'<span style="color:var(--text-mid);font-size:12px;'
+                    f'margin-right:8px;">{ms}</span>'
+                    f'{_dj_grade_chip(grade)} {detail}'
+                    f'<div style="color:var(--text-mid);font-size:12px;'
+                    f'margin-top:4px;">{note}</div>'
+                    "</div>"
+                )
+            else:
+                # 채점 행 없음 — milestone 도래 여부로 분기
+                if decision_dt is not None:
+                    elapsed = (today - decision_dt).days
+                    if elapsed < ms_days:
+                        d_n = ms_days - elapsed
+                        label = f"D-{d_n} · {ms} 채점 예정"
+                    else:
+                        label = f"{ms} 채점 대기 — 다음 파이프라인 실행 시"
+                else:
+                    label = f"{ms} 채점 대기 — 결정일 확인 필요"
+                ms_html_parts.append(
+                    '<div style="padding:6px 0;border-top:1px solid var(--line);'
+                    'color:var(--text-mid);font-size:12px;">'
+                    f'{label}</div>'
+                )
+
+        card_html = (
+            header
+            + '<div style="margin-top:10px;">'
+            + "".join(ms_html_parts)
+            + "</div></div>"
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
 # 화면: 회고 리포트
 # ---------------------------------------------------------------------------
 
@@ -6528,6 +6845,8 @@ elif nav == "regime":
     render_portfolio_regime()
 elif nav == "validation":
     render_validation_lab()
+elif nav == "journal":
+    render_decision_journal()
 elif nav == "discovery":
     render_discovery()
 elif nav == "detail":
