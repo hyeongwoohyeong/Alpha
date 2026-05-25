@@ -60,22 +60,27 @@ jobs:
         run: |
           git config user.name  "alpha-bot"
           git config user.email "alpha-bot@users.noreply.github.com"
-          git add data/alpha.db
-          if git diff --staged --quiet; then
-            echo "No DB changes to commit"
-            exit 0
-          fi
-          git commit -m "chore: daily research $(date -u +'%Y-%m-%d %H:%M UTC')"
-          # 항상 최신 origin/main 위로 rebase 후 push, 충돌 시 5회 재시도
+          # 파이프라인이 만든 새 DB 를 따로 보관.
+          # 바이너리 SQLite 는 rebase/merge 가 불가능("Cannot merge binary files")하므로
+          # rebase 를 쓰지 않는다. 매 시도마다: 워킹트리를 최신 origin/main 으로 강제
+          # 초기화 → 새 DB 만 덮어쓰기 → DB 단일 변경 커밋 → fast-forward push.
+          cp data/alpha.db /tmp/new_alpha.db
           for i in 1 2 3 4 5; do
             git fetch origin main
-            git rebase origin/main || git rebase --abort || true
+            git checkout -f -B main origin/main
+            cp /tmp/new_alpha.db data/alpha.db
+            git add data/alpha.db
+            if git diff --cached --quiet; then
+              echo "No DB changes to commit"
+              exit 0
+            fi
+            git commit -m "chore: daily research $(date -u +'%Y-%m-%d %H:%M UTC')"
             if git push origin main; then
               echo "push success on try $i"
               exit 0
             fi
-            echo "push rejected (try $i) — sleeping..."
-            sleep $((i * 2))
+            echo "push rejected (try $i) — retrying..."
+            sleep $((i * 3))
           done
           echo "::warning::push 5회 모두 실패 — alpha.db 는 artifact 로 업로드되어 있습니다"
           exit 0  # push 실패해도 워크플로우는 성공 처리 (데이터는 artifact 에 있음)
