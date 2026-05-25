@@ -3163,10 +3163,13 @@ def render_today_decision(regime: Any, crash: Any):
     sol_headline = ""
     sol_caveat = ""
     sol_data_mode = "rule_fallback"
+    sol_cycle_position = ""
     if sol is not None:
         sol_headline = _regime_row_get(sol, "headline") or ""
         sol_caveat = _regime_row_get(sol, "caveat") or ""
         sol_data_mode = _regime_row_get(sol, "data_mode") or "rule_fallback"
+        # cycle_position 컬럼은 구 DB 에 없을 수 있어 방어적으로 접근
+        sol_cycle_position = (_regime_row_get(sol, "cycle_position") or "").strip()
         items_raw = _regime_row_get(sol, "items_json")
         if items_raw:
             try:
@@ -3201,6 +3204,18 @@ def render_today_decision(regime: Any, crash: Any):
         market_line += "."
     cur_regime = _regime_row_get(regime, "current_regime")
     market_line += f" 국면: {_plain_regime(cur_regime)}."
+
+    # ── 2-b) 시장 사이클 위치 — 시장이 과거 어느 구간에 있나 ─────────
+    # cycle_position 이 비었으면 줄 자체를 생략 (빈 placeholder·에러 없음).
+    cycle_block = ""
+    if sol_cycle_position:
+        cycle_block = (
+            '<div class="env-block-body" style="margin-top:6px; '
+            'font-size:13px; color:var(--muted); line-height:1.6;">'
+            '<span style="color:var(--text-mid); font-weight:700;">'
+            '시장이 과거 어느 구간에 있나</span> · '
+            f'{sol_cycle_position}</div>'
+        )
 
     # ── 3) 오늘 할 일 — 통합·우선순위 목록 ──────────────────────────
     merged: list = []
@@ -3318,6 +3333,7 @@ def render_today_decision(regime: Any, crash: Any):
         f'margin:4px 0 2px; line-height:1.5;">{headline}</div>'
         '<div class="env-block-body" style="margin-top:8px;">'
         f'{market_line}</div>'
+        f'{cycle_block}'
         f'{action_block}'
         f'{delta_block}'
         '</div>',
@@ -6513,6 +6529,235 @@ def render_validation_lab():
                      hide_index=True)
         st.caption("고베타(QLD) 보유 중 Overheat 85+ 진입 시 QQQ 로 비중을 옮기는 "
                    "익절 룰이 과거에 MDD 를 줄였는지 검증.")
+
+    _render_market_cycle_sections(_pd)
+
+
+def _render_market_cycle_sections(_pd):
+    """Validation Lab 안의 Market Cycle 섹션 (Stage A).
+
+    장기 시장 history 에서 추출한 실증 base rate — 연간 조정 빈도, 낙폭·회복
+    기간, 상승장 분석, 신고가 근접 매수 성과, 추세 상태별 성과, 현재 시장
+    위치 vs 과거. 모든 표에 sample_count·신뢰도 표기.
+    """
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;margin-top:24px;">'
+        '<div class="env-block-title">Market Cycle Research Engine — Stage A</div>'
+        '<div class="env-block-body">'
+        '아래는 사용자 룰을 검증하는 것이 아니라, 장기 시장 history(QQQ ~1999, '
+        'SPY ~1993) 로부터 시장 자체의 <b>실증 base rate</b> 를 추출한 결과입니다. '
+        '상승·하락 양쪽 조건을 모두 다룹니다. 1999년 이후 독립적인 대형 사이클은 '
+        '4~6개뿐 — 깊은 낙폭 통계는 표본이 작으니 <b>표본 수</b>를 반드시 함께 '
+        '보십시오. 데이터가 "신고가 근처 매수도 나쁘지 않았다" 고 하면 그대로 '
+        '표기합니다 (편향 강화 없음).'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        with db.db_session() as conn:
+            mc_cycles = [dict(r) for r in db.fetch_market_cycles(conn, "QQQ")]
+            spy_cycles = [dict(r) for r in db.fetch_market_cycles(conn, "SPY")]
+            mc_annual = [dict(r) for r in db.fetch_annual_correction_stats(conn, "QQQ")]
+            mc_runs = [dict(r) for r in db.fetch_bull_run_stats(conn, "QQQ")]
+            mc_ath = [dict(r) for r in db.fetch_ath_forward_returns(conn, "QQQ")]
+    except Exception as e:
+        st.markdown(
+            f'<div class="card">시장 사이클 데이터 조회 중 오류: {e}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    _empty_note = "데이터 누적 중 — 파이프라인 실행 필요 (run_research 가 Stage A 분석을 계산)."
+
+    # ── 6) 연간 조정 빈도 ───────────────────────────────────────────
+    st.markdown('<div class="section-title">6 · 연간 조정 빈도 (QQQ)</div>',
+                unsafe_allow_html=True)
+    if not mc_annual:
+        _vl_empty_card(_empty_note)
+    else:
+        ann_table = []
+        for r in sorted(mc_annual, key=lambda x: x.get("year") or 0):
+            ann_table.append({
+                "연도": r.get("year"),
+                "-3% 조정": r.get("correction_3pct_count"),
+                "-5% 조정": r.get("correction_5pct_count"),
+                "-10% 조정": r.get("correction_10pct_count"),
+                "-15% 조정": r.get("correction_15pct_count"),
+                "-20% 조정": r.get("correction_20pct_count"),
+                "연 최대낙폭": _vl_pct(r.get("max_drawdown"), 0),
+                "연 수익률": _vl_pct(r.get("annual_return"), 0),
+            })
+        st.dataframe(_pd.DataFrame(ann_table), use_container_width=True,
+                     hide_index=True)
+        n_years = len(mc_annual)
+        m10 = (sum(r.get("correction_10pct_count") or 0 for r in mc_annual)
+               / n_years) if n_years else 0
+        st.caption(
+            f"조정 *이벤트* 수 (cluster-aware — 한 하락 다리가 -5/-10/-15% 를 "
+            f"통과해도 1건). 전체 {n_years}개 연도, 연평균 -10% 조정 {m10:.2f}건. "
+            "표본이 연 단위라 적으니 추세 참고용으로만 보십시오.")
+
+    # ── 7) 낙폭·회복 기간 ────────────────────────────────────────────
+    st.markdown('<div class="section-title">7 · 낙폭·회복 기간 (QQQ '
+                'drawdown cycle)</div>', unsafe_allow_html=True)
+    if not mc_cycles:
+        _vl_empty_card(_empty_note)
+    else:
+        cyc_table = []
+        for r in sorted(mc_cycles, key=lambda x: x.get("drawdown_depth") or 0):
+            cyc_table.append({
+                "고점일": r.get("peak_date"),
+                "저점일": r.get("trough_date"),
+                "낙폭": _vl_pct(r.get("drawdown_depth"), 1),
+                "유형": r.get("cycle_type"),
+                "고점→저점(영업일)": r.get("days_peak_to_trough"),
+                "저점→회복(영업일)": (r.get("days_trough_to_recovery")
+                                  if r.get("days_trough_to_recovery") is not None
+                                  else "미회복"),
+                "회복일": r.get("recovery_date") or "—",
+                "저점후 3M": _vl_pct(r.get("forward_return_3m_from_trough")),
+            })
+        deep = [r for r in mc_cycles if (r.get("drawdown_depth") or 0) <= -0.10]
+        st.dataframe(_pd.DataFrame(cyc_table[:30]), use_container_width=True,
+                     hide_index=True)
+        st.caption(
+            f"전체 -3%+ 조정 이벤트 {len(mc_cycles)}건 중 -10%+ 는 {len(deep)}건. "
+            "낙폭 깊은 순 상위 30건 표시. -20%+ 대형 약세장은 표본이 4~6개로 "
+            "극히 작아 회복 기간 통계의 신뢰도가 낮습니다 (과거≠미래).")
+        if spy_cycles:
+            st.caption(f"참고 — SPY 는 {len(spy_cycles)}건의 -3%+ 조정 이벤트.")
+
+    # ── 8) 상승장(Bull Run) 분석 ────────────────────────────────────
+    st.markdown('<div class="section-title">8 · 상승장(Bull Run) 분석 (QQQ)</div>',
+                unsafe_allow_html=True)
+    if not mc_runs:
+        _vl_empty_card(_empty_note)
+    else:
+        run_table = []
+        for r in sorted(mc_runs, key=lambda x: x.get("start_date") or ""):
+            run_table.append({
+                "시작": r.get("start_date"),
+                "종료": r.get("end_date"),
+                "기간(영업일)": r.get("duration_days"),
+                "총 수익률": _vl_pct(r.get("total_return"), 0),
+                "구간 내 최악 눌림": _vl_pct(r.get("max_pullback"), 0),
+                "종료 사유": r.get("end_reason"),
+            })
+        st.dataframe(_pd.DataFrame(run_table), use_container_width=True,
+                     hide_index=True)
+        durs = [r.get("duration_days") for r in mc_runs
+                if r.get("duration_days") is not None]
+        avg_dur = sum(durs) / len(durs) if durs else 0
+        st.caption(
+            f"상승장 정의 — 직전 고점 회복일부터 다음 -10% 조정의 직전 고점까지. "
+            f"표본 {len(mc_runs)}개, 평균 길이 {avg_dur:.0f}영업일. "
+            "표본이 작으니(사이클 4~6개) 평균은 참고용입니다.")
+
+    # ── 9) 신고가 근접 매수 성과 ────────────────────────────────────
+    st.markdown('<div class="section-title">9 · 신고가 근접 매수 성과 (QQQ)</div>',
+                unsafe_allow_html=True)
+    if not mc_ath:
+        _vl_empty_card(_empty_note)
+    else:
+        _order = {"전고점(ATH)": 0, "52주 신고가": 1, "52주 고점 -0~3%": 2,
+                  "52주 고점 -3~5%": 3, "52주 고점 -5~10%": 4}
+        ath_table = []
+        for r in sorted(mc_ath, key=lambda x: _order.get(
+                x.get("ath_proximity_bucket"), 9)):
+            n = r.get("sample_count") or 0
+            ath_table.append({
+                "ATH 근접도": r.get("ath_proximity_bucket"),
+                "표본": n,
+                "1M 평균": _vl_pct(r.get("forward_1m")),
+                "3M 평균": _vl_pct(r.get("forward_3m")),
+                "6M 평균": _vl_pct(r.get("forward_6m")),
+                "12M 평균": _vl_pct(r.get("forward_12m")),
+                "3M 승률": _vl_pct(r.get("win_rate"), 0),
+                "평균 MDD(3M)": _vl_pct(r.get("mdd_3m")),
+                "신뢰도": ("High" if n >= 60 else "Med" if n >= 20
+                          else "Sample Limited"),
+            })
+        st.dataframe(_pd.DataFrame(ath_table), use_container_width=True,
+                     hide_index=True)
+        st.caption(
+            "이 표는 '신고가 근처 매수는 나쁘다' 는 직관을 직접 검증합니다. "
+            "전고점(ATH) 행의 forward return 이 다른 행보다 낮지 않다면, "
+            "데이터상 신고가 매수가 불리한 진입이 아니었다는 뜻입니다 — "
+            "데이터가 말하는 그대로 받아들이십시오.")
+
+    # ── 10) 추세 상태별 성과 ─────────────────────────────────────────
+    st.markdown('<div class="section-title">10 · 추세 상태별 성과 (QQQ)</div>',
+                unsafe_allow_html=True)
+    try:
+        with db.db_session() as conn:
+            from src.market_cycle_analyzer import (
+                _load_series, calculate_forward_returns_by_trend_state,
+            )
+            _c, _d = _load_series(conn, "QQQ")
+        trend_res = (calculate_forward_returns_by_trend_state(_c, _d)
+                     if _c else {"by_state": {}})
+    except Exception as e:
+        trend_res = {"by_state": {}}
+        log.debug("trend state 계산 실패: %s", e)
+    by_state = trend_res.get("by_state") or {}
+    if not by_state:
+        _vl_empty_card(_empty_note)
+    else:
+        ts_table = []
+        for state, s in by_state.items():
+            n = s.get("sample_count") or 0
+            ts_table.append({
+                "추세 상태": state,
+                "표본(일)": n,
+                "1M 평균": _vl_pct((s.get("1m") or {}).get("avg")),
+                "3M 평균": _vl_pct((s.get("3m") or {}).get("avg")),
+                "6M 평균": _vl_pct((s.get("6m") or {}).get("avg")),
+                "3M 승률": _vl_pct((s.get("3m") or {}).get("win_rate"), 0),
+                "평균 MDD(3M)": _vl_pct((s.get("mdd_3m") or {}).get("avg")),
+                "신뢰도": s.get("confidence") or "—",
+            })
+        st.dataframe(_pd.DataFrame(ts_table), use_container_width=True,
+                     hide_index=True)
+        st.caption("20/60/200일선·200DMA 기울기·이격·RSI·고점대비 낙폭으로 "
+                   "분류한 추세 상태별 forward return. 표본은 일 단위라 자기상관이 "
+                   "있어 독립 표본 수는 더 적습니다.")
+
+    # ── 11) 현재 시장 위치 vs 과거 ──────────────────────────────────
+    st.markdown('<div class="section-title">11 · 현재 시장 위치 vs 과거</div>',
+                unsafe_allow_html=True)
+    try:
+        with db.db_session() as conn:
+            from src.market_cycle_analyzer import locate_current_market
+            cur = locate_current_market(conn, "QQQ")
+    except Exception as e:
+        cur = {"verdict_ko": f"현재 위치 분석 실패: {e}"}
+    f3 = cur.get("similar_forward_3m")
+    n = cur.get("similar_sample_count") or 0
+    st.markdown(
+        '<div class="card">'
+        f'<div class="pick-type">QQQ 현재 위치</div>'
+        f'<div class="env-block-body" style="margin-top:8px;">'
+        f'전고점 대비 낙폭 <b>{_vl_pct(cur.get("drawdown_pct"), 1)}</b> · '
+        f'추세 상태 <b>{cur.get("trend_state") or "—"}</b> · '
+        f'ATH 근접 버킷 <b>{cur.get("ath_bucket") or "—"}</b><br>'
+        f'과거 유사 구간 {n}개 — 3개월 평균 '
+        f'<b>{_vl_pct(f3) if f3 is not None else "표본 부족"}</b> · '
+        f'배치 힌트: {cur.get("deploy_zone_hint") or "—"}<br>'
+        f'<span style="color:var(--text-dim);">{cur.get("verdict_ko")}</span>'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="card" style="border-color:var(--amber);margin-top:8px;">'
+        '<div class="pick-type">⚠ Stage A 정직성 주의 — 과거 ≠ 미래. '
+        '대형 사이클 표본 4~6개로 깊은 낙폭 통계 신뢰도 낮음. '
+        'running ATH·52주 고점은 사후 계산(look-ahead 주의). '
+        '레버리지 ETF(QLD/TQQQ)는 변동성 끌림·경로 의존성 위험. '
+        '자동 룰 발굴은 과적합 함정으로 의도적으로 제외했습니다.'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_discovery():

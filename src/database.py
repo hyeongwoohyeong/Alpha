@@ -632,17 +632,92 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     # ── 백테스트 기반 오늘의 대응 — 퀀트 처방 일일 행 ───────────────────
     """
     CREATE TABLE IF NOT EXISTS backtest_solution (
-        date        TEXT PRIMARY KEY,
-        headline    TEXT,
-        data_mode   TEXT,
-        items_json  TEXT,
-        caveat      TEXT,
-        created_at  TEXT
+        date            TEXT PRIMARY KEY,
+        headline        TEXT,
+        data_mode       TEXT,
+        items_json      TEXT,
+        caveat          TEXT,
+        cycle_position  TEXT,
+        created_at      TEXT
+    )
+    """,
+    # ── Stage A — Market Cycle Research Engine: 시장 사이클 ─────────────
+    """
+    CREATE TABLE IF NOT EXISTS market_cycles (
+        asset                          TEXT NOT NULL,
+        peak_date                      TEXT NOT NULL,
+        trough_date                    TEXT,
+        recovery_date                  TEXT,
+        drawdown_depth                 REAL,
+        days_peak_to_trough            INTEGER,
+        days_trough_to_recovery        INTEGER,
+        total_recovery_days            INTEGER,
+        cycle_type                     TEXT,
+        forward_return_1m_from_trough  REAL,
+        forward_return_3m_from_trough  REAL,
+        forward_return_6m_from_trough  REAL,
+        forward_return_12m_from_trough REAL,
+        created_at                     TEXT,
+        PRIMARY KEY (asset, peak_date)
+    )
+    """,
+    # ── Stage A — 연간 조정 빈도 통계 ───────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS annual_correction_stats (
+        year                     INTEGER NOT NULL,
+        asset                    TEXT NOT NULL,
+        correction_3pct_count    INTEGER,
+        correction_5pct_count    INTEGER,
+        correction_10pct_count   INTEGER,
+        correction_15pct_count   INTEGER,
+        correction_20pct_count   INTEGER,
+        max_drawdown             REAL,
+        annual_return            REAL,
+        created_at               TEXT,
+        PRIMARY KEY (year, asset)
+    )
+    """,
+    # ── Stage A — 상승장(Bull Run) 통계 ─────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS bull_run_stats (
+        run_id          TEXT,
+        asset           TEXT NOT NULL,
+        start_date      TEXT NOT NULL,
+        end_date        TEXT,
+        duration_days   INTEGER,
+        total_return    REAL,
+        max_pullback    REAL,
+        trend_state     TEXT,
+        end_reason      TEXT,
+        created_at      TEXT,
+        PRIMARY KEY (asset, start_date)
+    )
+    """,
+    # ── Stage A — 신고가 근접도별 forward return (버킷당 1행) ───────────
+    """
+    CREATE TABLE IF NOT EXISTS ath_forward_returns (
+        asset                  TEXT NOT NULL,
+        ath_proximity_bucket   TEXT NOT NULL,
+        forward_1w             REAL,
+        forward_1m             REAL,
+        forward_3m             REAL,
+        forward_6m             REAL,
+        forward_12m            REAL,
+        mdd_1m                 REAL,
+        mdd_3m                 REAL,
+        mdd_6m                 REAL,
+        win_rate               REAL,
+        sample_count           INTEGER,
+        created_at             TEXT,
+        PRIMARY KEY (asset, ath_proximity_bucket)
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
+    "CREATE INDEX IF NOT EXISTS idx_mc_asset ON market_cycles(asset, peak_date)",
+    "CREATE INDEX IF NOT EXISTS idx_acs_asset ON annual_correction_stats(asset, year)",
+    "CREATE INDEX IF NOT EXISTS idx_brs_asset ON bull_run_stats(asset, start_date)",
 )
 
 
@@ -2041,11 +2116,13 @@ def upsert_backtest_solution(
     items_json = dump_json(fields.get("items"))
     sql = (
         "INSERT INTO backtest_solution "
-        "(date, headline, data_mode, items_json, caveat, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?) "
+        "(date, headline, data_mode, items_json, caveat, "
+        "cycle_position, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(date) DO UPDATE SET "
         "headline=excluded.headline, data_mode=excluded.data_mode, "
         "items_json=excluded.items_json, caveat=excluded.caveat, "
+        "cycle_position=excluded.cycle_position, "
         "created_at=excluded.created_at"
     )
     conn.execute(sql, (
@@ -2054,6 +2131,7 @@ def upsert_backtest_solution(
         fields.get("data_mode"),
         items_json,
         fields.get("caveat"),
+        fields.get("cycle_position"),
         now_iso(),
     ))
     conn.commit()
@@ -2255,6 +2333,225 @@ def fetch_regime_forward_returns(
         ))
     return list(conn.execute(
         "SELECT * FROM regime_forward_returns ORDER BY date"
+    ))
+
+
+# ---------------------------------------------------------------------------
+# Stage A — Market Cycle Research Engine: market_cycles /
+#           annual_correction_stats / bull_run_stats / ath_forward_returns
+# ---------------------------------------------------------------------------
+
+_MARKET_CYCLE_COLS: tuple[str, ...] = (
+    "asset", "peak_date", "trough_date", "recovery_date", "drawdown_depth",
+    "days_peak_to_trough", "days_trough_to_recovery", "total_recovery_days",
+    "cycle_type", "forward_return_1m_from_trough", "forward_return_3m_from_trough",
+    "forward_return_6m_from_trough", "forward_return_12m_from_trough", "created_at",
+)
+
+
+def upsert_market_cycles(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """market_cycles batch upsert ((asset, peak_date) PK)."""
+    placeholders = ", ".join("?" for _ in _MARKET_CYCLE_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _MARKET_CYCLE_COLS
+        if c not in ("asset", "peak_date")
+    )
+    sql = (
+        f"INSERT INTO market_cycles ({', '.join(_MARKET_CYCLE_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(asset, peak_date) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    ts = now_iso()
+    for r in rows:
+        try:
+            params = []
+            for c in _MARKET_CYCLE_COLS:
+                v = r.get(c)
+                if c == "created_at" and v is None:
+                    v = ts
+                params.append(v)
+            conn.execute(sql, params)
+            n += 1
+        except Exception as e:
+            log.debug("market_cycles upsert 실패: %s", e)
+    conn.commit()
+    return n
+
+
+def fetch_market_cycles(
+    conn: sqlite3.Connection, asset: str | None = None
+) -> list[sqlite3.Row]:
+    """market_cycles 전체 또는 특정 asset (peak_date 오름차순)."""
+    if asset:
+        return list(conn.execute(
+            "SELECT * FROM market_cycles WHERE asset=? ORDER BY peak_date",
+            (asset,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM market_cycles ORDER BY asset, peak_date"
+    ))
+
+
+_ANNUAL_CORRECTION_COLS: tuple[str, ...] = (
+    "year", "asset", "correction_3pct_count", "correction_5pct_count",
+    "correction_10pct_count", "correction_15pct_count", "correction_20pct_count",
+    "max_drawdown", "annual_return", "created_at",
+)
+
+
+def upsert_annual_correction_stats(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """annual_correction_stats batch upsert ((year, asset) PK)."""
+    placeholders = ", ".join("?" for _ in _ANNUAL_CORRECTION_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _ANNUAL_CORRECTION_COLS
+        if c not in ("year", "asset")
+    )
+    sql = (
+        f"INSERT INTO annual_correction_stats ({', '.join(_ANNUAL_CORRECTION_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(year, asset) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    ts = now_iso()
+    for r in rows:
+        try:
+            params = []
+            for c in _ANNUAL_CORRECTION_COLS:
+                v = r.get(c)
+                if c == "created_at" and v is None:
+                    v = ts
+                params.append(v)
+            conn.execute(sql, params)
+            n += 1
+        except Exception as e:
+            log.debug("annual_correction_stats upsert 실패: %s", e)
+    conn.commit()
+    return n
+
+
+def fetch_annual_correction_stats(
+    conn: sqlite3.Connection, asset: str | None = None
+) -> list[sqlite3.Row]:
+    """annual_correction_stats 전체 또는 특정 asset (year 오름차순)."""
+    if asset:
+        return list(conn.execute(
+            "SELECT * FROM annual_correction_stats WHERE asset=? ORDER BY year",
+            (asset,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM annual_correction_stats ORDER BY asset, year"
+    ))
+
+
+_BULL_RUN_COLS: tuple[str, ...] = (
+    "run_id", "asset", "start_date", "end_date", "duration_days",
+    "total_return", "max_pullback", "trend_state", "end_reason", "created_at",
+)
+
+
+def upsert_bull_run_stats(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """bull_run_stats batch upsert ((asset, start_date) PK)."""
+    placeholders = ", ".join("?" for _ in _BULL_RUN_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _BULL_RUN_COLS
+        if c not in ("asset", "start_date")
+    )
+    sql = (
+        f"INSERT INTO bull_run_stats ({', '.join(_BULL_RUN_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(asset, start_date) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    ts = now_iso()
+    for r in rows:
+        try:
+            params = []
+            for c in _BULL_RUN_COLS:
+                v = r.get(c)
+                if c == "created_at" and v is None:
+                    v = ts
+                params.append(v)
+            conn.execute(sql, params)
+            n += 1
+        except Exception as e:
+            log.debug("bull_run_stats upsert 실패: %s", e)
+    conn.commit()
+    return n
+
+
+def fetch_bull_run_stats(
+    conn: sqlite3.Connection, asset: str | None = None
+) -> list[sqlite3.Row]:
+    """bull_run_stats 전체 또는 특정 asset (start_date 오름차순)."""
+    if asset:
+        return list(conn.execute(
+            "SELECT * FROM bull_run_stats WHERE asset=? ORDER BY start_date",
+            (asset,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM bull_run_stats ORDER BY asset, start_date"
+    ))
+
+
+_ATH_FWD_COLS: tuple[str, ...] = (
+    "asset", "ath_proximity_bucket", "forward_1w", "forward_1m", "forward_3m",
+    "forward_6m", "forward_12m", "mdd_1m", "mdd_3m", "mdd_6m",
+    "win_rate", "sample_count", "created_at",
+)
+
+
+def upsert_ath_forward_returns(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """ath_forward_returns batch upsert ((asset, ath_proximity_bucket) PK).
+
+    버킷당 1행 — 집계된 결과만 저장 (날짜별 아님)."""
+    placeholders = ", ".join("?" for _ in _ATH_FWD_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _ATH_FWD_COLS
+        if c not in ("asset", "ath_proximity_bucket")
+    )
+    sql = (
+        f"INSERT INTO ath_forward_returns ({', '.join(_ATH_FWD_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(asset, ath_proximity_bucket) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    ts = now_iso()
+    for r in rows:
+        try:
+            params = []
+            for c in _ATH_FWD_COLS:
+                v = r.get(c)
+                if c == "created_at" and v is None:
+                    v = ts
+                params.append(v)
+            conn.execute(sql, params)
+            n += 1
+        except Exception as e:
+            log.debug("ath_forward_returns upsert 실패: %s", e)
+    conn.commit()
+    return n
+
+
+def fetch_ath_forward_returns(
+    conn: sqlite3.Connection, asset: str | None = None
+) -> list[sqlite3.Row]:
+    """ath_forward_returns 전체 또는 특정 asset."""
+    if asset:
+        return list(conn.execute(
+            "SELECT * FROM ath_forward_returns WHERE asset=? "
+            "ORDER BY ath_proximity_bucket", (asset,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM ath_forward_returns ORDER BY asset, ath_proximity_bucket"
     ))
 
 

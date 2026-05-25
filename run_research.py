@@ -902,6 +902,58 @@ def step_backtest(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_market_cycle(conn, run_id: str, date_iso: str) -> dict:
+    """Stage A — Market Cycle Research Engine.
+
+    장기 시장 history 로부터 base rate(조정 빈도·낙폭/회복 기간·상승장 길이·
+    신고가 근접 forward return·추세 상태별 forward return)를 실증적으로 추출.
+
+    1) 항상 ensure_long_term_history (장기 일봉 확보 — 부족하면 yfinance max).
+    2) FULL generate_market_cycle_summary 는 무겁다 — base rate 는 일간으로
+       거의 안 움직이므로 월초이거나 market_cycles 테이블이 비었을 때만 실행.
+       그 외에는 locate_current_market (가벼움) 만 갱신.
+
+    외부 데이터(yfinance) 실패해도 파이프라인 전체가 죽지 않게 try/except.
+    """
+    log.info("[Market Cycle] Stage A — 시장 사이클 분석 시작...")
+    try:
+        from src.market_cycle_analyzer import (
+            ensure_long_term_history,
+            generate_market_cycle_summary,
+            locate_current_market,
+        )
+
+        hist = ensure_long_term_history(conn)
+        log.info("[Market Cycle] 장기 history: %s",
+                 {t: v.get("rows") for t, v in hist.items()})
+
+        # market_cycles 테이블 비었는지 확인
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM market_cycles"
+            ).fetchone()
+            cycles_empty = (row["c"] if hasattr(row, "keys") else row[0]) == 0
+        except Exception:
+            cycles_empty = True
+
+        is_month_start = date_iso.endswith("-01")
+        if is_month_start or cycles_empty:
+            summary = generate_market_cycle_summary(conn)
+            log.info("[Market Cycle] FULL 분석 완료 — saved=%s",
+                     summary.get("saved"))
+            return {"ok": True, "mode": "full", "saved": summary.get("saved"),
+                    "current": (summary.get("current_market") or {}).get("verdict_ko")}
+        else:
+            cur = locate_current_market(conn, "QQQ")
+            log.info("[Market Cycle] 현재 위치만 갱신 — %s",
+                     cur.get("verdict_ko"))
+            return {"ok": True, "mode": "locate_only",
+                    "current": cur.get("verdict_ko")}
+    except Exception as e:
+        log.warning("[Market Cycle] Stage A 분석 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
     """백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
     '오늘 무엇을 할지' 의 구체적 처방을 만들어 backtest_solution 에 저장.
@@ -917,6 +969,7 @@ def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
     try:
         from src.backtest_engine import generate_backtest_summary
         from src.backtest_solution import build_backtest_solution
+        from src.market_cycle_analyzer import locate_current_market
 
         regime = db.fetch_latest_market_regime(conn)
         crash = db.fetch_latest_crash_deployment_plan(conn)
@@ -927,12 +980,20 @@ def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
             log.warning("[Backtest Solution] 백테스트 요약 실패 — 빈 dict: %s", e)
             bt_summary = {}
 
-        sol = build_backtest_solution(regime, crash, bt_summary)
+        # Stage B — 시장 사이클 위치 (step_market_cycle 이후라 데이터 존재)
+        try:
+            cycle = locate_current_market(conn)
+        except Exception as e:
+            log.warning("[Backtest Solution] 시장 사이클 위치 조회 실패: %s", e)
+            cycle = None
+
+        sol = build_backtest_solution(regime, crash, bt_summary, cycle=cycle)
         db.upsert_backtest_solution(conn, date_iso, {
             "headline": sol.get("headline"),
             "data_mode": sol.get("data_mode"),
             "items": sol.get("items") or [],
             "caveat": sol.get("caveat"),
+            "cycle_position": sol.get("cycle_position") or "",
         })
         n_items = len(sol.get("items") or [])
         log.info("[Backtest Solution] done: data_mode=%s items=%d",
@@ -1393,6 +1454,16 @@ def run_research(
         except Exception as e:
             log.warning("백테스트 갱신 실패: %s", e)
             summary["backtest"] = None
+
+        # Stage A — Market Cycle Research Engine. 장기 history 로부터
+        # 시장 사이클 base rate 를 실증 추출 (월초/테이블 빈 경우 FULL,
+        # 그 외엔 현재 위치만 갱신). step_backtest 직후.
+        try:
+            mc_res = step_market_cycle(conn, run_id, date_iso)
+            summary["market_cycle"] = mc_res
+        except Exception as e:
+            log.warning("시장 사이클 분석 실패: %s", e)
+            summary["market_cycle"] = None
 
         # 백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
         # '오늘 무엇을 할지' 의 처방을 backtest_solution 테이블에 저장.
