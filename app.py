@@ -99,7 +99,7 @@ CUSTOM_CSS = """
         --navy: #1E3A8A;
         --blue: #3B82F6;
         --blue-soft: #1E3A8A;
-        --blue-2: #06B6D4;
+        --blue-2: #7C9FC4;
         --green: #22C55E;
         --red: #EF4444;
     }
