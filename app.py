@@ -3164,6 +3164,104 @@ def render_daily_action_plan(regime: Any, crash: Any):
     )
 
 
+def render_backtest_solution():
+    """백테스트 기반 오늘의 대응 — 백테스트 결과를 소화한 퀀트 처방 박스.
+
+    Validation Lab 의 원시 백테스트 결과 대신, 엔진이 직접 디지털해
+    '오늘 무엇을 할지' 의 구체적 지시를 데일리 액션 플랜과 같은 화면에 노출.
+    데이터가 없거나 오류여도 조용히 안내 카드만 표시 — 절대 raise 하지 않는다.
+    """
+    try:
+        with db.db_session() as conn:
+            sol = db.fetch_latest_backtest_solution(conn)
+    except Exception as e:
+        log.debug(f"백테스트 대응 조회 실패: {e}")
+        sol = None
+
+    if sol is None:
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-type">백테스트 기반 대응이 아직 없습니다 — '
+            '파이프라인이 시장 일봉을 누적하면 표시됩니다.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    headline = _regime_row_get(sol, "headline") or "—"
+    data_mode = _regime_row_get(sol, "data_mode") or "rule_fallback"
+    caveat = _regime_row_get(sol, "caveat") or ""
+    items_raw = _regime_row_get(sol, "items_json")
+
+    items: list = []
+    if items_raw:
+        try:
+            import json as _json
+            parsed = _json.loads(items_raw)
+            if isinstance(parsed, list):
+                items = parsed
+        except Exception as e:
+            log.debug(f"backtest_solution items 파싱 실패: {e}")
+            items = []
+
+    # 우선순위별 행
+    item_rows = ""
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        color, plabel = _ACTION_PRIORITY.get(
+            it.get("priority"), _ACTION_PRIORITY["low"])
+        item_rows += (
+            '<div style="display:flex; gap:11px; padding:11px 0; '
+            'border-top:1px solid var(--line);">'
+            f'<div style="flex:0 0 5px; border-radius:3px; '
+            f'background:{color};"></div>'
+            '<div style="flex:1 1 auto;">'
+            '<div style="font-size:14px; font-weight:700; color:var(--text); '
+            'line-height:1.5;">'
+            f'<span style="color:{color}; font-size:11px; font-weight:700; '
+            f'letter-spacing:.04em; margin-right:8px;">{plabel}</span>'
+            f'{it.get("title", "")} — {it.get("action", "")}</div>'
+            '<div style="font-size:13px; color:var(--muted); margin-top:3px; '
+            f'line-height:1.6;">{it.get("basis", "")}</div>'
+            '</div></div>'
+        )
+    if not item_rows:
+        item_rows = (
+            '<div style="font-size:13px; color:var(--muted); '
+            'margin-top:10px; line-height:1.6;">오늘 백테스트 기반 특이 '
+            '대응 항목이 없습니다.</div>'
+        )
+
+    fallback_note = ""
+    if data_mode == "rule_fallback":
+        fallback_note = (
+            '<div style="font-size:11px; color:var(--muted); '
+            'margin-top:10px; line-height:1.6;">백테스트 데이터 누적 중 — '
+            '일부 항목은 룰 기준 잠정 권고입니다.</div>'
+        )
+
+    caveat_block = ""
+    if caveat:
+        caveat_block = (
+            '<div style="font-size:11px; color:var(--muted); '
+            'margin-top:10px; line-height:1.6;">' + caveat + '</div>'
+        )
+
+    st.markdown(
+        '<div class="env-block" style="min-height:auto; '
+        'border-left:3px solid var(--blue);">'
+        '<div class="env-block-title">백테스트 기반 오늘의 대응</div>'
+        '<div style="font-size:15px; font-weight:700; color:var(--text); '
+        f'margin:4px 0 2px; line-height:1.5;">{headline}</div>'
+        f'<div style="margin-top:10px;">{item_rows}</div>'
+        f'{fallback_note}'
+        f'{caveat_block}'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_portfolio_regime():
     render_back_button("regime")
     page_header(
@@ -3198,6 +3296,9 @@ def render_portfolio_regime():
 
     # ── 0) 오늘의 액션 플랜 — 최상단 (아침·저녁 체크) ────────────────
     render_daily_action_plan(regime, crash)
+
+    # ── 0-b) 백테스트 기반 오늘의 대응 — 퀀트 처방 ────────────────────
+    render_backtest_solution()
 
     # ── 1) 상단 요약 ────────────────────────────────────────────────
     cur_regime = _regime_row_get(regime, "current_regime")
@@ -4028,6 +4129,9 @@ def render_brief_regime_section():
     # Phase 4-C — 오늘의 액션 플랜을 브리프 최상단 영역에 노출.
     # Portfolio review 페이지와 동일한 박스를 재사용해 두 화면을 일관되게 유지.
     render_daily_action_plan(regime, crash)
+
+    # 백테스트 기반 오늘의 대응 — 퀀트 처방을 브리프에도 동일하게 노출.
+    render_backtest_solution()
 
     cur_regime = _regime_row_get(regime, "current_regime")
     overheat = _regime_row_get(regime, "market_overheat_score")

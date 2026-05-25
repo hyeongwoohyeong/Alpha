@@ -902,6 +902,47 @@ def step_backtest(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
+    """백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
+    '오늘 무엇을 할지' 의 구체적 처방을 만들어 backtest_solution 에 저장.
+
+    step_backtest(백테스트 갱신)와 step_market_regime(시장 국면) 이후에
+    실행되어야 한다 — 최신 백테스트·regime·crash 데이터를 모두 활용한다.
+
+    LLM 없이 완전 동작. 어떤 실패도 잡아 로깅하고 파이프라인을 죽이지 않는다.
+
+    Returns: {"data_mode": "...", "items": N} 또는 {"error": "..."}.
+    """
+    log.info("[Backtest Solution] 백테스트 기반 오늘의 대응 생성 시작...")
+    try:
+        from src.backtest_engine import generate_backtest_summary
+        from src.backtest_solution import build_backtest_solution
+
+        regime = db.fetch_latest_market_regime(conn)
+        crash = db.fetch_latest_crash_deployment_plan(conn)
+
+        try:
+            bt_summary = generate_backtest_summary(conn)
+        except Exception as e:
+            log.warning("[Backtest Solution] 백테스트 요약 실패 — 빈 dict: %s", e)
+            bt_summary = {}
+
+        sol = build_backtest_solution(regime, crash, bt_summary)
+        db.upsert_backtest_solution(conn, date_iso, {
+            "headline": sol.get("headline"),
+            "data_mode": sol.get("data_mode"),
+            "items": sol.get("items") or [],
+            "caveat": sol.get("caveat"),
+        })
+        n_items = len(sol.get("items") or [])
+        log.info("[Backtest Solution] done: data_mode=%s items=%d",
+                 sol.get("data_mode"), n_items)
+        return {"data_mode": sol.get("data_mode"), "items": n_items}
+    except Exception as e:
+        log.warning("[Backtest Solution] 생성 실패 — skip: %s", e)
+        return {"error": str(e)}
+
+
 def step_decision_grading(conn, run_id: str, date_iso: str) -> dict:
     """Phase 4-B — Decision Journal 사후 채점.
 
@@ -1340,6 +1381,16 @@ def run_research(
         except Exception as e:
             log.warning("백테스트 갱신 실패: %s", e)
             summary["backtest"] = None
+
+        # 백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
+        # '오늘 무엇을 할지' 의 처방을 backtest_solution 테이블에 저장.
+        # step_backtest(백테스트 갱신)·step_market_regime 이후라 최신 데이터 활용.
+        try:
+            bsol_res = step_backtest_solution(conn, run_id, date_iso)
+            summary["backtest_solution"] = bsol_res
+        except Exception as e:
+            log.warning("백테스트 기반 대응 생성 실패: %s", e)
+            summary["backtest_solution"] = None
 
         # Phase 4-B — Decision Journal 사후 채점 (1M/3M/6M milestone 도래한
         # 사용자 결정을 QQQ 대비로 채점해 decision_grades 테이블에 저장).

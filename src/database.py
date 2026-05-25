@@ -629,6 +629,17 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (date, ticker)
     )
     """,
+    # ── 백테스트 기반 오늘의 대응 — 퀀트 처방 일일 행 ───────────────────
+    """
+    CREATE TABLE IF NOT EXISTS backtest_solution (
+        date        TEXT PRIMARY KEY,
+        headline    TEXT,
+        data_mode   TEXT,
+        items_json  TEXT,
+        caveat      TEXT,
+        created_at  TEXT
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
@@ -2016,6 +2027,49 @@ def fetch_latest_crash_deployment_plan(
         return cur.fetchone()
     cur = conn.execute(
         "SELECT * FROM crash_deployment_plan ORDER BY date DESC LIMIT 1"
+    )
+    return cur.fetchone()
+
+
+def upsert_backtest_solution(
+    conn: sqlite3.Connection, date_iso: str, fields: dict[str, Any]
+) -> None:
+    """backtest_solution 일일 행 upsert (date PK).
+
+    fields 의 'items' 리스트는 items_json 으로 JSON 인코딩해 저장한다.
+    """
+    items_json = dump_json(fields.get("items"))
+    sql = (
+        "INSERT INTO backtest_solution "
+        "(date, headline, data_mode, items_json, caveat, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(date) DO UPDATE SET "
+        "headline=excluded.headline, data_mode=excluded.data_mode, "
+        "items_json=excluded.items_json, caveat=excluded.caveat, "
+        "created_at=excluded.created_at"
+    )
+    conn.execute(sql, (
+        date_iso,
+        fields.get("headline"),
+        fields.get("data_mode"),
+        items_json,
+        fields.get("caveat"),
+        now_iso(),
+    ))
+    conn.commit()
+
+
+def fetch_latest_backtest_solution(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """가장 최신 (또는 지정일) backtest_solution 행."""
+    if date_iso:
+        cur = conn.execute(
+            "SELECT * FROM backtest_solution WHERE date=?", (date_iso,)
+        )
+        return cur.fetchone()
+    cur = conn.execute(
+        "SELECT * FROM backtest_solution ORDER BY date DESC LIMIT 1"
     )
     return cur.fetchone()
 
