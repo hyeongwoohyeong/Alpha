@@ -3578,6 +3578,187 @@ def render_capital_efficiency_section(ticker: str):
         )
 
 
+def _render_holdings_briefing_section(holdings: list[dict]):
+    """보유 종목 브리핑 섹션 — 엔진이 생성한 의미 비중 종목별 일일 리서치 브리핑.
+
+    holdings_briefing 테이블(최신일)을 읽어 종목별 카드로 렌더한다.
+    - 브리핑 행이 없는 종목: '브리핑 대기' 안내 카드.
+    - 테이블 자체가 비었거나 DB 읽기 실패: 안내 카드 1개 후 조용히 종료.
+    어떤 경우에도 예외를 위로 던지지 않는다.
+    """
+    import json as _json
+
+    st.markdown(
+        '<div class="section-title" style="margin-top:26px;">보유 종목 브리핑</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="font-size:13px; color:var(--muted); margin:6px 0 12px;">'
+        '엔진이 매일 생성하는 보유 종목 리서치 브리핑 — 순자산 비중 1% 이상 종목 대상. '
+        '단발성 뉴스가 아닌 구조적·테마 관점의 분석입니다.'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    try:
+        from src.holdings_briefing import select_meaningful_holdings
+        meaningful = select_meaningful_holdings(holdings, 1.0)
+    except Exception:
+        meaningful = sorted(
+            [h for h in (holdings or [])
+             if (h.get("net_worth_pct") or 0) >= 1.0],
+            key=lambda h: h.get("net_worth_pct") or 0, reverse=True,
+        )
+
+    # 브리핑 행 조회 (최신일)
+    briefings_by_ticker: dict[str, Any] = {}
+    table_available = True
+    try:
+        with db.db_session() as conn:
+            rows = db.fetch_holdings_briefings(conn)
+        for r in (rows or []):
+            try:
+                briefings_by_ticker[r["ticker"]] = r
+            except Exception:
+                pass
+    except Exception as e:
+        log.debug(f"holdings_briefing 조회 실패: {e}")
+        table_available = False
+
+    if not table_available:
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-type">보유 종목 브리핑이 아직 없습니다. '
+            '파이프라인(run_research) 실행 후 표시됩니다.</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not meaningful:
+        st.markdown(
+            '<div class="card"><div class="pick-type">'
+            '의미 비중(1% 이상) 보유 종목이 없습니다.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not briefings_by_ticker:
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-type">보유 종목 브리핑이 아직 없습니다. '
+            '파이프라인(run_research) 실행 후 표시됩니다.</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        # 테이블은 있으나 데이터가 없는 경우 — 대기 안내만 하고 종료
+        return
+
+    def _g(row, k):
+        if row is None:
+            return None
+        try:
+            return row[k] if k in row.keys() else None
+        except Exception:
+            return None
+
+    for h in meaningful:
+        ticker = (h.get("ticker") or "").strip()
+        name = h.get("name") or ticker
+        nw = h.get("net_worth_pct")
+        ret = h.get("return_pct")
+        is_lev = bool(h.get("leverage"))
+
+        nw_str = f"{nw:.1f}%" if nw is not None else "—"
+        ret_str = f"{ret:+.1f}%" if ret is not None else "확인 필요"
+        ret_color = ("#22C55E" if (ret or 0) > 0
+                     else "#EF4444" if (ret or 0) < 0 else "var(--muted)")
+        lev_badge = (
+            '<span class="tag" style="background:#7F1D1D; color:#FCA5A5; '
+            'border:1px solid #991B1B;">레버리지</span>' if is_lev else ""
+        )
+
+        header = (
+            '<div style="display:flex; align-items:center; '
+            'justify-content:space-between; gap:10px; flex-wrap:wrap;">'
+            f'<div><b style="font-size:15px;">{name}</b> '
+            f'<span style="color:var(--muted); font-size:12px;">{ticker}</span> '
+            f'{lev_badge}</div>'
+            f'<div style="font-size:13px;">비중 {nw_str} · '
+            f'보유 수익률 <b style="color:{ret_color};">{ret_str}</b></div>'
+            "</div>"
+        )
+
+        row = briefings_by_ticker.get(ticker)
+        if row is None:
+            st.markdown(
+                '<div class="card" style="margin-bottom:10px;">'
+                + header
+                + '<div style="margin-top:10px;">'
+                '<span class="tag tag-data-unavailable">'
+                '브리핑 대기 — 다음 파이프라인 실행 시 생성됩니다.</span>'
+                "</div></div>",
+                unsafe_allow_html=True,
+            )
+            continue
+
+        theme = _g(row, "exposure_theme") or "—"
+        summary = _g(row, "summary_ko") or ""
+        risks = _g(row, "risks_ko") or ""
+        pf_note = _g(row, "portfolio_note_ko") or ""
+        model_used = _g(row, "model_used") or ""
+
+        # key_drivers — JSON 문자열을 list 로 방어적 파싱
+        raw_kd = _g(row, "key_drivers_ko")
+        drivers: list[str] = []
+        if isinstance(raw_kd, list):
+            drivers = raw_kd
+        elif raw_kd:
+            try:
+                parsed = _json.loads(raw_kd)
+                drivers = parsed if isinstance(parsed, list) else []
+            except Exception:
+                drivers = []
+
+        _lbl = ('font-size:11px; color:var(--muted); '
+                'text-transform:uppercase; letter-spacing:0.04em; '
+                'margin:12px 0 4px;')
+        _txt = 'font-size:13px; color:var(--text-mid); line-height:1.7;'
+
+        drivers_html = ""
+        if drivers:
+            items = "".join(
+                f'<li style="margin-bottom:3px;">{d}</li>' for d in drivers
+            )
+            drivers_html = (
+                f'<div style="{_lbl}">주목할 구조적 변수</div>'
+                f'<ul style="{_txt} margin:0; padding-left:18px;">{items}</ul>'
+            )
+
+        model_tag = (
+            '<span style="font-size:11px; color:var(--muted);">'
+            f'{"엔진 룰 기반" if model_used == "rule-based" else f"LLM: {model_used}"}'
+            "</span>"
+        )
+
+        st.markdown(
+            '<div class="card" style="margin-bottom:10px;">'
+            + header
+            + f'<div style="{_lbl}">익스포저 테마</div>'
+            + f'<div style="{_txt}"><b>{theme}</b></div>'
+            + (f'<div style="{_lbl}">핵심 요약</div>'
+               f'<div style="{_txt}">{summary}</div>' if summary else "")
+            + drivers_html
+            + (f'<div style="{_lbl}">리스크</div>'
+               f'<div style="{_txt}">{risks}</div>' if risks else "")
+            + (f'<div style="{_lbl}">포트폴리오 관점</div>'
+               f'<div style="{_txt}">{pf_note}</div>' if pf_note else "")
+            + f'<div style="margin-top:10px; text-align:right;">{model_tag}</div>'
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+
 def render_my_portfolio_review(regime: Any | None):
     """data/portfolio.json 의 실제 보유 종목을 읽어 포트폴리오 리뷰를 렌더.
 
@@ -3686,6 +3867,9 @@ def render_my_portfolio_review(regime: Any | None):
         f'font-size:14px; color:var(--muted);">{pnl_line}</div>',
         unsafe_allow_html=True,
     )
+
+    # ── 5-1.5) 보유 종목 브리핑 — 엔진 생성 일일 리서치 브리핑 ────────
+    _render_holdings_briefing_section(holdings)
 
     # ── 5-2) 포지션별 리뷰 — Phase 2 점수 DB 조회 ────────────────────
     position_reviews: list[dict] = []

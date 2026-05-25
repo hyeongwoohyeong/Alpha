@@ -1055,6 +1055,93 @@ def step_decision_grading(conn, run_id: str, date_iso: str) -> dict:
     return result
 
 
+def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
+    """보유 종목 브리핑 — 사용자 보유 종목(portfolio.json) 중 의미 비중(>=1%)
+    종목에 대해 일일 한국어 리서치 브리핑을 생성해 holdings_briefing 에 저장.
+
+    - 이미 (date, ticker) 브리핑이 있으면 SKIP (idempotent — 하루 2회 실행/재실행 시
+      LLM 비용 절감).
+    - LLM 비활성/budget 소진/호출 실패 시 rule-based 폴백으로 항상 채워진다.
+    - 종목별 실패는 catch — 스텝/파이프라인을 절대 중단시키지 않는다.
+
+    Returns: {"target": N, "generated": M, "skipped": K, "rule_based": R}
+    """
+    log.info("[Holdings Briefing] 보유 종목 브리핑 생성 시작...")
+    result = {"target": 0, "generated": 0, "skipped": 0, "rule_based": 0}
+    try:
+        from src.portfolio_review import load_portfolio
+        from src.holdings_briefing import (
+            generate_holding_briefing, select_meaningful_holdings,
+        )
+        from src.config import load_config, make_budget
+    except Exception as e:
+        log.warning("[Holdings Briefing] 모듈 import 실패 — skip: %s", e)
+        return result
+
+    try:
+        pf = load_portfolio()
+    except Exception as e:
+        log.warning("[Holdings Briefing] portfolio.json 로드 실패 — skip: %s", e)
+        return result
+    if not pf.get("available"):
+        log.info("[Holdings Briefing] 보유 종목 데이터 없음 — skip")
+        return result
+
+    meaningful = select_meaningful_holdings(pf.get("holdings") or [], 1.0)
+    result["target"] = len(meaningful)
+    if not meaningful:
+        log.info("[Holdings Briefing] 의미 비중 종목 없음 — skip")
+        return result
+
+    # 최신 market_regime 행
+    try:
+        regime = db.fetch_latest_market_regime(conn)
+    except Exception as e:
+        log.warning("[Holdings Briefing] market_regime 조회 실패: %s", e)
+        regime = None
+
+    # 기존 브리핑 (idempotent skip 용)
+    try:
+        existing = {
+            r["ticker"] for r in db.fetch_holdings_briefings(conn, date_iso)
+        }
+    except Exception:
+        existing = set()
+
+    # cfg/budget 은 한 번만 생성해 공유 (LLM 예산 공유)
+    cfg = load_config()
+    budget = make_budget(cfg)
+
+    for h in meaningful:
+        ticker = (h.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        if ticker in existing:
+            result["skipped"] += 1
+            continue
+        try:
+            brief = generate_holding_briefing(
+                h, regime, budget=budget, cfg=cfg, conn=conn,
+            )
+            db.upsert_holding_briefing(conn, date_iso, ticker, {
+                "name": h.get("name") or ticker,
+                "exposure_theme": brief.get("exposure_theme"),
+                "summary_ko": brief.get("summary_ko"),
+                "key_drivers_ko": brief.get("key_drivers_ko"),
+                "risks_ko": brief.get("risks_ko"),
+                "portfolio_note_ko": brief.get("portfolio_note_ko"),
+                "model_used": brief.get("model_used"),
+            })
+            result["generated"] += 1
+            if brief.get("model_used") == "rule-based":
+                result["rule_based"] += 1
+        except Exception as e:
+            log.warning("[Holdings Briefing] %s 브리핑 실패 — skip: %s", ticker, e)
+
+    log.info("[Holdings Briefing] done: %s", result)
+    return result
+
+
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
     """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
@@ -1266,6 +1353,21 @@ def run_research(
         except Exception as e:
             log.warning("Decision Journal 채점 실패: %s", e)
             summary["decision_grading"] = None
+
+        # 보유 종목 브리핑 — portfolio.json 의 의미 비중 종목에 대해
+        # 일일 한국어 리서치 브리핑 생성 후 holdings_briefing 테이블에 저장.
+        # market_regime 스텝 이후라 regime 행을 연계 분석에 쓸 수 있다.
+        try:
+            hb_res = step_holdings_briefing(conn, run_id, date_iso)
+            summary["holdings_briefing"] = {
+                "target": hb_res.get("target"),
+                "generated": hb_res.get("generated"),
+                "skipped": hb_res.get("skipped"),
+                "rule_based": hb_res.get("rule_based"),
+            }
+        except Exception as e:
+            log.warning("보유 종목 브리핑 생성 실패: %s", e)
+            summary["holdings_briefing"] = None
 
         step_generate_daily_brief(
             conn, run_id, date_iso, all_deep_dive, score_map, market_summary,

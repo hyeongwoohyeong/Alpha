@@ -613,6 +613,22 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (decision_id, milestone)
     )
     """,
+    # ── 보유 종목 브리핑 — 사용자 보유 종목 일일 LLM 리서치 브리핑 ────────
+    """
+    CREATE TABLE IF NOT EXISTS holdings_briefing (
+        date              TEXT NOT NULL,
+        ticker            TEXT NOT NULL,
+        name              TEXT,
+        exposure_theme    TEXT,
+        summary_ko        TEXT,
+        key_drivers_ko    TEXT,
+        risks_ko          TEXT,
+        portfolio_note_ko TEXT,
+        model_used        TEXT,
+        created_at        TEXT,
+        PRIMARY KEY (date, ticker)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
@@ -2651,3 +2667,85 @@ def fetch_parking_candidates(
         "ORDER BY parking_score DESC LIMIT ?",
         (date_iso, limit),
     ))
+
+
+# ---------------------------------------------------------------------------
+# 보유 종목 브리핑 — holdings_briefing
+# ---------------------------------------------------------------------------
+
+_HOLDINGS_BRIEFING_COLS: tuple[str, ...] = (
+    "date", "ticker", "name", "exposure_theme", "summary_ko",
+    "key_drivers_ko", "risks_ko", "portfolio_note_ko", "model_used",
+    "created_at",
+)
+
+
+def upsert_holding_briefing(
+    conn: sqlite3.Connection, date_iso: str, ticker: str, fields: dict[str, Any]
+) -> None:
+    """holdings_briefing 행 upsert ((date, ticker) PK).
+
+    key_drivers_ko 가 list 면 JSON 문자열로 직렬화해 저장한다.
+    """
+    placeholders = ", ".join("?" for _ in _HOLDINGS_BRIEFING_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _HOLDINGS_BRIEFING_COLS
+        if c not in ("date", "ticker")
+    )
+    sql = (
+        f"INSERT INTO holdings_briefing ({', '.join(_HOLDINGS_BRIEFING_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = []
+    for c in _HOLDINGS_BRIEFING_COLS:
+        if c == "date":
+            params.append(date_iso)
+        elif c == "ticker":
+            params.append(ticker)
+        elif c == "key_drivers_ko":
+            v = fields.get("key_drivers_ko")
+            params.append(dump_json(v) if isinstance(v, (list, tuple)) else v)
+        elif c == "created_at":
+            params.append(fields.get("created_at") or now_iso())
+        else:
+            params.append(fields.get(c))
+    conn.execute(sql, params)
+    conn.commit()
+
+
+def fetch_holdings_briefings(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> list[sqlite3.Row]:
+    """지정일(또는 최신 가용일)의 holdings_briefing 행 목록."""
+    if not date_iso:
+        try:
+            r = conn.execute(
+                "SELECT MAX(date) AS d FROM holdings_briefing"
+            ).fetchone()
+            date_iso = r["d"] if r and r["d"] else None
+        except Exception as e:
+            log.debug("holdings_briefing 최신일 조회 실패: %s", e)
+            return []
+    if not date_iso:
+        return []
+    try:
+        return list(conn.execute(
+            "SELECT * FROM holdings_briefing WHERE date=? ORDER BY ticker",
+            (date_iso,),
+        ))
+    except Exception as e:
+        log.debug("holdings_briefing 조회 실패: %s", e)
+        return []
+
+
+def fetch_briefing_dates(conn: sqlite3.Connection) -> list[str]:
+    """holdings_briefing 의 distinct date 목록 (내림차순)."""
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT date FROM holdings_briefing ORDER BY date DESC"
+        ).fetchall()
+        return [r["date"] if hasattr(r, "keys") else r[0] for r in rows]
+    except Exception as e:
+        log.debug("fetch_briefing_dates 실패: %s", e)
+        return []
