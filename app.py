@@ -1790,27 +1790,62 @@ def page_header(title: str, meta: str = "", show_refresh: bool = True):
             cols = [None, st.container()]
             with cols[1]:
                 if st.button("Update", use_container_width=True, type="primary"):
-                    import subprocess
-                    import sys as _sys
-                    with st.spinner("리서치 파이프라인 실행 중..."):
+                    # 파이프라인을 Streamlit Cloud 에서 직접 실행하지 않는다.
+                    # Cloud 의 리소스/시간 제한에 끊기면 SQLite DB 가 malformed 로
+                    # 손상되기 때문. 대신 GitHub Actions 의 Daily Research 워크플로를
+                    # 트리거한다 — 깨끗한 러너에서 끝까지 돌고 DB 를 안전하게 커밋한다.
+                    import os as _os
+                    _GH_REPO = "hyeongwoohyeong/Alpha"
+                    _GH_WF = "daily_research.yml"
+                    _actions_url = (
+                        f"https://github.com/{_GH_REPO}/actions/workflows/{_GH_WF}"
+                    )
+                    _token = None
+                    try:
+                        _token = st.secrets.get("GITHUB_TOKEN")  # type: ignore[attr-defined]
+                    except Exception:
+                        _token = None
+                    if not _token:
+                        _token = _os.environ.get("GITHUB_TOKEN")
+                    if _token:
                         try:
-                            result = subprocess.run(
-                                [_sys.executable, str(PROJECT_ROOT / "run_research.py")],
-                                capture_output=True, text=True, timeout=600,
+                            import requests as _rq
+                            _resp = _rq.post(
+                                f"https://api.github.com/repos/{_GH_REPO}"
+                                f"/actions/workflows/{_GH_WF}/dispatches",
+                                headers={
+                                    "Authorization": f"Bearer {_token}",
+                                    "Accept": "application/vnd.github+json",
+                                    "X-GitHub-Api-Version": "2022-11-28",
+                                },
+                                json={"ref": "main"},
+                                timeout=15,
                             )
-                            if result.returncode == 0:
-                                st.toast("DB 업데이트 완료. 화면을 갱신합니다.")
+                            if _resp.status_code in (201, 204):
+                                st.success(
+                                    "GitHub Actions 파이프라인을 트리거했습니다. "
+                                    "러너에서 안전하게 실행된 뒤(보통 3~10분) DB 가 "
+                                    "갱신되고 앱이 자동 재배포됩니다."
+                                )
                             else:
                                 st.error(
-                                    f"파이프라인 실행 실패 (exit {result.returncode}). "
-                                    f"마지막 출력:\n{result.stderr[-500:]}"
+                                    f"워크플로 트리거 실패 (HTTP {_resp.status_code}). "
+                                    "아래 링크에서 직접 실행해 주세요."
                                 )
-                        except subprocess.TimeoutExpired:
-                            st.error("파이프라인 실행 타임아웃 (10분 초과).")
+                                st.markdown(f"[GitHub Actions 열기]({_actions_url})")
                         except Exception as e:
-                            st.error(f"파이프라인 실행 오류: {e}")
-                        trigger_refresh()
-                    st.rerun()
+                            st.error(f"워크플로 트리거 오류: {e}")
+                            st.markdown(f"[GitHub Actions 열기]({_actions_url})")
+                    else:
+                        st.info(
+                            "데이터는 매일 07:30(KST) GitHub Actions 가 자동 갱신합니다. "
+                            "즉시 갱신하려면 아래에서 'Daily Research' 워크플로를 직접 "
+                            "실행하세요. (원클릭 트리거를 쓰려면 Streamlit Secrets 에 "
+                            "GITHUB_TOKEN 을 등록하세요.)"
+                        )
+                        st.markdown(
+                            f"[GitHub Actions 열기 — Daily Research]({_actions_url})"
+                        )
     st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="border-bottom:1px solid var(--line); margin-bottom:22px;"></div>',
