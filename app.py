@@ -3040,21 +3040,86 @@ _ACTION_PRIORITY = {
 }
 
 
-def render_daily_action_plan(regime: Any, crash: Any):
-    """Portfolio review 최상단 — 아침·저녁 확인용 데일리 액션 플랜.
+# ---------------------------------------------------------------------------
+# 평이한 한국어 표현 레이어 — 표시 전용 (계산은 절대 바꾸지 않음)
+# ---------------------------------------------------------------------------
 
-    전날 대비 시장 변동 + 오늘 신경 쓸 것(우선순위)을 한 박스에 요약한다.
-    사용자는 이 박스만 보고도 '오늘 뭘 해야 하는지' 를 알 수 있어야 한다.
+def _plain_overheat(score: Any) -> str:
+    """Market Overheat Score(0~100, None 가능)를 평이한 한 마디로.
+
+    호출자가 숫자를 붙이고 싶으면 따로 붙인다 — 여기선 표현만 반환.
     """
+    if score is None:
+        return "확인 필요"
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return "확인 필요"
+    if s < 35:
+        return "안정 — 시장이 차분한 편"
+    if s < 50:
+        return "중립"
+    if s < 65:
+        return "주의 — 다소 비싼 편"
+    if s < 80:
+        return "과열 — 평소보다 비쌈"
+    return "극단 과열 — 매우 비쌈"
+
+
+# market_regime.py 의 6개 current_regime 값 → 짧은 평이한 한국어
+_PLAIN_REGIME: dict[str, str] = {
+    "Risk-On": "위험선호 — 시장 분위기가 양호",
+    "Expensive but Stable": "고평가지만 안정 — 비싸도 흔들림은 적음",
+    "Overheated": "과열 — 단기 쏠림이 강함",
+    "Correction Watch": "조정 경계 — 약세 조짐을 살필 때",
+    "Dislocation": "디스로케이션 — 큰 낙폭, 분할 매수 구간",
+    "Crisis": "위기 — 방어가 최우선",
+}
+
+
+def _plain_regime(regime_str: Any) -> str:
+    """current_regime 문자열을 짧은 평이한 한국어 글로스로.
+
+    알 수 없거나 None 이면 원문 또는 '확인 필요' 반환.
+    """
+    if not regime_str:
+        return "확인 필요"
+    return _PLAIN_REGIME.get(str(regime_str), str(regime_str))
+
+
+_DECISION_DUP_KEYWORDS = ("낙폭", "과열", "Overheat", "익절")
+
+
+def render_today_decision(regime: Any, crash: Any):
+    """오늘의 판단 — '오늘 뭘 해야 하는지' 단일 통합 블록.
+
+    기존의 세 surface(금일 핵심 판단 / 데일리 액션 플랜 / 백테스트 대응)를
+    하나로 합친다. 헤드라인 → 시장 한 줄 → 오늘 할 일 → 전날 대비 변동 →
+    백테스트 근거(expander) 순. 데이터가 없어도 조용히 안내만 — raise 금지.
+    """
+    # ── 국면 데이터 자체가 없으면 차분한 한 줄만 ──────────────────────
+    if regime is None:
+        st.markdown(
+            '<div class="env-block" style="min-height:auto; '
+            'border-left:3px solid var(--blue);">'
+            '<div class="env-block-title">오늘의 판단</div>'
+            '<div class="env-block-body" style="margin-top:6px;">'
+            '시장 국면 데이터가 아직 없습니다 — 파이프라인 실행 후 '
+            '표시됩니다.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    # ── 데이터 수집 (전부 graceful) ──────────────────────────────────
     try:
         from src.portfolio_review import (
             load_portfolio, diagnose_portfolio, generate_daily_action_plan,
         )
     except Exception as e:
-        log.debug(f"액션플랜 import 실패: {e}")
+        log.debug(f"오늘의 판단 import 실패: {e}")
         return
 
-    # 전날 행 조회 (regime/crash 는 매일 갱신 — 2개 이상이면 비교 가능)
     prev_regime = None
     prev_crash = None
     try:
@@ -3066,9 +3131,8 @@ def render_daily_action_plan(regime: Any, crash: Any):
         if crashes and len(crashes) >= 2:
             prev_crash = crashes[1]
     except Exception as e:
-        log.debug(f"전일 regime 조회 실패: {e}")
+        log.debug(f"오늘의 판단 전일 regime 조회 실패: {e}")
 
-    # 포트폴리오 진단
     diag: dict = {}
     holdings: list = []
     try:
@@ -3077,37 +3141,139 @@ def render_daily_action_plan(regime: Any, crash: Any):
             holdings = pf.get("holdings") or []
             diag = diagnose_portfolio(holdings)
     except Exception as e:
-        log.debug(f"액션플랜 포트폴리오 로드 실패: {e}")
+        log.debug(f"오늘의 판단 포트폴리오 로드 실패: {e}")
 
+    plan: dict = {}
     try:
         plan = generate_daily_action_plan(
-            diag, holdings, regime, crash, prev_regime, prev_crash)
+            diag, holdings, regime, crash, prev_regime, prev_crash) or {}
     except Exception as e:
-        log.debug(f"액션플랜 생성 실패: {e}")
-        return
+        log.debug(f"오늘의 판단 액션플랜 생성 실패: {e}")
+        plan = {}
 
-    # 오늘 신경 쓸 것 — 우선순위별 행
-    action_rows = ""
-    for a in plan.get("actions", []):
-        color, plabel = _ACTION_PRIORITY.get(
-            a.get("priority"), _ACTION_PRIORITY["low"])
-        action_rows += (
-            '<div style="display:flex; gap:11px; padding:11px 0; '
-            'border-top:1px solid var(--line);">'
-            f'<div style="flex:0 0 5px; border-radius:3px; '
-            f'background:{color};"></div>'
-            '<div style="flex:1 1 auto;">'
-            '<div style="font-size:14px; font-weight:700; color:var(--text); '
-            'line-height:1.5;">'
-            f'<span style="color:{color}; font-size:11px; font-weight:700; '
-            f'letter-spacing:.04em; margin-right:8px;">{plabel}</span>'
-            f'{a.get("title", "")}</div>'
-            '<div style="font-size:13px; color:var(--muted); margin-top:3px; '
-            f'line-height:1.6;">{a.get("detail", "")}</div>'
-            '</div></div>'
+    sol = None
+    try:
+        with db.db_session() as conn:
+            sol = db.fetch_latest_backtest_solution(conn)
+    except Exception as e:
+        log.debug(f"오늘의 판단 백테스트 대응 조회 실패: {e}")
+        sol = None
+
+    sol_items: list = []
+    sol_headline = ""
+    sol_caveat = ""
+    sol_data_mode = "rule_fallback"
+    if sol is not None:
+        sol_headline = _regime_row_get(sol, "headline") or ""
+        sol_caveat = _regime_row_get(sol, "caveat") or ""
+        sol_data_mode = _regime_row_get(sol, "data_mode") or "rule_fallback"
+        items_raw = _regime_row_get(sol, "items_json")
+        if items_raw:
+            try:
+                import json as _json
+                parsed = _json.loads(items_raw)
+                if isinstance(parsed, list):
+                    sol_items = [it for it in parsed if isinstance(it, dict)]
+            except Exception as e:
+                log.debug(f"오늘의 판단 items 파싱 실패: {e}")
+                sol_items = []
+
+    # ── 1) 헤드라인 ─────────────────────────────────────────────────
+    headline = sol_headline.strip() if sol_headline else ""
+    if not headline:
+        headline = (plan.get("headline") or "—")
+
+    # ── 2) 시장 한 줄 ───────────────────────────────────────────────
+    overheat = _regime_row_get(regime, "market_overheat_score")
+    market_line = f"지금 시장은 {_plain_overheat(overheat)}"
+    dd_val = _regime_row_get(crash, "qqq_drawdown_from_high")
+    dd_pct = None
+    if dd_val is not None:
+        try:
+            dd_pct = float(dd_val)
+            if abs(dd_pct) <= 1:
+                dd_pct *= 100
+        except (TypeError, ValueError):
+            dd_pct = None
+    if dd_pct is not None:
+        market_line += f" · 나스닥은 고점 대비 {dd_pct:+.1f}%."
+    else:
+        market_line += "."
+    cur_regime = _regime_row_get(regime, "current_regime")
+    market_line += f" 국면: {_plain_regime(cur_regime)}."
+
+    # ── 3) 오늘 할 일 — 통합·우선순위 목록 ──────────────────────────
+    merged: list = []
+    # 3-a) 백테스트 처방 항목 (시장 지시 — 낙폭/과열/익절 대응)
+    for it in sol_items:
+        title = (it.get("title") or "").strip()
+        action = (it.get("action") or "").strip()
+        if action and title and title not in action:
+            text = f"{title} — {action}"
+        elif action:
+            text = action
+        else:
+            text = title
+        if not text:
+            continue
+        merged.append({
+            "priority": it.get("priority"),
+            "text": text,
+            "basis": (it.get("basis") or "").strip(),
+        })
+    # 3-b) plan actions 중 백테스트가 이미 다룬 토픽이 아닌 것만
+    for a in (plan.get("actions") or []):
+        title = (a.get("title") or "").strip()
+        if not title:
+            continue
+        if any(kw in title for kw in _DECISION_DUP_KEYWORDS):
+            continue
+        detail = (a.get("detail") or "").strip()
+        text = f"{title} — {detail}" if detail else title
+        merged.append({
+            "priority": a.get("priority"),
+            "text": text,
+            "basis": "",
+        })
+
+    # 우선순위 정렬 (high→medium→low) 후 6행 cap
+    _prio_order = {"high": 0, "medium": 1, "low": 2}
+    merged.sort(key=lambda m: _prio_order.get(m.get("priority"), 2))
+    merged = merged[:6]
+
+    if merged:
+        action_rows = ""
+        for m in merged:
+            color, plabel = _ACTION_PRIORITY.get(
+                m.get("priority"), _ACTION_PRIORITY["low"])
+            action_rows += (
+                '<div style="display:flex; gap:11px; padding:11px 0; '
+                'border-top:1px solid var(--line);">'
+                f'<div style="flex:0 0 5px; border-radius:3px; '
+                f'background:{color};"></div>'
+                '<div style="flex:1 1 auto;">'
+                '<div style="font-size:14px; font-weight:700; '
+                'color:var(--text); line-height:1.5;">'
+                f'<span style="color:{color}; font-size:11px; '
+                f'font-weight:700; letter-spacing:.04em; '
+                f'margin-right:8px;">{plabel}</span>'
+                f'{m["text"]}</div>'
+                '</div></div>'
+            )
+        action_block = (
+            '<div style="font-size:12px; color:var(--muted); '
+            'margin:16px 0 0; letter-spacing:.03em;">오늘 할 일</div>'
+            f'<div style="margin-top:2px;">{action_rows}</div>'
+        )
+    else:
+        action_block = (
+            '<div style="font-size:13px; color:var(--muted); '
+            'margin:16px 0 0; line-height:1.6;">오늘은 즉시 대응할 시장 '
+            '신호가 없습니다 — 현 구조 유지.</div>'
         )
 
-    # 전날 대비 변동 — chip
+    # ── 4) 전날 대비 변동 — 있을 때만 ───────────────────────────────
+    delta_block = ""
     if plan.get("has_prev") and plan.get("deltas"):
         chip_html = ""
         for d in plan["deltas"]:
@@ -3142,124 +3308,62 @@ def render_daily_action_plan(regime: Any, crash: Any):
             '<div style="display:flex; flex-wrap:wrap; gap:8px;">'
             + chip_html + '</div>'
         )
-    else:
-        delta_block = (
-            '<div style="font-size:12px; color:var(--muted); '
-            'margin:16px 0 0; line-height:1.6;">전날 대비 변동 — 비교할 전일 '
-            '데이터가 아직 없습니다 (파이프라인이 2회 이상 실행되면 '
-            '표시됩니다).</div>'
-        )
 
+    # ── 블록 렌더 (parts 1~4 는 하나의 env-block) ───────────────────
     st.markdown(
         '<div class="env-block" style="min-height:auto; '
         'border-left:3px solid var(--blue);">'
-        '<div class="env-block-title">오늘의 액션 플랜 · 아침·저녁 체크</div>'
-        '<div style="font-size:15px; font-weight:700; color:var(--text); '
-        f'margin:4px 0 2px; line-height:1.5;">오늘의 핵심 — '
-        f'{plan.get("headline", "—")}</div>'
-        f'<div style="margin-top:10px;">{action_rows}</div>'
+        '<div class="env-block-title">오늘의 판단</div>'
+        '<div style="font-size:16px; font-weight:700; color:var(--text); '
+        f'margin:4px 0 2px; line-height:1.5;">{headline}</div>'
+        '<div class="env-block-body" style="margin-top:8px;">'
+        f'{market_line}</div>'
+        f'{action_block}'
         f'{delta_block}'
         '</div>',
         unsafe_allow_html=True,
     )
 
-
-def render_backtest_solution():
-    """백테스트 기반 오늘의 대응 — 백테스트 결과를 소화한 퀀트 처방 박스.
-
-    Validation Lab 의 원시 백테스트 결과 대신, 엔진이 직접 디지털해
-    '오늘 무엇을 할지' 의 구체적 지시를 데일리 액션 플랜과 같은 화면에 노출.
-    데이터가 없거나 오류여도 조용히 안내 카드만 표시 — 절대 raise 하지 않는다.
-    """
-    try:
-        with db.db_session() as conn:
-            sol = db.fetch_latest_backtest_solution(conn)
-    except Exception as e:
-        log.debug(f"백테스트 대응 조회 실패: {e}")
-        sol = None
-
-    if sol is None:
-        st.markdown(
-            '<div class="card">'
-            '<div class="pick-type">백테스트 기반 대응이 아직 없습니다 — '
-            '파이프라인이 시장 일봉을 누적하면 표시됩니다.</div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        return
-
-    headline = _regime_row_get(sol, "headline") or "—"
-    data_mode = _regime_row_get(sol, "data_mode") or "rule_fallback"
-    caveat = _regime_row_get(sol, "caveat") or ""
-    items_raw = _regime_row_get(sol, "items_json")
-
-    items: list = []
-    if items_raw:
-        try:
-            import json as _json
-            parsed = _json.loads(items_raw)
-            if isinstance(parsed, list):
-                items = parsed
-        except Exception as e:
-            log.debug(f"backtest_solution items 파싱 실패: {e}")
-            items = []
-
-    # 우선순위별 행
-    item_rows = ""
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        color, plabel = _ACTION_PRIORITY.get(
-            it.get("priority"), _ACTION_PRIORITY["low"])
-        item_rows += (
-            '<div style="display:flex; gap:11px; padding:11px 0; '
-            'border-top:1px solid var(--line);">'
-            f'<div style="flex:0 0 5px; border-radius:3px; '
-            f'background:{color};"></div>'
-            '<div style="flex:1 1 auto;">'
-            '<div style="font-size:14px; font-weight:700; color:var(--text); '
-            'line-height:1.5;">'
-            f'<span style="color:{color}; font-size:11px; font-weight:700; '
-            f'letter-spacing:.04em; margin-right:8px;">{plabel}</span>'
-            f'{it.get("title", "")} — {it.get("action", "")}</div>'
-            '<div style="font-size:13px; color:var(--muted); margin-top:3px; '
-            f'line-height:1.6;">{it.get("basis", "")}</div>'
-            '</div></div>'
-        )
-    if not item_rows:
-        item_rows = (
-            '<div style="font-size:13px; color:var(--muted); '
-            'margin-top:10px; line-height:1.6;">오늘 백테스트 기반 특이 '
-            '대응 항목이 없습니다.</div>'
-        )
-
-    fallback_note = ""
-    if data_mode == "rule_fallback":
-        fallback_note = (
-            '<div style="font-size:11px; color:var(--muted); '
-            'margin-top:10px; line-height:1.6;">백테스트 데이터 누적 중 — '
-            '일부 항목은 룰 기준 잠정 권고입니다.</div>'
-        )
-
-    caveat_block = ""
-    if caveat:
-        caveat_block = (
-            '<div style="font-size:11px; color:var(--muted); '
-            'margin-top:10px; line-height:1.6;">' + caveat + '</div>'
-        )
-
-    st.markdown(
-        '<div class="env-block" style="min-height:auto; '
-        'border-left:3px solid var(--blue);">'
-        '<div class="env-block-title">백테스트 기반 오늘의 대응</div>'
-        '<div style="font-size:15px; font-weight:700; color:var(--text); '
-        f'margin:4px 0 2px; line-height:1.5;">{headline}</div>'
-        f'<div style="margin-top:10px;">{item_rows}</div>'
-        f'{fallback_note}'
-        f'{caveat_block}'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    # ── 5) 백테스트 근거 expander (별도 Streamlit 호출) ─────────────
+    with st.expander("이 판단의 백테스트 근거 보기"):
+        basis_items = [it for it in sol_items
+                       if (it.get("basis") or "").strip()]
+        if sol is None or not sol_items:
+            st.markdown(
+                '<div style="font-size:13px; color:var(--muted); '
+                'line-height:1.6;">백테스트 근거가 아직 없습니다 — '
+                '파이프라인이 시장 일봉을 누적하면 표시됩니다.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            rows_html = ""
+            for it in basis_items:
+                title = (it.get("title") or "").strip() or "—"
+                basis = (it.get("basis") or "").strip()
+                rows_html += (
+                    '<div style="font-size:13px; color:var(--text-mid); '
+                    'line-height:1.6; margin-bottom:6px;">'
+                    f'<b>{title}</b>: {basis}</div>'
+                )
+            if not rows_html:
+                rows_html = (
+                    '<div style="font-size:13px; color:var(--muted); '
+                    'line-height:1.6;">개별 항목 근거가 아직 없습니다.</div>'
+                )
+            extra = ""
+            if sol_caveat:
+                extra += (
+                    '<div style="font-size:11px; color:var(--muted); '
+                    'margin-top:10px; line-height:1.6;">'
+                    f'{sol_caveat}</div>'
+                )
+            if sol_data_mode == "rule_fallback":
+                extra += (
+                    '<div style="font-size:11px; color:var(--muted); '
+                    'margin-top:8px; line-height:1.6;">백테스트 데이터 '
+                    '누적 중 — 일부 항목은 룰 기준 잠정 권고입니다.</div>'
+                )
+            st.markdown(rows_html + extra, unsafe_allow_html=True)
 
 
 def render_portfolio_regime():
@@ -3294,11 +3398,8 @@ def render_portfolio_regime():
 
     regime_date = _regime_row_get(regime, "date")
 
-    # ── 0) 오늘의 액션 플랜 — 최상단 (아침·저녁 체크) ────────────────
-    render_daily_action_plan(regime, crash)
-
-    # ── 0-b) 백테스트 기반 오늘의 대응 — 퀀트 처방 ────────────────────
-    render_backtest_solution()
+    # ── 0) 오늘의 판단 — 최상단 통합 블록 (헤드라인+시장+할일+근거) ──
+    render_today_decision(regime, crash)
 
     # ── 1) 상단 요약 ────────────────────────────────────────────────
     cur_regime = _regime_row_get(regime, "current_regime")
@@ -4126,12 +4227,9 @@ def render_brief_regime_section():
     if regime is None:
         return
 
-    # Phase 4-C — 오늘의 액션 플랜을 브리프 최상단 영역에 노출.
-    # Portfolio review 페이지와 동일한 박스를 재사용해 두 화면을 일관되게 유지.
-    render_daily_action_plan(regime, crash)
-
-    # 백테스트 기반 오늘의 대응 — 퀀트 처방을 브리프에도 동일하게 노출.
-    render_backtest_solution()
+    # '오늘의 판단' 통합 블록을 브리프 최상단 영역에 노출.
+    # Portfolio review 페이지와 동일한 블록을 재사용해 두 화면을 일관되게 유지.
+    render_today_decision(regime, crash)
 
     cur_regime = _regime_row_get(regime, "current_regime")
     overheat = _regime_row_get(regime, "market_overheat_score")
@@ -4196,17 +4294,16 @@ def render_today_brief():
 
     brief = build_daily_brief(rows, proxies, market_summary)
 
-    # 금일 핵심 판단
+    # ════ Zone 1 — 오늘의 판단 ═══════════════════════════════════════
+    # '오늘의 판단' 통합 블록(헤드라인이 기존 금일 핵심 판단을 대체) +
+    # 가벼운 시장 국면 요약. 브리프 최상단의 단일 결론 영역.
+    render_brief_regime_section()
+
+    # ════ Zone 2 — 오늘의 시장 이슈 ══════════════════════════════════
     st.markdown(
-        '<div class="judgment-card">'
-        '<div class="judgment-eyebrow">금일 핵심 판단</div>'
-        f'<div class="judgment-body">{brief["judgment"]}</div>'
-        "</div>",
+        '<div class="section-title">오늘의 시장 이슈</div>',
         unsafe_allow_html=True,
     )
-
-    # 오늘의 Portfolio review — Portfolio Regime 요약 (DB rule-based)
-    render_brief_regime_section()
 
     # 금일 시장 환경 — 3블록 카드 (첫 블록은 자산 테이블)
     st.markdown('<div class="section-title">금일 시장 환경</div>', unsafe_allow_html=True)
@@ -4275,6 +4372,12 @@ def render_today_brief():
                 "</div>",
                 unsafe_allow_html=True,
             )
+
+    # ════ Zone 3 — 투자 아이디어 ═════════════════════════════════════
+    st.markdown(
+        '<div class="section-title">투자 아이디어</div>',
+        unsafe_allow_html=True,
+    )
 
     # 금일 추천 종목 — 통합 단일 섹션 (사용자 요구 2026-05-03)
     # 큐레이션 / LLM Researched / Heuristic 구분 없이 Alpha Score 상위만 표시.
