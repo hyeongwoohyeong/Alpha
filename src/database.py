@@ -432,6 +432,40 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         generated_at      TEXT
     )
     """,
+    # ── Portfolio Regime — 일일 시장 국면 / Overheat Score ──────────────
+    """
+    CREATE TABLE IF NOT EXISTS market_regime (
+        date                       TEXT PRIMARY KEY,
+        market_overheat_score      REAL,
+        current_regime             TEXT,
+        valuation_stretch_score    REAL,
+        sentiment_speculation_score REAL,
+        market_concentration_score REAL,
+        liquidity_credit_score     REAL,
+        earnings_revision_risk_score REAL,
+        technical_extension_score  REAL,
+        cycle_psychology_score     REAL,
+        buffett_opportunity_score  REAL,
+        portfolio_mode             TEXT,
+        recommended_beta_level     TEXT,
+        commentary_ko              TEXT,
+        created_at                 TEXT
+    )
+    """,
+    # ── Portfolio Regime — Nasdaq 하락 단계별 투입 계획 ─────────────────
+    """
+    CREATE TABLE IF NOT EXISTS crash_deployment_plan (
+        date                    TEXT PRIMARY KEY,
+        qqq_drawdown_from_high   REAL,
+        deployment_zone          TEXT,
+        recommended_instrument   TEXT,
+        suggested_action         TEXT,
+        credit_stress_status     TEXT,
+        liquidity_status         TEXT,
+        commentary_ko            TEXT,
+        created_at               TEXT
+    )
+    """,
 )
 
 
@@ -1733,6 +1767,91 @@ def auto_curation_is_fresh(
         return age <= max_age_days
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Portfolio Regime — market_regime / crash_deployment_plan
+# ---------------------------------------------------------------------------
+
+_MARKET_REGIME_COLS: tuple[str, ...] = (
+    "market_overheat_score", "current_regime",
+    "valuation_stretch_score", "sentiment_speculation_score",
+    "market_concentration_score", "liquidity_credit_score",
+    "earnings_revision_risk_score", "technical_extension_score",
+    "cycle_psychology_score", "buffett_opportunity_score",
+    "portfolio_mode", "recommended_beta_level", "commentary_ko",
+)
+
+
+def upsert_market_regime(
+    conn: sqlite3.Connection, date_iso: str, fields: dict[str, Any]
+) -> None:
+    """market_regime 일일 행 upsert (date PK). 없는 키는 NULL 로 저장."""
+    cols = ["date"] + list(_MARKET_REGIME_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "date")
+    sql = (
+        f"INSERT INTO market_regime ({', '.join(cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT(date) DO UPDATE SET {update_set}"
+    )
+    params = [date_iso]
+    for c in _MARKET_REGIME_COLS:
+        params.append(fields.get(c))
+    params.append(now_iso())
+    conn.execute(sql, params)
+    conn.commit()
+
+
+def fetch_latest_market_regime(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """가장 최신 (또는 지정일) market_regime 행."""
+    if date_iso:
+        cur = conn.execute("SELECT * FROM market_regime WHERE date=?", (date_iso,))
+        return cur.fetchone()
+    cur = conn.execute("SELECT * FROM market_regime ORDER BY date DESC LIMIT 1")
+    return cur.fetchone()
+
+
+_CRASH_PLAN_COLS: tuple[str, ...] = (
+    "qqq_drawdown_from_high", "deployment_zone", "recommended_instrument",
+    "suggested_action", "credit_stress_status", "liquidity_status",
+    "commentary_ko",
+)
+
+
+def upsert_crash_deployment_plan(
+    conn: sqlite3.Connection, date_iso: str, fields: dict[str, Any]
+) -> None:
+    """crash_deployment_plan 일일 행 upsert (date PK)."""
+    cols = ["date"] + list(_CRASH_PLAN_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "date")
+    sql = (
+        f"INSERT INTO crash_deployment_plan ({', '.join(cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT(date) DO UPDATE SET {update_set}"
+    )
+    params = [date_iso]
+    for c in _CRASH_PLAN_COLS:
+        params.append(fields.get(c))
+    params.append(now_iso())
+    conn.execute(sql, params)
+    conn.commit()
+
+
+def fetch_latest_crash_deployment_plan(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """가장 최신 (또는 지정일) crash_deployment_plan 행."""
+    if date_iso:
+        cur = conn.execute(
+            "SELECT * FROM crash_deployment_plan WHERE date=?", (date_iso,)
+        )
+        return cur.fetchone()
+    cur = conn.execute(
+        "SELECT * FROM crash_deployment_plan ORDER BY date DESC LIMIT 1"
+    )
+    return cur.fetchone()
 
 
 # ---------------------------------------------------------------------------

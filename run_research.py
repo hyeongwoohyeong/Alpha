@@ -665,6 +665,81 @@ def step_generate_daily_brief(
     return brief
 
 
+def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
+    """Portfolio Regime — 매크로/시장 데이터 → Overheat Score → regime →
+    portfolio mode → crash deployment plan → DB 저장.
+
+    외부 데이터(FRED/yfinance) 실패해도 파이프라인 전체가 죽지 않게 try/except.
+    부분 실패 시 sub-score 는 '확인 필요'(None) 로 저장된다.
+    """
+    log.info("[Regime] portfolio regime 평가 시작...")
+    try:
+        from src.macro_data import collect_regime_inputs
+        from src.market_regime import build_market_regime
+        from src.beta_allocation import classify_portfolio_mode
+        from src.crash_deployment import generate_deployment_plan
+
+        data = collect_regime_inputs()
+        regime = build_market_regime(data)
+
+        mode = classify_portfolio_mode(
+            regime.get("current_regime"),
+            regime.get("market_overheat_score"),
+        )
+
+        # crash deployment — QQQ 가격이력 사용
+        qqq_hist = ((data.get("etf") or {}).get("QQQ") or {}).get("history")
+        from src.crash_deployment import calculate_nasdaq_drawdown_from_high
+        dd = calculate_nasdaq_drawdown_from_high(qqq_hist)
+        if dd is None:
+            dd = regime.get("qqq_drawdown_from_high")
+        plan = generate_deployment_plan(dd, regime.get("credit_stress_status"))
+
+        # DB 저장 — market_regime
+        db.upsert_market_regime(conn, date_iso, {
+            "market_overheat_score": regime.get("market_overheat_score"),
+            "current_regime": regime.get("current_regime"),
+            "valuation_stretch_score": regime.get("valuation_stretch_score"),
+            "sentiment_speculation_score": regime.get("sentiment_speculation_score"),
+            "market_concentration_score": regime.get("market_concentration_score"),
+            "liquidity_credit_score": regime.get("liquidity_credit_score"),
+            "earnings_revision_risk_score": regime.get("earnings_revision_risk_score"),
+            "technical_extension_score": regime.get("technical_extension_score"),
+            # cycle_psychology / buffett_opportunity 는 Phase 3 — 지금은 NULL
+            "cycle_psychology_score": None,
+            "buffett_opportunity_score": None,
+            "portfolio_mode": mode.get("portfolio_mode"),
+            "recommended_beta_level": mode.get("recommended_beta_level"),
+            "commentary_ko": regime.get("commentary_ko"),
+        })
+
+        # DB 저장 — crash_deployment_plan
+        db.upsert_crash_deployment_plan(conn, date_iso, {
+            "qqq_drawdown_from_high": plan.get("qqq_drawdown_from_high"),
+            "deployment_zone": plan.get("deployment_zone"),
+            "recommended_instrument": plan.get("recommended_instrument"),
+            "suggested_action": plan.get("suggested_action"),
+            "credit_stress_status": plan.get("credit_stress_status"),
+            "liquidity_status": plan.get("liquidity_status"),
+            "commentary_ko": plan.get("commentary_ko"),
+        })
+
+        log.info(
+            "[Regime] regime=%s overheat=%s mode=%s zone=%s",
+            regime.get("current_regime"), regime.get("market_overheat_score"),
+            mode.get("portfolio_mode"), plan.get("deployment_zone"),
+        )
+        return {
+            "ok": True,
+            "regime": regime.get("current_regime"),
+            "overheat": regime.get("market_overheat_score"),
+            "portfolio_mode": mode.get("portfolio_mode"),
+        }
+    except Exception as e:
+        log.warning("[Regime] portfolio regime 평가 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
     """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
@@ -820,6 +895,16 @@ def run_research(
         except Exception as e:
             log.warning("시장 환경 자동 생성 실패: %s", e)
             summary["market_env_generated"] = 0
+
+        # Portfolio Regime — Overheat Score / regime / portfolio mode /
+        # crash deployment plan 평가 후 DB 저장 (Daily Brief 생성 전).
+        try:
+            regime_res = step_market_regime(conn, run_id, date_iso)
+            summary["market_regime"] = regime_res.get("regime")
+            summary["market_overheat"] = regime_res.get("overheat")
+        except Exception as e:
+            log.warning("portfolio regime 평가 실패: %s", e)
+            summary["market_regime"] = None
 
         step_generate_daily_brief(
             conn, run_id, date_iso, all_deep_dive, score_map, market_summary,

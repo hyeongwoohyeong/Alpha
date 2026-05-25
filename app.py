@@ -1606,6 +1606,7 @@ def render_tag(tag: str) -> str:
 
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
+    ("regime", "포트폴리오 국면"),
     ("discovery", "Discovery"),
     ("detail", "종목 상세"),
     ("dislocation", "우량주 과매도"),
@@ -2955,6 +2956,259 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
 
 
 # ---------------------------------------------------------------------------
+# 화면: 포트폴리오 국면 (Portfolio Regime)
+# ---------------------------------------------------------------------------
+
+# Overheat sub-score 6개 — (컬럼명, 한국어 라벨)
+_REGIME_SUBSCORES: list[tuple[str, str]] = [
+    ("valuation_stretch_score", "밸류에이션 과열"),
+    ("sentiment_speculation_score", "심리 · 투기"),
+    ("market_concentration_score", "시장 집중도"),
+    ("liquidity_credit_score", "유동성 · 크레딧"),
+    ("earnings_revision_risk_score", "이익 추정 리스크"),
+    ("technical_extension_score", "기술적 과열"),
+]
+
+
+def _regime_row_get(row: Any, key: str) -> Any:
+    """sqlite3.Row / dict 안전 접근 — 키 없거나 None 이면 None 반환."""
+    if row is None:
+        return None
+    try:
+        keys = row.keys()
+    except Exception:
+        keys = []
+    if key in keys:
+        return row[key]
+    return None
+
+
+def _fmt_regime_value(val: Any) -> str:
+    """None 이면 대시, 숫자면 정수 표기, 그 외 문자열."""
+    if val is None:
+        return "—"
+    if isinstance(val, (int, float)):
+        return f"{val:.0f}" if float(val).is_integer() else f"{val:.1f}"
+    return str(val)
+
+
+def render_portfolio_regime():
+    render_back_button("regime")
+    page_header(
+        "포트폴리오 국면",
+        meta="Portfolio Regime · Market Overheat Score · Beta Allocation · Crash Deployment",
+    )
+
+    try:
+        with db.db_session() as conn:
+            regime = db.fetch_latest_market_regime(conn)
+            crash = db.fetch_latest_crash_deployment_plan(conn)
+    except Exception as e:
+        regime, crash = None, None
+        st.markdown(
+            f'<div class="card">Portfolio Regime 데이터 조회 중 오류가 발생했습니다: {e}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if regime is None:
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-name" style="font-size:18px;">아직 Portfolio Regime 데이터가 없습니다</div>'
+            '<div class="pick-type">파이프라인(run_research) 실행이 필요합니다. '
+            '데이터 업데이트가 완료되면 시장 국면 · Overheat Score · 권장 포트폴리오 모드가 표시됩니다.</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    regime_date = _regime_row_get(regime, "date")
+
+    # ── 1) 상단 요약 ────────────────────────────────────────────────
+    cur_regime = _regime_row_get(regime, "current_regime")
+    overheat = _regime_row_get(regime, "market_overheat_score")
+    portfolio_mode = _regime_row_get(regime, "portfolio_mode")
+    beta_level = _regime_row_get(regime, "recommended_beta_level")
+
+    st.markdown(
+        '<div class="section-title first">시장 국면 요약'
+        + (f' · 기준일 {regime_date}' if regime_date else "")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+    summary_cells = [
+        ("CURRENT REGIME", cur_regime if cur_regime else "확인 필요"),
+        ("MARKET OVERHEAT SCORE", _fmt_regime_value(overheat) + " / 100"),
+        ("PORTFOLIO MODE", portfolio_mode if portfolio_mode else "확인 필요"),
+        ("RECOMMENDED BETA LEVEL", beta_level if beta_level else "확인 필요"),
+    ]
+    sum_cols = st.columns(len(summary_cells))
+    for i, (label, value) in enumerate(summary_cells):
+        with sum_cols[i]:
+            st.markdown(
+                '<div class="metric-card">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="font-size:24px;">{value}</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ── 2) Market Overheat Score 분해 — 6 sub-score ─────────────────
+    st.markdown('<div class="section-title">Market Overheat Score 분해</div>',
+                unsafe_allow_html=True)
+    sub_cols = st.columns(3)
+    for i, (col_key, label) in enumerate(_REGIME_SUBSCORES):
+        val = _regime_row_get(regime, col_key)
+        with sub_cols[i % 3]:
+            if val is None:
+                body = (
+                    f'<div class="metric-value" style="font-size:18px;">'
+                    f'<span class="tag tag-data-unavailable">확인 필요</span></div>'
+                )
+            else:
+                pct = max(0.0, min(100.0, float(val)))
+                body = (
+                    f'<div class="metric-value">{_fmt_regime_value(val)} / 100</div>'
+                    '<div style="margin-top:10px; background:var(--panel-soft); '
+                    'border:1px solid var(--line); border-radius:6px; height:10px; '
+                    'overflow:hidden;">'
+                    f'<div style="width:{pct:.0f}%; height:100%; background:var(--blue);">'
+                    '</div></div>'
+                )
+            st.markdown(
+                '<div class="metric-card" style="min-height:130px;">'
+                f'<div class="metric-label">{label}</div>'
+                f"{body}"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ── 3) 권장 포트폴리오 모드 + Beta Allocation ───────────────────
+    commentary = _regime_row_get(regime, "commentary_ko")
+    st.markdown('<div class="section-title">권장 포트폴리오 모드 · Beta Allocation</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        f'<div class="env-block-title">PORTFOLIO MODE</div>'
+        f'<div class="env-block-body" style="font-size:16px; font-weight:700; '
+        f'color:var(--text); margin-bottom:8px;">'
+        f'{portfolio_mode if portfolio_mode else "확인 필요"}'
+        f' · 권장 베타 {beta_level if beta_level else "확인 필요"}</div>'
+        f'<div class="env-block-body">'
+        f'{commentary if commentary else "코멘터리가 아직 생성되지 않았습니다."}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 4) Nasdaq Drawdown Deployment Plan ──────────────────────────
+    st.markdown('<div class="section-title">Nasdaq Drawdown Deployment Plan</div>',
+                unsafe_allow_html=True)
+    if crash is None:
+        st.markdown(
+            '<div class="card">Crash Deployment Plan 데이터가 아직 없습니다.</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        dd = _regime_row_get(crash, "qqq_drawdown_from_high")
+        zone = _regime_row_get(crash, "deployment_zone")
+        instrument = _regime_row_get(crash, "recommended_instrument")
+        action = _regime_row_get(crash, "suggested_action")
+        credit = _regime_row_get(crash, "credit_stress_status")
+        crash_comment = _regime_row_get(crash, "commentary_ko")
+
+        dd_str = "확인 필요"
+        if dd is not None:
+            try:
+                dd_str = f"{float(dd):+.1f}%"
+            except (TypeError, ValueError):
+                dd_str = str(dd)
+
+        kv_rows = [
+            ("QQQ 고점 대비 낙폭", dd_str),
+            ("Deployment Zone", zone if zone else "확인 필요"),
+            ("권장 수단", instrument if instrument else "확인 필요"),
+            ("권장 액션", action if action else "확인 필요"),
+            ("크레딧 스트레스", credit if credit else "확인 필요"),
+        ]
+        kv_html = "".join(
+            f'<div class="kv"><span class="kv-k">{k}</span>'
+            f'<span class="kv-v">{v}</span></div>'
+            for k, v in kv_rows
+        )
+        st.markdown(
+            '<div class="card">'
+            f"{kv_html}"
+            + (
+                f'<div class="env-block-body" style="margin-top:14px;">'
+                f"{crash_comment}</div>"
+                if crash_comment else ""
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+
+def render_brief_regime_section():
+    """Daily Brief 내 '오늘의 포트폴리오 국면' 섹션 — DB rule-based 요약.
+
+    데이터가 없으면 조용히 생략한다 (브리프 흐름을 깨지 않음).
+    """
+    try:
+        with db.db_session() as conn:
+            regime = db.fetch_latest_market_regime(conn)
+            crash = db.fetch_latest_crash_deployment_plan(conn)
+    except Exception:
+        return
+
+    if regime is None:
+        return
+
+    cur_regime = _regime_row_get(regime, "current_regime")
+    overheat = _regime_row_get(regime, "market_overheat_score")
+    portfolio_mode = _regime_row_get(regime, "portfolio_mode")
+    beta_level = _regime_row_get(regime, "recommended_beta_level")
+    commentary = _regime_row_get(regime, "commentary_ko")
+
+    st.markdown('<div class="section-title">오늘의 포트폴리오 국면</div>',
+                unsafe_allow_html=True)
+
+    head = (
+        f'시장 국면 <b>{cur_regime if cur_regime else "확인 필요"}</b> · '
+        f'Overheat Score <b>{_fmt_regime_value(overheat)} / 100</b> · '
+        f'권장 모드 <b>{portfolio_mode if portfolio_mode else "확인 필요"}</b> · '
+        f'권장 베타 <b>{beta_level if beta_level else "확인 필요"}</b>'
+    )
+
+    crash_line = ""
+    if crash is not None:
+        zone = _regime_row_get(crash, "deployment_zone")
+        dd = _regime_row_get(crash, "qqq_drawdown_from_high")
+        dd_str = ""
+        if dd is not None:
+            try:
+                dd_str = f"QQQ 고점 대비 {float(dd):+.1f}% · "
+            except (TypeError, ValueError):
+                dd_str = ""
+        if zone:
+            crash_line = (
+                '<div class="env-block-body" style="margin-top:8px;">'
+                f'Deployment: {dd_str}{zone}</div>'
+            )
+
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        f'<div class="env-block-body" style="font-size:15px; color:var(--text);">{head}</div>'
+        + (
+            f'<div class="env-block-body" style="margin-top:8px;">{commentary}</div>'
+            if commentary else ""
+        )
+        + crash_line
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
 # 화면: 오늘의 투자 브리프
 # ---------------------------------------------------------------------------
 
@@ -2980,6 +3234,9 @@ def render_today_brief():
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # 오늘의 포트폴리오 국면 — Portfolio Regime 요약 (DB rule-based)
+    render_brief_regime_section()
 
     # 금일 시장 환경 — 3블록 카드 (첫 블록은 자산 테이블)
     st.markdown('<div class="section-title">금일 시장 환경</div>', unsafe_allow_html=True)
@@ -5306,6 +5563,8 @@ if st.session_state.get("scroll_to_top", False):
 
 if nav == "brief":
     render_today_brief()
+elif nav == "regime":
+    render_portfolio_regime()
 elif nav == "discovery":
     render_discovery()
 elif nav == "detail":

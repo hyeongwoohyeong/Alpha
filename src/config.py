@@ -93,6 +93,19 @@ class AlphaConfig:
         return self.news_per_discovery_ticker
 
 
+# ---------------------------------------------------------------------------
+# FRED API 키 — Portfolio Regime 매크로 데이터용 (무료, 선택)
+# ---------------------------------------------------------------------------
+# 키가 없으면 None 을 반환하고, macro_data 모듈은 FRED 호출을 graceful 하게 skip.
+
+def get_fred_api_key() -> str | None:
+    """FRED API 키를 환경변수에서 읽는다. 없으면 None.
+
+    Streamlit secrets 사용 시에도 환경변수로 주입하면 그대로 동작.
+    """
+    return _env("FRED_API_KEY")
+
+
 def load_config() -> AlphaConfig:
     """환경변수에서 설정 로드. 매 호출 시 새로 읽는다 (테스트 친화적)."""
     mode = (_env("LLM_MODE", LLM_MODE_NONE) or LLM_MODE_NONE).strip().lower()
