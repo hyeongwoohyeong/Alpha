@@ -876,6 +876,32 @@ def step_capital_efficiency(
         return {"ok": False, "error": str(e)}
 
 
+def step_backtest(conn, run_id: str, date_iso: str) -> dict:
+    """Phase 4-A — 백테스트 갱신.
+
+    1) data_cache 로 시장 일봉 증분 append (최초엔 가능한 긴 history)
+    2) backtest_engine 으로 regime/overheat forward return, drawdown
+       deployment, parking, profit protection 백테스트 재계산
+    3) backtest_results / regime_forward_returns 테이블 저장
+
+    매월 1일에는 full=True 로 전체 재다운로드 (split/배당 재조정 반영).
+    외부 데이터(yfinance) 실패해도 파이프라인 전체가 죽지 않게 try/except.
+    """
+    log.info("[Backtest] Phase 4-A 백테스트 갱신 시작...")
+    try:
+        from src.backtest_engine import update_backtest_incrementally
+
+        # 매월 1일 = 전체 재다운로드, 그 외 = 증분
+        is_month_start = date_iso.endswith("-01")
+        result = update_backtest_incrementally(conn, full=is_month_start)
+        log.info("[Backtest] done: ok=%s saved=%s cache=%s",
+                 result.get("ok"), result.get("saved"), result.get("cache"))
+        return result
+    except Exception as e:
+        log.warning("[Backtest] 백테스트 갱신 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
     """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
@@ -1062,6 +1088,18 @@ def run_research(
         except Exception as e:
             log.warning("Capital Efficiency 평가 실패: %s", e)
             summary["capital_efficiency"] = None
+
+        # Phase 4-A — 백테스트 갱신 (시장 일봉 증분 + regime/overheat/
+        # deployment/parking/profit-protection 백테스트 재계산 후 DB 저장).
+        try:
+            bt_res = step_backtest(conn, run_id, date_iso)
+            summary["backtest"] = {
+                "ok": bt_res.get("ok"),
+                "saved": bt_res.get("saved"),
+            }
+        except Exception as e:
+            log.warning("백테스트 갱신 실패: %s", e)
+            summary["backtest"] = None
 
         step_generate_daily_brief(
             conn, run_id, date_iso, all_deep_dive, score_map, market_summary,

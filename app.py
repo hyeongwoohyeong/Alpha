@@ -1611,6 +1611,7 @@ def render_tag(tag: str) -> str:
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
     ("regime", "Portfolio review"),
+    ("validation", "Validation Lab"),
     ("discovery", "Discovery"),
     ("detail", "종목 상세"),
     ("dislocation", "우량주 과매도"),
@@ -5692,6 +5693,290 @@ def render_brief_discovery_section():
         )
 
 
+# ---------------------------------------------------------------------------
+# Validation Lab — Phase 4-A 백테스트 기반
+# ---------------------------------------------------------------------------
+
+_VL_CONF_CLASS = {
+    "High": "tag-research-now",
+    "Med": "tag-watchlist",
+    "Low": "tag-need-thesis-check",
+    "computed": "tag-watchlist",
+    "Sample Limited": "tag-need-thesis-check",
+    "Data Unavailable": "tag-data-unavailable",
+}
+
+
+def _vl_conf_tag(conf: Any) -> str:
+    """confidence 값을 색 태그 HTML 로."""
+    if conf is None:
+        return ""
+    label = str(conf)
+    if label == "High":
+        label = "신뢰도 High"
+    elif label == "Med":
+        label = "신뢰도 Med"
+    elif label == "Low":
+        label = "Sample Limited / 신뢰도 Low"
+    cls = _VL_CONF_CLASS.get(str(conf), "tag-watchlist")
+    return f'<span class="tag {cls}">{label}</span>'
+
+
+def _vl_pct(v: Any, digits: int = 1) -> str:
+    if v is None:
+        return "—"
+    try:
+        return f"{float(v) * 100:+.{digits}f}%"
+    except Exception:
+        return "—"
+
+
+def _vl_num(v: Any, digits: int = 2) -> str:
+    if v is None:
+        return "—"
+    try:
+        return f"{float(v):.{digits}f}"
+    except Exception:
+        return "—"
+
+
+def _vl_empty_card(msg: str):
+    st.markdown(
+        '<div class="card">'
+        f'<div class="pick-type">{msg}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_validation_lab():
+    """Validation Lab — 백테스트 기반 과거 검증 페이지 (Phase 4-A)."""
+    import pandas as _pd
+
+    render_back_button("validation")
+    page_header(
+        "Validation Lab",
+        meta="과거 검증 · Overheat/Regime Forward Return · Drawdown Deployment Backtest",
+    )
+
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        '<div class="env-block-title">백테스트 기반 — 과거 검증</div>'
+        '<div class="env-block-body">'
+        '이 페이지는 과거 시장 데이터에 Overheat Score · Regime 분류 · Drawdown '
+        'Deployment 룰을 재적용한 <b>과거 검증</b> 결과입니다. 미래 수익을 보장하지 '
+        '않으며, 표본이 부족한 항목은 신뢰도를 낮게 표기합니다. 레버리지 ETF'
+        '(QLD/TQQQ)는 변동성 끌림(decay)과 깊은 MDD 위험이 있습니다.'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── 데이터 로드 ─────────────────────────────────────────────────
+    try:
+        with db.db_session() as conn:
+            bt_results = [dict(r) for r in db.fetch_backtest_results(conn)]
+            rfr_rows = [dict(r) for r in db.fetch_regime_forward_returns(conn)]
+            price_tickers = db.fetch_price_history_tickers(conn)
+    except Exception as e:
+        st.markdown(
+            f'<div class="card">백테스트 데이터 조회 중 오류: {e}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not bt_results and not rfr_rows:
+        _vl_empty_card(
+            "백테스트 데이터 없음 — 파이프라인 실행이 필요합니다. "
+            "run_research 가 시장 일봉을 수집하고 백테스트를 계산하면 "
+            "여기에 Overheat/Regime Forward Return · Drawdown Deployment "
+            "결과가 표시됩니다."
+        )
+        if price_tickers:
+            st.caption(f"수집된 일봉 티커: {', '.join(price_tickers)}")
+        return
+
+    # ── 1) Overheat Score Backtest — Regime Forward Returns 에서 파생 ──
+    # regime_forward_returns 에는 overheat_score 가 함께 저장돼 있어
+    # 구간별로 재집계한다.
+    st.markdown('<div class="section-title first">1 · Overheat Score Backtest</div>',
+                unsafe_allow_html=True)
+    if not rfr_rows:
+        _vl_empty_card("Overheat 백테스트 데이터 없음 — 파이프라인 실행 필요.")
+    else:
+        bands = [(0, 30, "0-30 정상"), (30, 50, "30-50 주의"),
+                 (50, 70, "50-70 과열경계"), (70, 85, "70-85 과열"),
+                 (85, 101, "85-100 FOMO")]
+        band_table: list[dict] = []
+        for lo, hi, name in bands:
+            for asset in ("QQQ", "QLD"):
+                sel = [r for r in rfr_rows
+                       if r.get("asset") == asset
+                       and r.get("overheat_score") is not None
+                       and lo <= r["overheat_score"] < hi]
+                if not sel:
+                    continue
+                def _avg(key):
+                    vals = [r[key] for r in sel if r.get(key) is not None]
+                    return sum(vals) / len(vals) if vals else None
+                def _wr(key):
+                    vals = [r[key] for r in sel if r.get(key) is not None]
+                    return (sum(1 for v in vals if v > 0) / len(vals)) if vals else None
+                n = len(sel)
+                band_table.append({
+                    "Overheat 구간": name,
+                    "자산": asset,
+                    "표본": n,
+                    "1M 평균": _vl_pct(_avg("forward_1m")),
+                    "3M 평균": _vl_pct(_avg("forward_3m")),
+                    "6M 평균": _vl_pct(_avg("forward_6m")),
+                    "3M 승률": _vl_pct(_wr("forward_3m"), 0),
+                    "평균 MDD(3M)": _vl_pct(_avg("mdd_3m")),
+                    "신뢰도": ("High" if n >= 60 else "Med" if n >= 20
+                              else "Sample Limited"),
+                })
+        if band_table:
+            st.dataframe(_pd.DataFrame(band_table), use_container_width=True,
+                         hide_index=True)
+            st.caption("과거 각 날짜의 Overheat Score(technical extension 기반 "
+                       "재구성)를 구간으로 묶어 forward 수익률·MDD 를 집계.")
+        else:
+            _vl_empty_card("Overheat 구간별 표본이 부족합니다 (Sample Limited).")
+
+    # ── 2) Regime Forward Returns ───────────────────────────────────
+    st.markdown('<div class="section-title">2 · Regime Forward Returns</div>',
+                unsafe_allow_html=True)
+    if not rfr_rows:
+        _vl_empty_card("Regime 백테스트 데이터 없음 — 파이프라인 실행 필요.")
+    else:
+        regime_table: list[dict] = []
+        regimes_seen = sorted({r.get("regime") for r in rfr_rows if r.get("regime")})
+        for regime in regimes_seen:
+            for asset in ("QQQ", "QLD", "TQQQ"):
+                sel = [r for r in rfr_rows
+                       if r.get("regime") == regime and r.get("asset") == asset]
+                if not sel:
+                    continue
+                def _avg2(key):
+                    vals = [r[key] for r in sel if r.get(key) is not None]
+                    return sum(vals) / len(vals) if vals else None
+                def _wr2(key):
+                    vals = [r[key] for r in sel if r.get(key) is not None]
+                    return (sum(1 for v in vals if v > 0) / len(vals)) if vals else None
+                def _worst(key):
+                    vals = [r[key] for r in sel if r.get(key) is not None]
+                    return min(vals) if vals else None
+                n = len(sel)
+                regime_table.append({
+                    "Regime": regime,
+                    "자산": asset,
+                    "표본": n,
+                    "1M 평균": _vl_pct(_avg2("forward_1m")),
+                    "3M 평균": _vl_pct(_avg2("forward_3m")),
+                    "6M 평균": _vl_pct(_avg2("forward_6m")),
+                    "12M 평균": _vl_pct(_avg2("forward_12m")),
+                    "3M 승률": _vl_pct(_wr2("forward_3m"), 0),
+                    "최악 MDD(3M)": _vl_pct(_worst("mdd_3m")),
+                    "신뢰도": ("High" if n >= 60 else "Med" if n >= 20
+                              else "Sample Limited"),
+                })
+        if regime_table:
+            st.dataframe(_pd.DataFrame(regime_table), use_container_width=True,
+                         hide_index=True)
+            st.caption("각 regime 발생일 기준 SPY/QQQ/QLD/TQQQ 의 forward "
+                       "수익률·MDD. TQQQ 는 MDD 를 반드시 함께 확인하세요.")
+        else:
+            _vl_empty_card("Regime 별 표본이 부족합니다 (Sample Limited).")
+
+    # ── 3) Nasdaq Drawdown Deployment Backtest ──────────────────────
+    st.markdown('<div class="section-title">3 · Nasdaq Drawdown Deployment '
+                'Backtest</div>', unsafe_allow_html=True)
+    deploy = [r for r in bt_results
+              if (r.get("strategy_name") or "").startswith(
+                  ("Buy&Hold", "Drawdown Deployment", "현금대기", "적립식"))]
+    if not deploy:
+        _vl_empty_card("Drawdown Deployment 백테스트 데이터 없음 — "
+                       "파이프라인 실행 필요.")
+    else:
+        dep_table = []
+        for r in deploy:
+            dep_table.append({
+                "전략": r.get("strategy_name"),
+                "자산": r.get("asset"),
+                "기간": f"{r.get('start_date') or '—'} ~ {r.get('end_date') or '—'}",
+                "Total Return": _vl_pct(r.get("total_return"), 0),
+                "CAGR": _vl_pct(r.get("cagr")),
+                "MaxDD": _vl_pct(r.get("max_drawdown"), 0),
+                "Sharpe": _vl_num(r.get("sharpe")),
+                "Sortino": _vl_num(r.get("sortino")),
+                "Calmar": _vl_num(r.get("calmar")),
+                "회복(영업일)": (str(int(r["recovery_time"]))
+                              if r.get("recovery_time") is not None
+                              else "미회복"),
+            })
+        st.dataframe(_pd.DataFrame(dep_table), use_container_width=True,
+                     hide_index=True)
+        st.markdown(
+            '<div class="card" style="border-color:var(--amber);">'
+            '<div class="pick-type">⚠ 레버리지 경고 — QLD(2x)/TQQQ(3x)는 일간 '
+            '리밸런싱 구조로 횡보장에서 변동성 끌림(decay)이 발생하며, 약세장에서 '
+            'MDD 가 매우 깊고 회복에 오래 걸립니다. 위 Buy&Hold TQQQ 의 MaxDD·'
+            '회복 영업일을 반드시 확인하세요. 거래비용·세금은 미반영입니다.'
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── 4) Parking Strategy Backtest ────────────────────────────────
+    st.markdown('<div class="section-title">4 · Parking Strategy Backtest</div>',
+                unsafe_allow_html=True)
+    parking = [r for r in bt_results
+               if (r.get("strategy_name") or "") == "Parking Buy&Hold"]
+    if not parking:
+        _vl_empty_card("Parking 백테스트 데이터 없음 — 파이프라인 실행 필요.")
+    else:
+        park_table = []
+        for r in parking:
+            details = db.load_json(r.get("details_json")) or {}
+            park_table.append({
+                "Parking 종목": r.get("asset"),
+                "Total Return": _vl_pct(r.get("total_return"), 0),
+                "CAGR": _vl_pct(r.get("cagr")),
+                "MaxDD": _vl_pct(r.get("max_drawdown"), 0),
+                "Sharpe": _vl_num(r.get("sharpe")),
+                "신뢰도": details.get("confidence") or "—",
+            })
+        st.dataframe(_pd.DataFrame(park_table), use_container_width=True,
+                     hide_index=True)
+        st.caption("비싼 국면의 방어적 파킹 후보(MCD·KO·COST 등) Buy&Hold 성과 — "
+                   "QQQ 와 비교해 변동성·MDD 가 낮은지 확인하는 용도입니다.")
+
+    # ── 5) Profit Protection Backtest ───────────────────────────────
+    st.markdown('<div class="section-title">5 · Profit Protection Backtest</div>',
+                unsafe_allow_html=True)
+    pp_rows = [r for r in bt_results
+               if (r.get("strategy_name") or "").startswith("ProfitProtection")]
+    if not pp_rows:
+        _vl_empty_card("Profit Protection 백테스트 데이터 없음 — "
+                       "파이프라인 실행 필요.")
+    else:
+        pp_table = []
+        for r in pp_rows:
+            name = r.get("strategy_name")
+            label = ("익절 룰 적용" if "with-rule" in name
+                     else "룰 없음(QLD Buy&Hold)")
+            pp_table.append({
+                "케이스": label,
+                "Total Return": _vl_pct(r.get("total_return"), 0),
+                "CAGR": _vl_pct(r.get("cagr")),
+                "MaxDD": _vl_pct(r.get("max_drawdown"), 0),
+                "Sharpe": _vl_num(r.get("sharpe")),
+                "Calmar": _vl_num(r.get("calmar")),
+            })
+        st.dataframe(_pd.DataFrame(pp_table), use_container_width=True,
+                     hide_index=True)
+        st.caption("고베타(QLD) 보유 중 Overheat 85+ 진입 시 QQQ 로 비중을 옮기는 "
+                   "익절 룰이 과거에 MDD 를 줄였는지 검증.")
+
+
 def render_discovery():
     """전용 Discovery 페이지 — 큐별 + 승격 후보 + 필터."""
     render_back_button("discovery")
@@ -6102,6 +6387,8 @@ if nav == "brief":
     render_today_brief()
 elif nav == "regime":
     render_portfolio_regime()
+elif nav == "validation":
+    render_validation_lab()
 elif nav == "discovery":
     render_discovery()
 elif nav == "detail":

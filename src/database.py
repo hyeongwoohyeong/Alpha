@@ -541,6 +541,63 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (date, ticker)
     )
     """,
+    # ── Phase 4-A — 백테스트: 시장 일봉 캐시 ────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS market_price_history (
+        date        TEXT NOT NULL,
+        ticker      TEXT NOT NULL,
+        open        REAL,
+        high        REAL,
+        low         REAL,
+        close       REAL,
+        adj_close   REAL,
+        volume      INTEGER,
+        source      TEXT,
+        created_at  TEXT,
+        PRIMARY KEY (date, ticker)
+    )
+    """,
+    # ── Phase 4-A — 백테스트: 전략별 성과 ──────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS backtest_results (
+        strategy_name   TEXT NOT NULL,
+        asset           TEXT NOT NULL,
+        start_date      TEXT,
+        end_date        TEXT,
+        cagr            REAL,
+        total_return    REAL,
+        max_drawdown    REAL,
+        sharpe          REAL,
+        sortino         REAL,
+        calmar          REAL,
+        win_rate        REAL,
+        recovery_time   REAL,
+        details_json    TEXT,
+        updated_at      TEXT,
+        PRIMARY KEY (strategy_name, asset)
+    )
+    """,
+    # ── Phase 4-A — 백테스트: regime/overheat 별 forward return ─────────
+    """
+    CREATE TABLE IF NOT EXISTS regime_forward_returns (
+        date            TEXT NOT NULL,
+        regime          TEXT NOT NULL,
+        overheat_score  REAL,
+        asset           TEXT NOT NULL,
+        forward_1w      REAL,
+        forward_1m      REAL,
+        forward_3m      REAL,
+        forward_6m      REAL,
+        forward_12m     REAL,
+        mdd_1m          REAL,
+        mdd_3m          REAL,
+        mdd_6m          REAL,
+        updated_at      TEXT,
+        PRIMARY KEY (date, regime, asset)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
+    "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
 )
 
 
@@ -1927,6 +1984,169 @@ def fetch_latest_crash_deployment_plan(
         "SELECT * FROM crash_deployment_plan ORDER BY date DESC LIMIT 1"
     )
     return cur.fetchone()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4-A — 백테스트: market_price_history / backtest_results /
+#             regime_forward_returns
+# ---------------------------------------------------------------------------
+
+_MPH_COLS: tuple[str, ...] = (
+    "date", "ticker", "open", "high", "low", "close",
+    "adj_close", "volume", "source", "created_at",
+)
+
+
+def upsert_market_price_history(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """일봉 batch upsert ((date, ticker) PK). rows 는 _MPH_COLS 키를 가진 dict."""
+    placeholders = ", ".join("?" for _ in _MPH_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _MPH_COLS if c not in ("date", "ticker")
+    )
+    sql = (
+        f"INSERT INTO market_price_history ({', '.join(_MPH_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    for r in rows:
+        try:
+            conn.execute(sql, [r.get(c) for c in _MPH_COLS])
+            n += 1
+        except Exception as e:
+            log.debug("market_price_history upsert 실패 %s: %s", r.get("ticker"), e)
+    conn.commit()
+    return n
+
+
+def fetch_market_price_history(
+    conn: sqlite3.Connection, ticker: str,
+    start_date: str | None = None, end_date: str | None = None,
+) -> list[sqlite3.Row]:
+    """단일 티커 일봉 (날짜 오름차순). 날짜 범위 옵션."""
+    sql = "SELECT * FROM market_price_history WHERE ticker=?"
+    params: list[Any] = [ticker]
+    if start_date:
+        sql += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        sql += " AND date <= ?"
+        params.append(end_date)
+    sql += " ORDER BY date"
+    return list(conn.execute(sql, params))
+
+
+def fetch_price_history_tickers(conn: sqlite3.Connection) -> list[str]:
+    """market_price_history 에 데이터가 있는 티커 목록."""
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT ticker FROM market_price_history ORDER BY ticker"
+        ).fetchall()
+        return [r["ticker"] if hasattr(r, "keys") else r[0] for r in rows]
+    except Exception:
+        return []
+
+
+_BACKTEST_COLS: tuple[str, ...] = (
+    "strategy_name", "asset", "start_date", "end_date", "cagr",
+    "total_return", "max_drawdown", "sharpe", "sortino", "calmar",
+    "win_rate", "recovery_time", "details_json", "updated_at",
+)
+
+
+def upsert_backtest_result(
+    conn: sqlite3.Connection, fields: dict[str, Any]
+) -> None:
+    """backtest_results 행 upsert ((strategy_name, asset) PK)."""
+    placeholders = ", ".join("?" for _ in _BACKTEST_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _BACKTEST_COLS
+        if c not in ("strategy_name", "asset")
+    )
+    sql = (
+        f"INSERT INTO backtest_results ({', '.join(_BACKTEST_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(strategy_name, asset) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = []
+    for c in _BACKTEST_COLS:
+        v = fields.get(c)
+        if c == "details_json" and v is not None and not isinstance(v, str):
+            v = dump_json(v)
+        if c == "updated_at" and v is None:
+            v = now_iso()
+        params.append(v)
+    conn.execute(sql, params)
+    conn.commit()
+
+
+def fetch_backtest_results(
+    conn: sqlite3.Connection, strategy_name: str | None = None
+) -> list[sqlite3.Row]:
+    """backtest_results 전체 또는 특정 전략."""
+    if strategy_name:
+        return list(conn.execute(
+            "SELECT * FROM backtest_results WHERE strategy_name=? "
+            "ORDER BY asset", (strategy_name,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM backtest_results ORDER BY strategy_name, asset"
+    ))
+
+
+_RFR_COLS: tuple[str, ...] = (
+    "date", "regime", "overheat_score", "asset",
+    "forward_1w", "forward_1m", "forward_3m", "forward_6m", "forward_12m",
+    "mdd_1m", "mdd_3m", "mdd_6m", "updated_at",
+)
+
+
+def upsert_regime_forward_returns(
+    conn: sqlite3.Connection, rows: Iterable[dict[str, Any]]
+) -> int:
+    """regime_forward_returns batch upsert ((date, regime, asset) PK)."""
+    placeholders = ", ".join("?" for _ in _RFR_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _RFR_COLS
+        if c not in ("date", "regime", "asset")
+    )
+    sql = (
+        f"INSERT INTO regime_forward_returns ({', '.join(_RFR_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, regime, asset) DO UPDATE SET {update_set}"
+    )
+    n = 0
+    ts = now_iso()
+    for r in rows:
+        try:
+            params = []
+            for c in _RFR_COLS:
+                v = r.get(c)
+                if c == "updated_at" and v is None:
+                    v = ts
+                params.append(v)
+            conn.execute(sql, params)
+            n += 1
+        except Exception as e:
+            log.debug("regime_forward_returns upsert 실패: %s", e)
+    conn.commit()
+    return n
+
+
+def fetch_regime_forward_returns(
+    conn: sqlite3.Connection, regime: str | None = None
+) -> list[sqlite3.Row]:
+    """regime_forward_returns 전체 또는 특정 regime."""
+    if regime:
+        return list(conn.execute(
+            "SELECT * FROM regime_forward_returns WHERE regime=? "
+            "ORDER BY date", (regime,)
+        ))
+    return list(conn.execute(
+        "SELECT * FROM regime_forward_returns ORDER BY date"
+    ))
 
 
 # ---------------------------------------------------------------------------
