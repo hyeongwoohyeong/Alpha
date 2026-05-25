@@ -83,21 +83,21 @@ st.set_page_config(
 CUSTOM_CSS = """
 <style>
     :root {
-        --bg: #F8FAFC;
-        --panel: #FFFFFF;
-        --panel-soft: #F1F5F9;
-        --line: #E2E8F0;
-        --line-strong: #CBD5E1;
-        --text: #0F172A;
-        --text-mid: #334155;
-        --muted: #64748B;
-        --muted-soft: #94A3B8;
-        --navy: #0F2A5F;
-        --blue: #2563EB;
-        --blue-soft: #DBEAFE;
-        --blue-2: #0284C7;
-        --green: #16A34A;
-        --red: #DC2626;
+        --bg: #05070D;
+        --panel: #111827;
+        --panel-soft: #1F2937;
+        --line: #2D3748;
+        --line-strong: #374151;
+        --text: #F9FAFB;
+        --text-mid: #CBD5E1;
+        --muted: #9CA3AF;
+        --muted-soft: #6B7280;
+        --navy: #1E3A8A;
+        --blue: #3B82F6;
+        --blue-soft: #1E3A8A;
+        --blue-2: #06B6D4;
+        --green: #22C55E;
+        --red: #EF4444;
     }
 
     html, body, [data-testid="stAppViewContainer"] {
@@ -112,7 +112,7 @@ CUSTOM_CSS = """
 
     /* ---------- Sidebar ---------- */
     [data-testid="stSidebar"] {
-        background: #FFFFFF;
+        background: var(--panel);
         border-right: 1px solid var(--line);
     }
     [data-testid="stSidebar"] * { color: var(--text); }
@@ -124,7 +124,7 @@ CUSTOM_CSS = """
         display: inline-flex; align-items: center; justify-content: center;
         width: 46px; height: 46px;
         border-radius: 12px;
-        background: var(--navy);
+        background: var(--blue);
         color: #FFFFFF;
         font-family: "Times New Roman", Georgia, serif;
         font-style: italic;
@@ -161,7 +161,7 @@ CUSTOM_CSS = """
         justify-content: flex-start;
         padding: 10px 14px;
         border-radius: 8px;
-        background: #FFFFFF;
+        background: var(--panel);
         color: var(--text);
         border: 1px solid transparent;
         font-weight: 500;
@@ -169,19 +169,19 @@ CUSTOM_CSS = """
     }
     [data-testid="stSidebar"] .stButton > button:hover {
         background: var(--panel-soft);
-        color: var(--navy);
+        color: var(--blue);
         border-color: transparent;
     }
     [data-testid="stSidebar"] .stButton > button[kind="primary"] {
-        background: #EFF4FB;             /* 옅은 블루 배경 */
-        color: var(--navy);              /* 네이비 글씨 */
-        border: 1px solid #CBDAF2;       /* 좌측 진한 보더 제거 */
+        background: #1E3A8A;             /* 어두운 블루 배경 */
+        color: #BFDBFE;                  /* 밝은 블루 글씨 */
+        border: 1px solid #2D3748;
         font-weight: 700;
     }
     [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
-        background: #E2EBF7;
-        color: var(--navy);
-        border-color: #B6CAE9;
+        background: #172554;
+        color: #BFDBFE;
+        border-color: #374151;
     }
 
     /* ---------- 본문 헤더 ---------- */
@@ -236,13 +236,13 @@ CUSTOM_CSS = """
     .section-title.first { margin-top: 6px; }
     .section-spacer { margin-bottom: 40px; }
     .section-summary {
-        background: #F1F5F9;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 14px;
         padding: 20px 24px;
         font-size: 15px;
         line-height: 1.75;
-        color: #334155;
+        color: var(--text-mid);
         margin-top: 18px;
         margin-bottom: 32px;
         word-break: keep-all;
@@ -252,9 +252,9 @@ CUSTOM_CSS = """
 
     /* ---------- 금일 핵심 판단 카드 ---------- */
     .judgment-card {
-        background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+        background: linear-gradient(180deg, #111827 0%, #0B1120 100%);
         border: 1px solid var(--line);
-        border-left: 4px solid var(--navy);
+        border-left: 4px solid var(--blue);
         border-radius: 12px;
         padding: 22px 26px;
         margin-bottom: 14px;
@@ -363,14 +363,14 @@ CUSTOM_CSS = """
         border: 1px solid transparent;
         white-space: nowrap;
     }
-    /* 모두 "옅은 배경 + 진한 글씨" 패턴. 색 구분은 톤다운된 컬러칩으로. */
-    .tag-research-now { background: #EFF4FB; color: var(--navy); border-color: #CBDAF2; }
-    .tag-quality-dislocation { background: #E6F2FB; color: #075985; border-color: #BFDFF2; }
-    .tag-watchlist { background: #F1F5F9; color: var(--text-mid); border-color: var(--line-strong); }
-    .tag-wait-for-entry { background: #F4F1EA; color: #7C5A1E; border-color: #E5DABE; }
-    .tag-too-crowded { background: #F1ECF8; color: #5B3F8A; border-color: #DCD0EC; }
-    .tag-need-thesis-check { background: #F1F5F9; color: var(--text-mid); border-color: var(--line-strong); }
-    .tag-avoid { background: #FBECEC; color: #8B1F1F; border-color: #F0CACA; }
+    /* 모두 "어두운 배경 + 밝은 글씨" 패턴. 색 구분은 톤다운된 컬러칩으로. */
+    .tag-research-now { background: #1E3A8A; color: #BFDBFE; border-color: #2D4A8A; }
+    .tag-quality-dislocation { background: #164E63; color: #A5F3FC; border-color: #1E6A82; }
+    .tag-watchlist { background: #1F2937; color: var(--text-mid); border-color: var(--line-strong); }
+    .tag-wait-for-entry { background: #4A3A12; color: #FCD34D; border-color: #6B541E; }
+    .tag-too-crowded { background: #3A2A52; color: #D8B4FE; border-color: #543C73; }
+    .tag-need-thesis-check { background: #1F2937; color: var(--text-mid); border-color: var(--line-strong); }
+    .tag-avoid { background: #4A1F1F; color: #FCA5A5; border-color: #6B2E2E; }
     .tag-data-unavailable { background: var(--panel-soft); color: var(--muted-soft); border-color: var(--line); }
 
     /* ---------- 알림 / 점검 사항 row ---------- */
@@ -414,8 +414,8 @@ CUSTOM_CSS = """
         margin-bottom: 8px;
     }
     [data-testid="stExpander"] > details {
-        background: #F8FAFC;
-        border: 1px solid #CBD5E1 !important;
+        background: var(--panel-soft);
+        border: 1px solid var(--line) !important;
         border-radius: 16px !important;
         padding: 4px 8px;
     }
@@ -462,9 +462,9 @@ CUSTOM_CSS = """
         border-radius: 6px;
         margin-bottom: 12px;
     }
-    .scenario-bull { color: var(--green); background: #ECFDF5; border: 1px solid #BBF7D0; }
-    .scenario-base { color: var(--navy); background: var(--blue-soft); border: 1px solid var(--blue-soft); }
-    .scenario-bear { color: var(--red); background: #FEF2F2; border: 1px solid #FECACA; }
+    .scenario-bull { color: #86EFAC; background: #14321F; border: 1px solid #1E5235; }
+    .scenario-base { color: #BFDBFE; background: #1E3A8A; border: 1px solid #2D4A8A; }
+    .scenario-bear { color: #FCA5A5; background: #3A1A1A; border: 1px solid #5C2A2A; }
     .scenario-body { font-size: 15px; color: var(--text); line-height: 1.7; }
 
     .lens {
@@ -556,8 +556,8 @@ CUSTOM_CSS = """
         font-variant-numeric: tabular-nums;
         text-align: right;
     }
-    .ret-positive { color: #16A34A; }
-    .ret-negative { color: #DC2626; }
+    .ret-positive { color: var(--green); }
+    .ret-negative { color: var(--red); }
     .ret-neutral { color: var(--muted); font-weight: 500; }
 
     /* ---------- 매크로 이슈 카드 ---------- */
@@ -629,7 +629,7 @@ CUSTOM_CSS = """
     .ob-event-detail {
         font-size: 14.5px;
         line-height: 1.8;
-        color: #334155;
+        color: var(--text-mid);
         margin-bottom: 10px;
         word-break: keep-all;
         overflow-wrap: break-word;
@@ -654,16 +654,16 @@ CUSTOM_CSS = """
         padding: 22px 24px;
         height: 100%;
     }
-    .bbd-side-bull { border-top: 3px solid #15803D; }
-    .bbd-side-bear { border-top: 3px solid #B91C1C; }
+    .bbd-side-bull { border-top: 3px solid #22C55E; }
+    .bbd-side-bear { border-top: 3px solid #EF4444; }
     .bbd-side-head {
         font-size: 14px;
         font-weight: 800;
         letter-spacing: 0.6px;
         margin-bottom: 14px;
     }
-    .bbd-side-bull .bbd-side-head { color: #15803D; }
-    .bbd-side-bear .bbd-side-head { color: #B91C1C; }
+    .bbd-side-bull .bbd-side-head { color: #4ADE80; }
+    .bbd-side-bear .bbd-side-head { color: #F87171; }
     .bbd-round-label {
         font-size: 11px;
         font-weight: 700;
@@ -675,7 +675,7 @@ CUSTOM_CSS = """
     .bbd-text {
         font-size: 14.5px;
         line-height: 1.8;
-        color: #334155;
+        color: var(--text-mid);
         word-break: keep-all;
         overflow-wrap: break-word;
     }
@@ -698,19 +698,19 @@ CUSTOM_CSS = """
     .bbd-swing li {
         font-size: 14.5px;
         line-height: 1.75;
-        color: #334155;
+        color: var(--text-mid);
         margin-bottom: 7px;
         word-break: keep-all;
     }
     .bbd-summary {
-        background: #F8FAFC;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 16px;
         padding: 20px 26px;
         margin-top: 16px;
         font-size: 14.5px;
         line-height: 1.8;
-        color: #334155;
+        color: var(--text-mid);
         word-break: keep-all;
     }
     .bbd-summary-label {
@@ -737,7 +737,7 @@ CUSTOM_CSS = """
         text-indent: calc(-1 * var(--label-width));
         font-size: 15px;
         line-height: 1.8;
-        color: #334155;
+        color: var(--text-mid);
         margin-bottom: 14px;
         word-break: keep-all;
         overflow-wrap: break-word;
@@ -750,13 +750,13 @@ CUSTOM_CSS = """
         padding-right: 24px;
         box-sizing: border-box;
         font-weight: 800;
-        color: #0F172A;
+        color: var(--text);
         white-space: nowrap;
         text-indent: 0;            /* 라벨 자체는 들여쓰기 영향 받지 않음 */
         vertical-align: top;
     }
     .para-text {
-        color: #334155;
+        color: var(--text-mid);
         word-break: keep-all;
         overflow-wrap: break-word;
     }
@@ -794,7 +794,7 @@ CUSTOM_CSS = """
     .para-row.kpts-row .para-text {
         font-size: 15px;
         line-height: 1.7;
-        color: #334155;
+        color: var(--text-mid);
         word-break: keep-all;
         overflow-wrap: break-word;
         min-width: 0;
@@ -803,7 +803,7 @@ CUSTOM_CSS = """
         padding: 5px 0;
         font-size: 15px;
         line-height: 1.75;
-        color: #1F2937;
+        color: var(--text);
     }
     .para-row.kpts-row .kpts-line + .kpts-line {
         border-top: 1px dashed var(--line);
@@ -817,7 +817,7 @@ CUSTOM_CSS = """
     ul.news-followups li {
         font-size: 15px;
         line-height: 1.7;
-        color: #1F2937;
+        color: var(--text);
         padding: 3px 0;
     }
     /* 뉴스 카드 관련 기사 묶음 */
@@ -833,9 +833,9 @@ CUSTOM_CSS = """
     }
     /* 데이터 품질 경고 배너 */
     .data-quality-warning {
-        background: #FEF3C7;
-        border-left: 4px solid #D97706;
-        color: #78350F;
+        background: #3A2E0A;
+        border-left: 4px solid #F59E0B;
+        color: #FCD34D;
         padding: 10px 14px;
         border-radius: 6px;
         font-size: 14px;
@@ -851,7 +851,7 @@ CUSTOM_CSS = """
         padding: 4px 10px;
         border: 1.5px solid var(--line-strong);
         border-radius: 6px;
-        background: #FFFFFF;
+        background: var(--panel-soft);
         line-height: 1;
     }
     .pick-alpha-label {
@@ -863,7 +863,7 @@ CUSTOM_CSS = """
     }
     /* ───────── Alpha Score 카드 ───────── */
     .alpha-score-card {
-        background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+        background: linear-gradient(180deg, #111827 0%, #0B1120 100%);
         border: 1px solid var(--line);
         border-radius: 12px;
         padding: 22px 24px;
@@ -900,13 +900,13 @@ CUSTOM_CSS = """
         font-size: 13px; color: var(--muted); font-weight: 500;
     }
     .alpha-score-interpretation {
-        font-size: 14px; color: #334155; line-height: 1.7;
+        font-size: 14px; color: var(--text-mid); line-height: 1.7;
         word-break: keep-all; overflow-wrap: break-word;
     }
     /* 8 컴포넌트 horizontal bars */
     .alpha-comp-grid {
         display: grid; grid-template-columns: 1fr; gap: 6px;
-        background: #FFFFFF; border: 1px solid var(--line);
+        background: var(--panel-soft); border: 1px solid var(--line);
         border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;
     }
     @media (min-width: 900px) {
@@ -947,9 +947,9 @@ CUSTOM_CSS = """
         font-style: italic; opacity: 0.85;
     }
     .alpha-coverage-note {
-        background: #FFFBEB;
-        border: 1px solid #FDE68A;
-        color: #92400E;
+        background: #3A2E0A;
+        border: 1px solid #6B541E;
+        color: #FCD34D;
         padding: 10px 14px;
         border-radius: 8px;
         font-size: 13px;
@@ -957,7 +957,7 @@ CUSTOM_CSS = """
         margin-top: 12px;
     }
     .alpha-coverage-note b {
-        color: #78350F;
+        color: #FDE68A;
     }
     .alpha-score-coverage {
         font-weight: 600;
@@ -973,7 +973,7 @@ CUSTOM_CSS = """
         .eq-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
     .eq-dim-card {
-        background: #FFFFFF;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 12px 14px;
@@ -987,7 +987,7 @@ CUSTOM_CSS = """
     }
     .eq-dim-sub { font-size: 12px; color: var(--muted); font-weight: 400; }
     .eq-dim-comment {
-        font-size: 13px; line-height: 1.65; color: #334155;
+        font-size: 13px; line-height: 1.65; color: var(--text-mid);
         word-break: keep-all; overflow-wrap: break-word;
     }
     /* ───────── Moat Map ───────── */
@@ -1003,7 +1003,7 @@ CUSTOM_CSS = """
     .moat-cell {
         display: flex; justify-content: space-between; align-items: center;
         gap: 8px;
-        background: #F8FAFC;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 6px;
         padding: 10px 12px;
@@ -1023,7 +1023,7 @@ CUSTOM_CSS = """
         .lens-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .lens-card {
-        background: #FFFFFF;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 14px 16px;
@@ -1043,10 +1043,10 @@ CUSTOM_CSS = """
         font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
         display: inline-block; margin-bottom: 6px;
     }
-    .lens-swot-label.strength { background: #DBEAFE; color: #1E40AF; }
-    .lens-swot-label.weakness { background: #FEE2E2; color: #991B1B; }
-    .lens-swot-label.opportunity { background: #DCFCE7; color: #166534; }
-    .lens-swot-label.threat { background: #FEF3C7; color: #92400E; }
+    .lens-swot-label.strength { background: #1E3A8A; color: #BFDBFE; }
+    .lens-swot-label.weakness { background: #4A1F1F; color: #FCA5A5; }
+    .lens-swot-label.opportunity { background: #14321F; color: #86EFAC; }
+    .lens-swot-label.threat { background: #3A2E0A; color: #FCD34D; }
     .lens-row {
         display: grid;
         grid-template-columns: 110px minmax(0, 1fr);
@@ -1059,7 +1059,7 @@ CUSTOM_CSS = """
         font-weight: 600; color: var(--navy);
     }
     .lens-row-text {
-        color: #334155;
+        color: var(--text-mid);
         word-break: keep-all;
         overflow-wrap: break-word;
     }
@@ -1072,9 +1072,9 @@ CUSTOM_CSS = """
 
     /* ---------- 이 회사는 쉽게 말해 ---------- */
     .simple-card {
-        background: #FBFCFE;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
-        border-left: 3px solid var(--navy);
+        border-left: 3px solid var(--blue);
         border-radius: 10px;
         padding: 18px 22px;
         margin-bottom: 14px;
@@ -1179,25 +1179,25 @@ CUSTOM_CSS = """
         display: inline-block;
         margin-top: 10px;
         padding: 8px 14px;
-        background: #EFF4FB;
-        color: var(--navy);
-        border: 1px solid #CBDAF2;
+        background: #1E3A8A;
+        color: #BFDBFE;
+        border: 1px solid #2D4A8A;
         border-radius: 6px;
         font-size: 13px;
         font-weight: 700;
         text-decoration: none;
     }
-    .news-link:hover { background: #E2EBF7; text-decoration: none; }
+    .news-link:hover { background: #172554; text-decoration: none; }
 
     /* ---------- 가치평가 비교 요약 (section-summary alias) ---------- */
     .val-summary {
-        background: #F1F5F9;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 14px;
         padding: 18px 22px;
         font-size: 14px;
         line-height: 1.7;
-        color: #334155;
+        color: var(--text-mid);
         margin-top: 18px;
         margin-bottom: 8px;
         word-break: keep-all;
@@ -1208,7 +1208,7 @@ CUSTOM_CSS = """
         display: flex;
         gap: 28px;
         flex-wrap: wrap;
-        background: #F8FAFC;
+        background: var(--panel-soft);
         border: 1px solid var(--line);
         border-radius: 12px;
         padding: 16px 20px;
@@ -1250,11 +1250,11 @@ CUSTOM_CSS = """
         margin-left: 6px;
         border: 1px solid transparent;
     }
-    .status-진행 { background: #EFF4FB; color: var(--navy); border-color: #CBDAF2; }
-    .status-종료 { background: #F1F5F9; color: var(--text-mid); border-color: var(--line-strong); }
-    .status-완료 { background: #EDF6EE; color: #15803D; border-color: #C9E6CF; }
-    .status-무산 { background: #F1F5F9; color: var(--text-mid); border-color: var(--line-strong); }
-    .status-확인 { background: #F4F1EA; color: #7C5A1E; border-color: #E5DABE; }
+    .status-진행 { background: #1E3A8A; color: #BFDBFE; border-color: #2D4A8A; }
+    .status-종료 { background: #1F2937; color: var(--text-mid); border-color: var(--line-strong); }
+    .status-완료 { background: #14321F; color: #86EFAC; border-color: #1E5235; }
+    .status-무산 { background: #1F2937; color: var(--text-mid); border-color: var(--line-strong); }
+    .status-확인 { background: #4A3A12; color: #FCD34D; border-color: #6B541E; }
 
     /* 리서치 품질 카드 */
     .quality-card {
@@ -1293,11 +1293,11 @@ CUSTOM_CSS = """
     @media (max-width: 768px) {
         .quality-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    .chip-strengthen { background: #EDF6EE; color: #15803D; border-color: #C9E6CF; }
-    .chip-weaken { background: #FBECEC; color: #8B1F1F; border-color: #F0CACA; }
-    .chip-new-risk { background: #F4F1EA; color: #7C5A1E; border-color: #E5DABE; }
-    .chip-noise { background: #F1F5F9; color: var(--text-mid); border-color: var(--line-strong); }
-    .chip-needs-check { background: #EFF4FB; color: var(--navy); border-color: #CBDAF2; }
+    .chip-strengthen { background: #14321F; color: #86EFAC; border-color: #1E5235; }
+    .chip-weaken { background: #4A1F1F; color: #FCA5A5; border-color: #6B2E2E; }
+    .chip-new-risk { background: #4A3A12; color: #FCD34D; border-color: #6B541E; }
+    .chip-noise { background: #1F2937; color: var(--text-mid); border-color: var(--line-strong); }
+    .chip-needs-check { background: #1E3A8A; color: #BFDBFE; border-color: #2D4A8A; }
 
     .bullet {
         display: flex; gap: 12px; padding: 8px 0;
@@ -1312,17 +1312,17 @@ CUSTOM_CSS = """
 
     /* ---------- 진단 박스 ---------- */
     .diagnose {
-        background: #FFF7ED;
-        border: 1px solid #FED7AA;
+        background: #2E2410;
+        border: 1px solid #6B541E;
         border-radius: 10px;
         padding: 14px 16px;
         margin-bottom: 16px;
         font-size: 13.5px;
         color: var(--text);
     }
-    .diagnose b { color: var(--navy); }
+    .diagnose b { color: #FCD34D; }
     .diagnose code {
-        background: rgba(15,23,42,0.06);
+        background: rgba(249,250,251,0.10);
         padding: 1px 6px;
         border-radius: 4px;
         font-size: 12px;
@@ -1342,15 +1342,15 @@ CUSTOM_CSS = """
         color: var(--navy);
     }
     .stButton > button[kind="primary"] {
-        background: #EFF4FB;
-        color: var(--navy);
-        border-color: #B6CAE9;
+        background: #1E3A8A;
+        color: #BFDBFE;
+        border-color: #2D4A8A;
         font-weight: 700;
     }
     .stButton > button[kind="primary"]:hover {
-        background: #E2EBF7;
-        color: var(--navy);
-        border-color: #93B0DD;
+        background: #172554;
+        color: #BFDBFE;
+        border-color: #374151;
     }
 
     /* ---------- 입력 ---------- */
@@ -1990,18 +1990,18 @@ def render_price_chart(row: dict[str, Any]):
 
     # ── 가격 요약 박스 (선택 기간 기준) — 3개만 표시 ───────────────────────
     st.markdown(
-        '<div style="margin-bottom:14px; padding:18px 22px; background:#F8FAFC; '
-        'border:1px solid #E2E8F0; border-radius:12px;">'
+        '<div style="margin-bottom:14px; padding:18px 22px; background:#1F2937; '
+        'border:1px solid #2D3748; border-radius:12px;">'
         '<div style="font-size:12px; color:var(--muted); letter-spacing:1.4px; '
         'text-transform:uppercase; font-weight:700; margin-bottom:10px;">선택 기간 기준</div>'
         '<div style="display:flex; gap:42px; flex-wrap:wrap; '
         'font-variant-numeric:tabular-nums;">'
         f'<div><span style="font-size:13px; color:var(--muted); margin-right:8px;">최고가</span>'
-        f'<span style="font-size:17px; font-weight:700; color:#2563EB;">${high_price:,.2f}</span></div>'
+        f'<span style="font-size:17px; font-weight:700; color:#3B82F6;">${high_price:,.2f}</span></div>'
         f'<div><span style="font-size:13px; color:var(--muted); margin-right:8px;">최저가</span>'
-        f'<span style="font-size:17px; font-weight:700; color:#64748B;">${low_price:,.2f}</span></div>'
+        f'<span style="font-size:17px; font-weight:700; color:#9CA3AF;">${low_price:,.2f}</span></div>'
         f'<div><span style="font-size:13px; color:var(--muted); margin-right:8px;">현재가</span>'
-        f'<span style="font-size:17px; font-weight:700; color:#0F2A5F;">${current_price:,.2f}</span>'
+        f'<span style="font-size:17px; font-weight:700; color:#F9FAFB;">${current_price:,.2f}</span>'
         f'<span style="font-size:12px; color:var(--muted); margin-left:8px;">{_fmt_date(current_idx)}</span></div>'
         "</div>"
         "</div>",
@@ -2018,9 +2018,9 @@ def render_price_chart(row: dict[str, Any]):
                 x=hist.index,
                 y=hist["Close"],
                 mode="lines",
-                line=dict(color="#0F2A5F", width=2),
+                line=dict(color="#3B82F6", width=2),
                 fill="tozeroy",
-                fillcolor="rgba(15,42,95,0.06)",
+                fillcolor="rgba(59,130,246,0.10)",
                 name="Close",
                 hovertemplate="%{x|%Y.%m.%d}<br>$%{y:,.2f}<extra></extra>",
             )
@@ -2029,25 +2029,25 @@ def render_price_chart(row: dict[str, Any]):
         # 현재가 수평선 (점선, 연한 그레이)
         fig.add_hline(
             y=current_price,
-            line=dict(color="#CBD5E1", dash="dot", width=1),
+            line=dict(color="#374151", dash="dot", width=1),
         )
 
         # 최고/최저/현재 마커 — 통일 색상 (빨강 제거)
         fig.add_trace(go.Scatter(
             x=[high_idx], y=[high_price], mode="markers",
-            marker=dict(size=8, color="#2563EB", line=dict(color="#FFFFFF", width=2)),
+            marker=dict(size=8, color="#3B82F6", line=dict(color="#111827", width=2)),
             showlegend=False,
             hovertemplate=f"기간 내 최고가<br>${high_price:,.2f}<br>{_fmt_date(high_idx)}<extra></extra>",
         ))
         fig.add_trace(go.Scatter(
             x=[low_idx], y=[low_price], mode="markers",
-            marker=dict(size=8, color="#64748B", line=dict(color="#FFFFFF", width=2)),
+            marker=dict(size=8, color="#9CA3AF", line=dict(color="#111827", width=2)),
             showlegend=False,
             hovertemplate=f"기간 내 최저가<br>${low_price:,.2f}<br>{_fmt_date(low_idx)}<extra></extra>",
         ))
         fig.add_trace(go.Scatter(
             x=[current_idx], y=[current_price], mode="markers",
-            marker=dict(size=9, color="#0F2A5F", line=dict(color="#FFFFFF", width=2)),
+            marker=dict(size=9, color="#06B6D4", line=dict(color="#111827", width=2)),
             showlegend=False,
             hovertemplate=f"현재가<br>${current_price:,.2f}<br>{_fmt_date(current_idx)}<extra></extra>",
         ))
@@ -2055,8 +2055,8 @@ def render_price_chart(row: dict[str, Any]):
         # ── 통일된 annotation (3종) ───────────────────────────────────────
         _ANN_COMMON = dict(
             showarrow=False,
-            bgcolor="rgba(255,255,255,0.92)",
-            bordercolor="#CBD5E1",
+            bgcolor="rgba(17,24,39,0.92)",
+            bordercolor="#374151",
             borderwidth=1,
             borderpad=4,
             font=dict(family="-apple-system, sans-serif"),
@@ -2065,21 +2065,21 @@ def render_price_chart(row: dict[str, Any]):
             x=high_idx, y=high_price,
             text=f"최고 ${high_price:,.2f}",
             yshift=18,
-            font=dict(size=12, color="#2563EB"),
+            font=dict(size=12, color="#3B82F6"),
             **{k: v for k, v in _ANN_COMMON.items() if k != "font"},
         )
         fig.add_annotation(
             x=low_idx, y=low_price,
             text=f"최저 ${low_price:,.2f}",
             yshift=-18,
-            font=dict(size=12, color="#64748B"),
+            font=dict(size=12, color="#9CA3AF"),
             **{k: v for k, v in _ANN_COMMON.items() if k != "font"},
         )
         fig.add_annotation(
             x=current_idx, y=current_price,
             text=f"현재 ${current_price:,.2f}",
             yshift=18, xshift=-12,
-            font=dict(size=13, color="#0F2A5F"),
+            font=dict(size=13, color="#06B6D4"),
             **{k: v for k, v in _ANN_COMMON.items() if k != "font"},
         )
 
@@ -2117,8 +2117,8 @@ def render_price_chart(row: dict[str, Any]):
                     marker=dict(
                         size=11,
                         symbol="diamond",
-                        color="#2563EB",
-                        line=dict(color="#FFFFFF", width=2),
+                        color="#06B6D4",
+                        line=dict(color="#111827", width=2),
                     ),
                     showlegend=False,
                     name="주요 이벤트",
@@ -2133,9 +2133,9 @@ def render_price_chart(row: dict[str, Any]):
             )
 
         fig.update_layout(
-            template="plotly_white",
-            paper_bgcolor="#FFFFFF",
-            plot_bgcolor="#FFFFFF",
+            template="plotly_dark",
+            paper_bgcolor="#111827",
+            plot_bgcolor="#111827",
             margin=dict(l=10, r=10, t=24, b=10),
             height=440,
             dragmode="zoom",
@@ -2143,23 +2143,23 @@ def render_price_chart(row: dict[str, Any]):
                 showgrid=False,
                 zeroline=False,
                 showline=False,
-                color="#475569",
-                tickfont=dict(color="#475569", size=12),
-                rangeslider=dict(visible=True, thickness=0.05, bgcolor="#F1F5F9"),
+                color="#9CA3AF",
+                tickfont=dict(color="#9CA3AF", size=12),
+                rangeslider=dict(visible=True, thickness=0.05, bgcolor="#1F2937"),
                 type="date",
             ),
             yaxis=dict(
                 showgrid=False,
                 zeroline=False,
                 showline=False,
-                color="#475569",
-                tickfont=dict(color="#475569", size=12),
+                color="#9CA3AF",
+                tickfont=dict(color="#9CA3AF", size=12),
             ),
             showlegend=False,
             hoverlabel=dict(
-                bgcolor="#FFFFFF",
-                bordercolor="#E2E8F0",
-                font=dict(color="#0F172A", size=13),
+                bgcolor="#1F2937",
+                bordercolor="#374151",
+                font=dict(color="#F9FAFB", size=13),
             ),
         )
 
@@ -2206,29 +2206,29 @@ def _rating_chip_class(rating: str) -> str:
 
 def _tier_color(tier: str) -> str:
     if tier == "Very Strong":
-        return "#0F4C75"   # 진한 네이비
+        return "#60A5FA"   # 밝은 블루
     if tier == "Strong":
-        return "#1B6FC0"
+        return "#3B82F6"
     if tier == "Moderate":
-        return "#6B7280"
+        return "#9CA3AF"
     if tier == "Weak":
-        return "#B45309"
+        return "#FBBF24"
     if tier == "High Risk":
-        return "#B91C1C"
-    return "#6B7280"
+        return "#F87171"
+    return "#9CA3AF"
 
 
 def _alpha_score_color(score: float) -> str:
-    """Alpha Score 점수 → 색상 (네이비 강조 / 70 미만 회색)."""
+    """Alpha Score 점수 → 색상 (블루 강조 / 70 미만 회색)."""
     if score >= 90:
-        return "#0F4C75"
+        return "#60A5FA"
     if score >= 80:
-        return "#1B6FC0"
-    if score >= 70:
         return "#3B82F6"
+    if score >= 70:
+        return "#06B6D4"
     if score >= 60:
-        return "#6B7280"
-    return "#94A3B8"
+        return "#9CA3AF"
+    return "#6B7280"
 
 
 def render_alpha_score_section(alpha: dict | None):
@@ -2251,33 +2251,33 @@ def render_alpha_score_section(alpha: dict | None):
     # 점수 표시 — None 이면 N/A
     if score is None:
         score_str = "N/A"
-        color = "#9F1239"
+        color = "#F87171"
     else:
         score_str = f"{score:.0f}"
         color = _alpha_score_color(score)
 
     # 헤더 — Data Confidence + Coverage chip
     confidence_chip_color = {
-        "Manual Override": "#5B21B6",   # purple — 사용자 수동 큐레이션 (최우선)
-        "LLM Researched": "#1E40AF",    # navy — LLM 자동 큐레이션 (SEC 10-K + 뉴스)
-        "High": "#1E40AF",              # 하위 호환
-        "Medium": "#6B7280",
-        "Heuristic": "#B45309",         # amber — auto_profile (산업 + 정량)
-        "Low": "#9F1239",               # rose — 데이터 부족
-    }.get(confidence, "#6B7280")
+        "Manual Override": "#C4B5FD",   # purple — 사용자 수동 큐레이션 (최우선)
+        "LLM Researched": "#93C5FD",    # blue — LLM 자동 큐레이션 (SEC 10-K + 뉴스)
+        "High": "#93C5FD",              # 하위 호환
+        "Medium": "#9CA3AF",
+        "Heuristic": "#FBBF24",         # amber — auto_profile (산업 + 정량)
+        "Low": "#F87171",               # rose — 데이터 부족
+    }.get(confidence, "#9CA3AF")
 
     # tier 별 시각 강조 — Manual Override 는 purple solid border, Heuristic 은 dashed amber
     if confidence == "Manual Override":
         confidence_extra_style = (
-            "; border:1px solid #5B21B6; background:#F5F3FF; padding:2px 8px; border-radius:6px;"
+            "; border:1px solid #5B21B6; background:#2E1F52; padding:2px 8px; border-radius:6px;"
         )
     elif confidence == "LLM Researched":
         confidence_extra_style = (
-            "; border:1px solid #1E40AF; background:#EFF6FF; padding:2px 8px; border-radius:6px;"
+            "; border:1px solid #1E40AF; background:#1E3A8A; padding:2px 8px; border-radius:6px;"
         )
     elif confidence == "Heuristic":
         confidence_extra_style = (
-            "; border:1px dashed #D97706; background:#FFFBEB; padding:2px 8px; border-radius:6px;"
+            "; border:1px dashed #D97706; background:#3A2E0A; padding:2px 8px; border-radius:6px;"
         )
     else:
         confidence_extra_style = ""
@@ -2286,13 +2286,13 @@ def render_alpha_score_section(alpha: dict | None):
 
     # Coverage chip — 산정된 컴포넌트 비율
     if coverage_pct >= 85:
-        cov_color = "#1E40AF"
+        cov_color = "#93C5FD"
     elif coverage_pct >= 70:
-        cov_color = "#6B7280"
+        cov_color = "#9CA3AF"
     elif coverage_pct >= 50:
-        cov_color = "#B45309"
+        cov_color = "#FBBF24"
     else:
-        cov_color = "#9F1239"
+        cov_color = "#F87171"
 
     coverage_chip = (
         f'<span class="alpha-score-coverage" style="color:{cov_color}; '
@@ -2311,9 +2311,9 @@ def render_alpha_score_section(alpha: dict | None):
             top_pct = pct["top_pct"]
             rank = pct["rank"]
             total = pct["total"]
-            pct_color = "#0F4C75" if top_pct <= 20 else (
-                "#1B6FC0" if top_pct <= 40 else (
-                    "#6B7280" if top_pct <= 70 else "#9F1239"
+            pct_color = "#60A5FA" if top_pct <= 20 else (
+                "#3B82F6" if top_pct <= 40 else (
+                    "#9CA3AF" if top_pct <= 70 else "#F87171"
                 )
             )
             percentile_chip = (
@@ -2382,9 +2382,9 @@ def render_alpha_score_section(alpha: dict | None):
                 f'{label_cell}'
                 '<div class="alpha-comp-bar-wrap">'
                 '<div class="alpha-comp-bar alpha-comp-bar-na" style="width:100%; '
-                'background:repeating-linear-gradient(45deg, #FEE2E2, #FEE2E2 6px, #FCA5A5 6px, #FCA5A5 10px);"></div>'
+                'background:repeating-linear-gradient(45deg, #4A1F1F, #4A1F1F 6px, #6B2E2E 6px, #6B2E2E 10px);"></div>'
                 "</div>"
-                f'<div class="alpha-comp-value alpha-comp-na" style="color:#9F1239;" title="{c_reason}">N/A</div>'
+                f'<div class="alpha-comp-value alpha-comp-na" style="color:#F87171;" title="{c_reason}">N/A</div>'
                 "</div>"
             )
         else:
@@ -2487,21 +2487,21 @@ def _component_status_badge(status: str, confidence: str) -> tuple[str, str]:
     """
     if status == "Scored":
         if confidence == "High":
-            color, bg, label = "#065F46", "#D1FAE5", "Scored · High"
+            color, bg, label = "#86EFAC", "#14321F", "Scored · High"
         elif confidence == "Medium":
-            color, bg, label = "#1E40AF", "#DBEAFE", "Scored · Med"
+            color, bg, label = "#93C5FD", "#1E3A8A", "Scored · Med"
         else:
-            color, bg, label = "#92400E", "#FEF3C7", "Scored · Low"
+            color, bg, label = "#FCD34D", "#3A2E0A", "Scored · Low"
     elif status == "Neutral":
-        color, bg, label = "#374151", "#F3F4F6", "Neutral"
+        color, bg, label = "#CBD5E1", "#1F2937", "Neutral"
     elif status == "Insufficient Data":
-        color, bg, label = "#9F1239", "#FEE2E2", "N/A"
+        color, bg, label = "#FCA5A5", "#4A1F1F", "N/A"
     elif status == "Not Applicable":
-        color, bg, label = "#6B7280", "#F3F4F6", "N/A"
+        color, bg, label = "#9CA3AF", "#1F2937", "N/A"
     elif status == "Calculation Error":
-        color, bg, label = "#9F1239", "#FEE2E2", "Error"
+        color, bg, label = "#FCA5A5", "#4A1F1F", "Error"
     else:
-        color, bg, label = "#6B7280", "#F3F4F6", status[:8]
+        color, bg, label = "#9CA3AF", "#1F2937", status[:8]
 
     chip = (
         f'<span style="padding:1px 7px; border-radius:8px; '
@@ -2622,14 +2622,14 @@ def render_earnings_quality_section(eq: dict | None, ticker: str | None = None):
                 level = stale.get("level", "fresh")
                 label = stale.get("label", "")
                 if level == "stale":
-                    color_chip = "#9F1239"
-                    bg_chip = "#FEE2E2"
+                    color_chip = "#FCA5A5"
+                    bg_chip = "#4A1F1F"
                 elif level == "aging":
-                    color_chip = "#B45309"
-                    bg_chip = "#FFFBEB"
+                    color_chip = "#FCD34D"
+                    bg_chip = "#3A2E0A"
                 else:
-                    color_chip = "#0F4C75"
-                    bg_chip = "#EFF6FF"
+                    color_chip = "#93C5FD"
+                    bg_chip = "#1E3A8A"
                 staleness_chip = (
                     f'<span style="margin-left:10px; padding:2px 8px; '
                     f'border-radius:6px; font-size:12px; font-weight:500; '
@@ -2650,16 +2650,16 @@ def render_earnings_quality_section(eq: dict | None, ticker: str | None = None):
     # 상단 — Earnings Durability Score 배지 (4 단계 라벨)
     if is_manually_curated:
         note = (
-            '<div style="font-size:12px; color:#5B21B6; margin-top:4px; '
-            'padding:4px 8px; background:#F5F3FF; border:1px solid #5B21B6; '
+            '<div style="font-size:12px; color:#C4B5FD; margin-top:4px; '
+            'padding:4px 8px; background:#2E1F52; border:1px solid #5B21B6; '
             'border-radius:6px; display:inline-block;">'
             '※ Manual Override — 사용자가 직접 검토 / 입력한 큐레이션 데이터입니다.'
             "</div>"
         )
     elif is_llm_researched:
         note = (
-            '<div style="font-size:12px; color:#1E40AF; margin-top:4px; '
-            'padding:4px 8px; background:#EFF6FF; border:1px solid #1E40AF; '
+            '<div style="font-size:12px; color:#93C5FD; margin-top:4px; '
+            'padding:4px 8px; background:#1E3A8A; border:1px solid #1E40AF; '
             'border-radius:6px; display:inline-block;">'
             '※ LLM Researched — SEC 10-K (Item 1 / 1A / 7) + yfinance 사업 요약 + 최근 뉴스 '
             '한국어 요약을 기반으로 LLM (gpt-4o-mini) 이 자동 생성한 큐레이션입니다. '
@@ -2668,8 +2668,8 @@ def render_earnings_quality_section(eq: dict | None, ticker: str | None = None):
         )
     elif is_auto_profiled:
         note = (
-            '<div style="font-size:12px; color:#B45309; margin-top:4px; '
-            'padding:4px 8px; background:#FFFBEB; border:1px dashed #D97706; '
+            '<div style="font-size:12px; color:#FCD34D; margin-top:4px; '
+            'padding:4px 8px; background:#3A2E0A; border:1px dashed #D97706; '
             'border-radius:6px; display:inline-block;">'
             '※ Heuristic — 큐레이션 미등록 종목으로, 산업 keyword + 정량 지표 (margin / FCF / ROE) '
             '기반 자동 추정 결과입니다. LLM 큐레이션 또는 사용자 수동 입력으로 보강 권장.'
@@ -2878,7 +2878,7 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
         _score = _alpha.get("alpha_score")
         if _score is None:
             _score_str = "N/A"
-            _color = "#9F1239"
+            _color = "#F87171"
         else:
             _score_str = f"{_score:.0f}"
             _color = _alpha_score_color(_score)
@@ -3180,7 +3180,7 @@ def render_stock_detail():
             def _fmt(v):
                 if v is None:
                     return "—"
-                color = "#0F4C75" if v >= 0 else "#9F1239"
+                color = "#22C55E" if v >= 0 else "#EF4444"
                 return f'<b style="color:{color};">{v*100:+.1f}%p</b>'
 
             laggard_pill = ""
@@ -3188,14 +3188,14 @@ def render_stock_detail():
                 laggard_pill = (
                     '<span style="margin-left:12px; padding:2px 8px; '
                     'border-radius:6px; font-size:12px; font-weight:600; '
-                    'background:#EFF6FF; color:#1E40AF; '
+                    'background:#1E3A8A; color:#93C5FD; '
                     'border:1px solid #1E40AF;">'
                     f'Mag 7 Laggard · score {laggard_check.get("score", 0):.0f}'
                     "</span>"
                 )
 
             cohort_html = (
-                '<div class="card" style="background:#F8FAFC; border-color:#E2E8F0; '
+                '<div class="card" style="background:#1F2937; border-color:#2D3748; '
                 'margin-top:-6px; margin-bottom:14px;">'
                 '<div style="display:flex; justify-content:space-between; '
                 'align-items:center; flex-wrap:wrap; gap:12px;">'
@@ -3385,15 +3385,15 @@ def render_stock_detail():
                 if comp["company"] is not None and comp["company"] > 0:
                     labels.append(detail["name_kr"])
                     values.append(comp["company"])
-                    colors.append("#0F2A5F")
+                    colors.append("#3B82F6")
                 if comp["industry_avg"] is not None:
                     labels.append("산업 평균")
                     values.append(comp["industry_avg"])
-                    colors.append("#94A3B8")
+                    colors.append("#9CA3AF")
                 if comp["peer_avg"] is not None:
                     labels.append("Peer 평균")
                     values.append(comp["peer_avg"])
-                    colors.append("#CBD5E1")
+                    colors.append("#6B7280")
 
                 if values:
                     fig = go.Figure(
@@ -3407,7 +3407,7 @@ def render_stock_detail():
                             ),
                             text=[f"{v:.1f}배" for v in values],
                             textposition="outside",
-                            textfont=dict(size=12, color="#0F172A"),
+                            textfont=dict(size=12, color="#F9FAFB"),
                             hovertemplate="%{y}<br>%{x:.1f}배<extra></extra>",
                             width=0.35,
                         )
@@ -3415,9 +3415,9 @@ def render_stock_detail():
                     # x축 max를 약간 더 길게 잡아 라벨이 잘리지 않게
                     x_max = max(values) * 1.18 if values else 1
                     fig.update_layout(
-                        template="plotly_white",
-                        paper_bgcolor="#FFFFFF",
-                        plot_bgcolor="#FFFFFF",
+                        template="plotly_dark",
+                        paper_bgcolor="#111827",
+                        plot_bgcolor="#111827",
                         height=260 if len(labels) <= 2 else 300,
                         margin=dict(l=130, r=60, t=20, b=20),
                         bargap=0.55,
@@ -3433,7 +3433,7 @@ def render_stock_detail():
                             showgrid=False,
                             zeroline=False,
                             showline=False,
-                            tickfont=dict(color="#475569", size=14),
+                            tickfont=dict(color="#CBD5E1", size=14),
                         ),
                         showlegend=False,
                     )
@@ -3496,7 +3496,7 @@ def render_stock_detail():
                         name="매출액",
                         x=xs,
                         y=rev_s,
-                        marker=dict(color="#CBDAF2"),
+                        marker=dict(color="#374151"),
                         hovertemplate="%{x} 매출액<br>%{y:.2f} " + unit + "<extra></extra>",
                     )
                 )
@@ -3505,7 +3505,7 @@ def render_stock_detail():
                         name="영업이익",
                         x=xs,
                         y=op_s,
-                        marker=dict(color="#2563EB"),
+                        marker=dict(color="#3B82F6"),
                         hovertemplate="%{x} 영업이익<br>%{y:.2f} " + unit + "<extra></extra>",
                     )
                 )
@@ -3514,7 +3514,7 @@ def render_stock_detail():
                         name="당기순이익",
                         x=xs,
                         y=net_s,
-                        marker=dict(color="#0F2A5F"),
+                        marker=dict(color="#06B6D4"),
                         hovertemplate="%{x} 당기순이익<br>%{y:.2f} " + unit + "<extra></extra>",
                     )
                 )
@@ -3549,7 +3549,7 @@ def render_stock_detail():
                 if y_axis_min < 0:
                     fig.add_hline(
                         y=0,
-                        line=dict(color="#CBD5E1", width=1),
+                        line=dict(color="#374151", width=1),
                         layer="below",
                     )
 
@@ -3570,13 +3570,13 @@ def render_stock_detail():
 
                     if opm_v is None:
                         text = "추정치 없음"
-                        color = "#94A3B8"
+                        color = "#9CA3AF"
                     elif opm_v < 0:
                         text = f"OPM {opm_v * 100:.1f}%"
-                        color = "#DC2626"
+                        color = "#EF4444"
                     else:
                         text = f"OPM {opm_v * 100:.1f}%"
-                        color = "#0F2A5F"
+                        color = "#60A5FA"
 
                     fig.add_annotation(
                         x=xlabel,
@@ -3599,51 +3599,51 @@ def render_stock_detail():
                     fig.add_vrect(
                         x0=fi - 0.5,
                         x1=fi + 0.5,
-                        fillcolor="rgba(15,42,95,0.05)",
+                        fillcolor="rgba(59,130,246,0.10)",
                         line_width=0,
                         layer="below",
                     )
 
                 fig.update_layout(
                     barmode="group",
-                    template="plotly_white",
-                    paper_bgcolor="#FFFFFF",
-                    plot_bgcolor="#FFFFFF",
+                    template="plotly_dark",
+                    paper_bgcolor="#111827",
+                    plot_bgcolor="#111827",
                     height=420,
                     margin=dict(l=50, r=30, t=60, b=70),
                     bargap=0.30,
-                    font=dict(size=13, color="#334155"),
+                    font=dict(size=13, color="#CBD5E1"),
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
                         y=-0.22,
                         xanchor="center",
                         x=0.5,
-                        font=dict(size=14, color="#334155"),
+                        font=dict(size=14, color="#CBD5E1"),
                     ),
                     xaxis=dict(
                         showgrid=False,
                         zeroline=False,
                         showline=False,
-                        color="#475569",
-                        tickfont=dict(size=14, color="#475569"),
+                        color="#9CA3AF",
+                        tickfont=dict(size=14, color="#9CA3AF"),
                     ),
                     yaxis=dict(
                         showgrid=False,            # ← 가로 gridline 완전 제거
                         zeroline=False,
                         showline=False,
-                        color="#64748B",
+                        color="#9CA3AF",
                         range=[y_axis_min, y_axis_max],  # 음수 구간 포함, OPM 라벨 여유
-                        tickfont=dict(size=13, color="#64748B"),
+                        tickfont=dict(size=13, color="#9CA3AF"),
                         title=dict(
                             text=f"단위: {unit}",
-                            font=dict(size=12, color="#94A3B8"),
+                            font=dict(size=12, color="#6B7280"),
                         ),
                     ),
                     hoverlabel=dict(
-                        bgcolor="#FFFFFF",
-                        bordercolor="#E2E8F0",
-                        font=dict(color="#0F172A", size=13),
+                        bgcolor="#1F2937",
+                        bordercolor="#374151",
+                        font=dict(color="#F9FAFB", size=13),
                     ),
                 )
                 st.plotly_chart(
@@ -3758,9 +3758,9 @@ def render_stock_detail():
             unsafe_allow_html=True,
         )
         score_color = (
-            "#0F4C75" if bn["score"] >= 75 else
-            "#1B6FC0" if bn["score"] >= 60 else
-            "#6B7280"
+            "#60A5FA" if bn["score"] >= 75 else
+            "#3B82F6" if bn["score"] >= 60 else
+            "#9CA3AF"
         )
         st.markdown(
             '<div class="card">'
@@ -4266,8 +4266,8 @@ def render_mag7_laggard_section():
                 '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
                 '— cohort 평균 대비 후행하는 Mag 7 발굴'
                 "</span></div>"
-                f'<div class="card" style="background:#F0FDF4; border-color:#BBF7D0; '
-                f'color:#166534;">'
+                f'<div class="card" style="background:#14321F; border-color:#1E5235; '
+                f'color:#86EFAC;">'
                 f'현재 Mag 7 cohort 가 균형 — 평균 3M {avg_3m_str}, '
                 f'cohort 대비 -10%p 이상 후행 종목 없음. '
                 "구조적 rotation 기회는 시장 변동 후 다시 점검."
@@ -4289,8 +4289,8 @@ def render_mag7_laggard_section():
         '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
         '— cohort 평균 대비 후행하는 Mag 7 발굴 (mean reversion 후보)'
         "</span></div>"
-        '<div class="info-row check" style="background:#EFF6FF; border-left-color:#1E40AF; '
-        'color:#1E40AF; margin-bottom:8px;">'
+        '<div class="info-row check" style="background:#1E3A8A; border-left-color:#1E40AF; '
+        'color:#93C5FD; margin-bottom:8px;">'
         f'※ 현재 Mag 7 cohort 평균 3M 수익률 {avg_3m_str}. 아래는 cohort 대비 -10%p 이상 후행 + '
         'thesis 유지 종목입니다. 형우의 cohort rotation strategy (시장이 가는데 안 가는 종목 매수) 적용 후보.'
         "</div>",
@@ -4319,12 +4319,12 @@ def render_mag7_laggard_section():
         r_1m_str = f"{r_1m*100:+.1f}%" if r_1m is not None else "N/A"
 
         # Score color
-        score_color = "#0F4C75" if score >= 70 else (
-            "#1B6FC0" if score >= 50 else "#6B7280"
+        score_color = "#60A5FA" if score >= 70 else (
+            "#3B82F6" if score >= 50 else "#9CA3AF"
         )
 
         body = (
-            '<div class="card" style="border-left:3px solid #1E40AF;">'
+            '<div class="card" style="border-left:3px solid #3B82F6;">'
             '<div style="display:flex; justify-content:space-between; align-items:flex-start; '
             'gap:12px; margin-bottom:8px; flex-wrap:wrap;">'
             f'<div><div style="font-size:16px; font-weight:600;">{name_full}</div>'
@@ -4340,8 +4340,8 @@ def render_mag7_laggard_section():
             '<div class="para-row">'
             '<span class="para-label">cohort 대비</span>'
             '<span class="para-text">'
-            f'3M <b style="color:#9F1239;">{lag_3m_pct:+.1f}%p</b>'
-            + (f' · 1M <b style="color:#9F1239;">{lag_1m_pct:+.1f}%p</b>'
+            f'3M <b style="color:#F87171;">{lag_3m_pct:+.1f}%p</b>'
+            + (f' · 1M <b style="color:#F87171;">{lag_1m_pct:+.1f}%p</b>'
                if lag_1m_pct is not None else "")
             + " 후행"
             "</span></div>"
@@ -4534,11 +4534,11 @@ def _render_db_pick_card(p: dict, idx: int) -> None:
     source = p.get("_source", "")
 
     chip_color = {
-        "LLM Researched": "#1E40AF",
-        "Heuristic": "#B45309",
-        "Manual Override": "#5B21B6",
-        "Low": "#9F1239",
-    }.get(confidence, "#6B7280")
+        "LLM Researched": "#93C5FD",
+        "Heuristic": "#FBBF24",
+        "Manual Override": "#C4B5FD",
+        "Low": "#F87171",
+    }.get(confidence, "#9CA3AF")
     score_color = _alpha_score_color(score)
 
     source_label = "Promoted Candidate" if source == "promoted" else "Auto-Curation"
@@ -4552,7 +4552,7 @@ def _render_db_pick_card(p: dict, idx: int) -> None:
         )
 
     body = (
-        '<div class="card" style="border-left:3px solid #94A3B8;">'
+        '<div class="card" style="border-left:3px solid #6B7280;">'
         '<div style="display:flex; justify-content:space-between; align-items:flex-start; '
         'gap:12px; margin-bottom:8px; flex-wrap:wrap;">'
         f'<div><div style="font-size:16px; font-weight:600;">{name} ({ticker})</div>'
@@ -4681,7 +4681,7 @@ def render_outsider_top_picks():
             '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
             '— 큐레이션 외 발굴 종목 중 Alpha Score 상위'
             "</span></div>"
-            '<div class="card" style="background:#FEF3C7; border-color:#FCD34D;">'
+            '<div class="card" style="background:#3A2E0A; border-color:#6B541E;">'
             '아직 Promoted Candidate / auto_curation 데이터가 충분하지 않습니다. '
             'GitHub Actions 의 다음 run 이후 (또는 며칠 누적 뒤) 등장하기 시작합니다.'
             "</div>",
@@ -4694,8 +4694,8 @@ def render_outsider_top_picks():
         '<span style="font-size:13px; color:var(--muted); margin-left:8px;">'
         '— 큐레이션 외 발굴 종목 중 Alpha Score 상위 (Echo Chamber 방지)'
         "</span></div>"
-        '<div class="info-row check" style="background:#F5F3FF; border-left-color:#5B21B6; '
-        'color:#5B21B6; margin-bottom:8px;">'
+        '<div class="info-row check" style="background:#2E1F52; border-left-color:#5B21B6; '
+        'color:#C4B5FD; margin-bottom:8px;">'
         '※ 형우의 큐레이션 watchlist 외 종목 중 Discovery + LLM 자동 큐레이션 기반으로 '
         'Alpha Score 상위만 노출. 매일 변동될 수 있으며, 익숙하지 않은 종목이 보이는 게 정상입니다.'
         "</div>",
@@ -4714,11 +4714,11 @@ def render_outsider_top_picks():
 
         # confidence chip color
         chip_color = {
-            "LLM Researched": "#1E40AF",
-            "Heuristic": "#B45309",
-            "Manual Override": "#5B21B6",
-            "Low": "#9F1239",
-        }.get(confidence, "#6B7280")
+            "LLM Researched": "#93C5FD",
+            "Heuristic": "#FBBF24",
+            "Manual Override": "#C4B5FD",
+            "Low": "#F87171",
+        }.get(confidence, "#9CA3AF")
         score_color = _alpha_score_color(score)
 
         source_label = "Promoted Candidate" if source == "promoted" else "Auto-Curation"
