@@ -740,6 +740,124 @@ def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_capital_efficiency(
+    conn, run_id: str, date_iso: str,
+    universe: list[dict], md_map: dict[str, dict],
+) -> dict:
+    """Capital Efficiency 시스템 (Phase 2) — parking 후보 스크리닝 +
+    watchlist/portfolio 종목 profit protection + capital efficiency 계산 → DB 저장.
+
+    외부 데이터(yfinance) 실패해도 파이프라인 전체가 죽지 않게 try/except.
+    """
+    log.info("[CapEff] Capital Efficiency 시스템 평가 시작...")
+    try:
+        from src.capital_efficiency import calculate_capital_efficiency_score
+        from src.profit_protection import calculate_profit_protection_score
+        from src.parking_strategy import screen_parking_candidates
+
+        result = {"parking": 0, "profit_protection": 0, "capital_efficiency": 0}
+
+        # ── QLD 컨텍스트 (capital efficiency 의 QLD 상대비교용) ──────────
+        qld_ctx: dict | None = None
+        try:
+            from src.market_data import fetch_universe as _fetch_uni
+            qld_map = _fetch_uni(["QLD"], period="2y", enrich=True)
+            qld_md = (qld_map or {}).get("QLD")
+            if qld_md and qld_md.get("available"):
+                qld_ctx = {"market_data": qld_md}
+        except Exception as e:
+            log.debug("[CapEff] QLD 컨텍스트 fetch 실패: %s", e)
+
+        # ── 1) parking 후보 스크리닝 ────────────────────────────────────
+        try:
+            candidates = screen_parking_candidates()  # 고정 유니버스, graceful
+            for c in candidates:
+                try:
+                    db.upsert_parking_candidate(conn, date_iso, c.get("ticker"), c)
+                    result["parking"] += 1
+                except Exception as e:
+                    log.debug("[CapEff] parking upsert 실패 %s: %s", c.get("ticker"), e)
+            conn.commit()
+        except Exception as e:
+            log.warning("[CapEff] parking 스크리닝 실패: %s", e)
+
+        # ── 2) watchlist + portfolio 종목 — profit protection / cap eff ──
+        # watchlist: 이번 run 의 deep-dive universe (md_map 보유)
+        seen: set[str] = set()
+        for u in universe:
+            ticker = (u.get("ticker") or "").upper()
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            md = md_map.get(u.get("ticker")) or md_map.get(ticker) or {}
+            if not md.get("available"):
+                continue
+            stock = {"ticker": ticker, "market_data": md,
+                     "scores": u.get("scores"), "curated_events": u.get("curated_events")}
+            # Capital Efficiency
+            try:
+                ce = calculate_capital_efficiency_score(stock, qld_ctx=qld_ctx)
+                db.upsert_capital_efficiency_score(conn, date_iso, ticker, ce)
+                result["capital_efficiency"] += 1
+            except Exception as e:
+                log.debug("[CapEff] %s capital efficiency 실패: %s", ticker, e)
+            # Profit Protection
+            try:
+                pp = calculate_profit_protection_score({"ticker": ticker,
+                                                        "market_data": md})
+                db.upsert_profit_protection(conn, date_iso, ticker, pp)
+                result["profit_protection"] += 1
+            except Exception as e:
+                log.debug("[CapEff] %s profit protection 실패: %s", ticker, e)
+        conn.commit()
+
+        # ── 3) portfolio.json 의 미국 종목 (yf_ticker 보유) 추가 처리 ────
+        try:
+            import json as _json
+            pf_path = PROJECT_ROOT / "data" / "portfolio.json"
+            if pf_path.exists():
+                pf = _json.loads(pf_path.read_text(encoding="utf-8"))
+                pf_tickers: list[tuple[str, str]] = []  # (yf_ticker, display_ticker)
+                for h in (pf.get("holdings") or []):
+                    yft = h.get("yf_ticker")
+                    if yft and not str(yft).endswith(".KS"):
+                        disp = (h.get("ticker") or yft).upper()
+                        if disp.upper() not in seen:
+                            pf_tickers.append((str(yft), disp.upper()))
+                if pf_tickers:
+                    from src.market_data import fetch_universe as _fetch_uni2
+                    pf_md = _fetch_uni2([t for t, _ in pf_tickers],
+                                        period="2y", enrich=True)
+                    for yft, disp in pf_tickers:
+                        md = (pf_md or {}).get(yft) or {}
+                        if not md.get("available"):
+                            continue
+                        seen.add(disp)
+                        try:
+                            ce = calculate_capital_efficiency_score(
+                                {"ticker": disp, "market_data": md}, qld_ctx=qld_ctx)
+                            db.upsert_capital_efficiency_score(conn, date_iso, disp, ce)
+                            result["capital_efficiency"] += 1
+                        except Exception as e:
+                            log.debug("[CapEff] %s cap eff 실패: %s", disp, e)
+                        try:
+                            pp = calculate_profit_protection_score(
+                                {"ticker": disp, "market_data": md})
+                            db.upsert_profit_protection(conn, date_iso, disp, pp)
+                            result["profit_protection"] += 1
+                        except Exception as e:
+                            log.debug("[CapEff] %s profit protection 실패: %s", disp, e)
+                    conn.commit()
+        except Exception as e:
+            log.warning("[CapEff] portfolio.json 종목 처리 실패: %s", e)
+
+        log.info("[CapEff] done: %s", result)
+        return {"ok": True, **result}
+    except Exception as e:
+        log.warning("[CapEff] Capital Efficiency 평가 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_update_performance_tracking(conn, run_id: str, today: _dt.date) -> int:
     """Logic Auditor — Auto-recorded 결정 전체에 대해 holding period 별 성과 갱신.
 
@@ -905,6 +1023,27 @@ def run_research(
         except Exception as e:
             log.warning("portfolio regime 평가 실패: %s", e)
             summary["market_regime"] = None
+
+        # Capital Efficiency (Phase 2) — parking 후보 / profit protection /
+        # capital efficiency 점수 평가 후 DB 저장.
+        try:
+            ce_universe = []
+            for u in all_deep_dive:
+                s = score_map.get(u["ticker"]) or {}
+                rc = s.get("row_context") or {}
+                ce_universe.append({
+                    **u,
+                    "scores": {k: v for k, v in s.items()
+                               if k not in ("row_context", "rationale")},
+                    "curated_events": rc.get("curated_events"),
+                })
+            cap_res = step_capital_efficiency(
+                conn, run_id, date_iso, ce_universe, md_map,
+            )
+            summary["capital_efficiency"] = cap_res
+        except Exception as e:
+            log.warning("Capital Efficiency 평가 실패: %s", e)
+            summary["capital_efficiency"] = None
 
         step_generate_daily_brief(
             conn, run_id, date_iso, all_deep_dive, score_map, market_summary,

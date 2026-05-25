@@ -1610,7 +1610,7 @@ def render_tag(tag: str) -> str:
 
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
-    ("regime", "포트폴리오 국면"),
+    ("regime", "Portfolio review"),
     ("discovery", "Discovery"),
     ("detail", "종목 상세"),
     ("dislocation", "우량주 과매도"),
@@ -2995,7 +2995,7 @@ def render_pick_card(row: dict[str, Any], idx: int, key_prefix: str = "pick"):
 
 
 # ---------------------------------------------------------------------------
-# 화면: 포트폴리오 국면 (Portfolio Regime)
+# 화면: Portfolio review (Portfolio Regime)
 # ---------------------------------------------------------------------------
 
 # Overheat sub-score 6개 — (컬럼명, 한국어 라벨)
@@ -3034,7 +3034,7 @@ def _fmt_regime_value(val: Any) -> str:
 def render_portfolio_regime():
     render_back_button("regime")
     page_header(
-        "포트폴리오 국면",
+        "Portfolio review",
         meta="Portfolio Regime · Market Overheat Score · Beta Allocation · Crash Deployment",
     )
 
@@ -3186,9 +3186,328 @@ def render_portfolio_regime():
             unsafe_allow_html=True,
         )
 
+    # ── 5) 내 포트폴리오 리뷰 ────────────────────────────────────────
+    render_my_portfolio_review(regime)
+
+
+def _fmt_krw(v: Any) -> str:
+    """KRW 금액 — 억/만 단위 한국어 표기."""
+    n = None
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return "확인 필요"
+    if n is None:
+        return "확인 필요"
+    eok = n / 1e8
+    if abs(eok) >= 1:
+        return f"{eok:,.2f}억 원"
+    man = n / 1e4
+    return f"{man:,.0f}만 원"
+
+
+def render_capital_efficiency_section(ticker: str):
+    """종목상세 — Capital Efficiency / Profit Protection / Parking / QLD Relative
+    보조 점수 표시 (Phase 2). DB 데이터 없으면 graceful 안내.
+    """
+    try:
+        with db.db_session() as conn:
+            ce = db.fetch_capital_efficiency_score(conn, ticker)
+            pp = db.fetch_profit_protection(conn, ticker)
+            parking_rows = db.fetch_parking_candidates(conn)
+    except Exception as e:
+        log.debug(f"capital efficiency 섹션 조회 실패: {e}")
+        return
+
+    parking = None
+    for pr in (parking_rows or []):
+        try:
+            if pr["ticker"] == ticker:
+                parking = pr
+                break
+        except Exception:
+            pass
+
+    if ce is None and pp is None and parking is None:
+        return  # Phase 2 데이터 없으면 섹션 자체를 생략 (조용히)
+
+    def _g(r, k):
+        if r is None:
+            return None
+        try:
+            return r[k] if k in r.keys() else None
+        except Exception:
+            return None
+
+    st.markdown('<div class="section-title">Capital Efficiency · 보조 점수</div>',
+                unsafe_allow_html=True)
+
+    ce_score = _g(ce, "capital_efficiency_score")
+    pp_score = _g(pp, "profit_protection_score")
+    pk_score = _g(parking, "parking_score")
+    qld_view = _g(ce, "qld_relative_view")
+
+    cells = [
+        ("CAPITAL EFFICIENCY",
+         f"{float(ce_score):.0f} / 100" if ce_score is not None else "확인 필요"),
+        ("PROFIT PROTECTION",
+         f"{float(pp_score):.0f} / 100" if pp_score is not None else "확인 필요"),
+        ("PARKING SUITABILITY",
+         f"{float(pk_score):.0f} / 100" if pk_score is not None else "확인 필요"),
+        ("QLD RELATIVE VIEW", qld_view if qld_view else "확인 필요"),
+    ]
+    ccols = st.columns(len(cells))
+    for i, (label, value) in enumerate(cells):
+        with ccols[i]:
+            st.markdown(
+                '<div class="metric-card" style="min-height:96px;">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="font-size:18px;">{value}</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+    notes: list[str] = []
+    ce_comment = _g(ce, "commentary_ko")
+    pp_comment = _g(pp, "commentary_ko")
+    pk_why = _g(parking, "why_parking_ko")
+    if ce_comment:
+        notes.append(ce_comment)
+    if pp_comment:
+        notes.append(pp_comment)
+    if pk_why:
+        notes.append(pk_why + " " + (_g(parking, "risk_ko") or ""))
+    if notes:
+        body = "<br><br>".join(notes)
+        st.markdown(
+            '<div class="card" style="font-size:13px; color:var(--muted); '
+            f'line-height:1.7;">{body}</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_my_portfolio_review(regime: Any | None):
+    """data/portfolio.json 의 실제 보유 종목을 읽어 포트폴리오 리뷰를 렌더.
+
+    - 포트폴리오 레벨 진단 (총평가액·집중도·레버리지·수익분포)
+    - 포지션별 리뷰 (return_pct / leverage / Profit Protection·Capital Efficiency·QLD Relative)
+    - Market Regime 연계 rule-based 한국어 코멘트
+    portfolio.json 없거나 깨지면 graceful 안내.
+    """
+    st.markdown('<div class="section-title">내 포트폴리오 리뷰</div>',
+                unsafe_allow_html=True)
+
+    try:
+        from src.portfolio_review import (
+            load_portfolio, diagnose_portfolio, generate_portfolio_commentary,
+        )
+        pf = load_portfolio(PROJECT_ROOT)
+    except Exception as e:
+        st.markdown(
+            f'<div class="card">포트폴리오 데이터 로드 중 오류가 발생했습니다: {e}</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    if not pf.get("available"):
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-name" style="font-size:16px;">보유 종목 데이터가 없습니다</div>'
+            f'<div class="pick-type">{pf.get("error") or "data/portfolio.json 을 확인하십시오."}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    holdings = pf.get("holdings") or []
+    diag = diagnose_portfolio(holdings)
+
+    # ── 5-1) 포트폴리오 레벨 진단 ────────────────────────────────────
+    top = diag.get("top_holding") or {}
+    top_name = top.get("name") or top.get("ticker") or "—"
+    top_pct = diag.get("top_holding_pct")
+    lev_pct = diag.get("leverage_exposure_pct")
+    tot_ret = diag.get("total_return_pct")
+
+    diag_cells = [
+        ("총 평가액", _fmt_krw(diag.get("total_value_krw"))),
+        ("보유 종목 수", f'{diag.get("n_holdings", 0)} 종목'),
+        ("최대 비중 (집중도)",
+         (f"{top_pct:.1f}%" if top_pct is not None else "확인 필요")
+         + f" · {top_name}"),
+        ("레버리지 노출",
+         f"{lev_pct:.1f}%" if lev_pct is not None else "확인 필요"),
+    ]
+    dcols = st.columns(len(diag_cells))
+    for i, (label, value) in enumerate(diag_cells):
+        with dcols[i]:
+            st.markdown(
+                '<div class="metric-card" style="min-height:104px;">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value" style="font-size:17px;">{value}</div>'
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+    # 수익/손실 분포 + 총 수익률
+    pnl_line = (
+        f'평가손익 {_fmt_krw(diag.get("total_pnl_krw"))}'
+        + (f' (총 수익률 {tot_ret:+.1f}%)' if tot_ret is not None else "")
+        + f' · 수익 종목 {diag.get("n_winners", 0)} / 손실 종목 {diag.get("n_losers", 0)}'
+    )
+    st.markdown(
+        f'<div class="card" style="padding:12px 16px; font-size:14px; '
+        f'color:var(--muted);">{pnl_line}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── 5-2) 포지션별 리뷰 — Phase 2 점수 DB 조회 ────────────────────
+    position_reviews: list[dict] = []
+    pp_map: dict[str, Any] = {}
+    ce_map: dict[str, Any] = {}
+    try:
+        with db.db_session() as conn:
+            for h in holdings:
+                disp = (h.get("ticker") or "").upper()
+                yft = h.get("yf_ticker")
+                if not yft:
+                    continue
+                # portfolio.json 의 disp ticker 로 저장됨 (run_research step 참고)
+                lookup = disp
+                try:
+                    pp = db.fetch_profit_protection(conn, lookup)
+                    if pp is not None:
+                        pp_map[disp] = pp
+                    ce = db.fetch_capital_efficiency_score(conn, lookup)
+                    if ce is not None:
+                        ce_map[disp] = ce
+                except Exception:
+                    pass
+    except Exception as e:
+        log.debug(f"포트폴리오 Phase2 점수 조회 실패: {e}")
+
+    def _row_get(r, k):
+        if r is None:
+            return None
+        try:
+            return r[k] if k in r.keys() else None
+        except Exception:
+            return None
+
+    # 비중 큰 순 정렬
+    sorted_h = sorted(
+        holdings,
+        key=lambda h: (h.get("net_worth_pct") if h.get("net_worth_pct") is not None
+                       else (h.get("value_krw") or 0)),
+        reverse=True,
+    )
+
+    st.markdown(
+        '<div style="font-size:13px; color:var(--muted); margin:6px 0 12px;">'
+        '포지션별 리뷰 — 비중 큰 순. yf_ticker 없는 한국 ETF 는 yfinance 분석 불가로 '
+        "'확인 필요' 로 표시됩니다."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    for h in sorted_h:
+        disp = (h.get("ticker") or "").upper()
+        name = h.get("name") or disp
+        ret = h.get("return_pct")
+        nw = h.get("net_worth_pct")
+        is_lev = bool(h.get("leverage"))
+        yft = h.get("yf_ticker")
+
+        position_reviews.append({
+            "ticker": disp, "name": name, "return_pct": ret, "leverage": is_lev,
+        })
+
+        ret_str = f"{ret:+.1f}%" if ret is not None else "확인 필요"
+        ret_color = ("#22C55E" if (ret or 0) > 0
+                     else "#EF4444" if (ret or 0) < 0 else "var(--muted)")
+        nw_str = f"{nw:.1f}%" if nw is not None else "—"
+        lev_badge = (
+            '<span class="tag" style="background:#7F1D1D; color:#FCA5A5; '
+            'border:1px solid #991B1B;">레버리지</span>' if is_lev else ""
+        )
+
+        # Phase 2 점수
+        pp = pp_map.get(disp)
+        ce = ce_map.get(disp)
+        if not yft:
+            score_html = (
+                '<span class="tag tag-data-unavailable">한국 ETF — 확인 필요</span>'
+            )
+        else:
+            pp_score = _row_get(pp, "profit_protection_score")
+            ce_score = _row_get(ce, "capital_efficiency_score")
+            qld_view = _row_get(ce, "qld_relative_view")
+            chips: list[str] = []
+            if pp_score is not None:
+                chips.append(
+                    f'<span class="tag" style="background:var(--panel-soft); '
+                    f'border:1px solid var(--line);">Profit Protection '
+                    f'{float(pp_score):.0f}/100</span>'
+                )
+            if ce_score is not None:
+                chips.append(
+                    f'<span class="tag" style="background:var(--panel-soft); '
+                    f'border:1px solid var(--line);">Capital Efficiency '
+                    f'{float(ce_score):.0f}/100</span>'
+                )
+            if qld_view:
+                chips.append(
+                    f'<span class="tag" style="background:var(--panel-soft); '
+                    f'border:1px solid var(--line);">QLD: {qld_view}</span>'
+                )
+            if chips:
+                score_html = " ".join(chips)
+            else:
+                score_html = (
+                    '<span class="tag tag-data-unavailable">'
+                    'Phase 2 점수 미산정 — 확인 필요</span>'
+                )
+
+        # profit protection suggested action (있으면)
+        pp_action = _row_get(pp, "suggested_action")
+        action_html = (
+            f'<div style="font-size:13px; color:var(--muted); margin-top:8px;">'
+            f'{pp_action}</div>'
+            if pp_action else ""
+        )
+
+        st.markdown(
+            '<div class="card" style="margin-bottom:10px;">'
+            '<div style="display:flex; align-items:center; justify-content:space-between; '
+            'gap:10px; flex-wrap:wrap;">'
+            f'<div><b style="font-size:15px;">{name}</b> '
+            f'<span style="color:var(--muted); font-size:12px;">{disp}</span> '
+            f'{lev_badge}</div>'
+            f'<div style="font-size:13px;">비중 {nw_str} · '
+            f'보유 수익률 <b style="color:{ret_color};">{ret_str}</b></div>'
+            "</div>"
+            f'<div style="margin-top:8px;">{score_html}</div>'
+            f'{action_html}'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── 5-3) Market Regime 연계 종합 코멘트 ──────────────────────────
+    try:
+        commentary = generate_portfolio_commentary(diag, regime, position_reviews)
+    except Exception as e:
+        commentary = f"코멘트 생성 중 오류: {e}"
+    st.markdown(
+        '<div class="env-block" style="min-height:auto;">'
+        '<div class="env-block-title">PORTFOLIO REVIEW · 시장 국면 연계</div>'
+        f'<div class="env-block-body">{commentary}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
 
 def render_brief_regime_section():
-    """Daily Brief 내 '오늘의 포트폴리오 국면' 섹션 — DB rule-based 요약.
+    """Daily Brief 내 '오늘의 Portfolio review' 섹션 — DB rule-based 요약.
 
     데이터가 없으면 조용히 생략한다 (브리프 흐름을 깨지 않음).
     """
@@ -3208,7 +3527,7 @@ def render_brief_regime_section():
     beta_level = _regime_row_get(regime, "recommended_beta_level")
     commentary = _regime_row_get(regime, "commentary_ko")
 
-    st.markdown('<div class="section-title">오늘의 포트폴리오 국면</div>',
+    st.markdown('<div class="section-title">오늘의 Portfolio review</div>',
                 unsafe_allow_html=True)
 
     head = (
@@ -3274,7 +3593,7 @@ def render_today_brief():
         unsafe_allow_html=True,
     )
 
-    # 오늘의 포트폴리오 국면 — Portfolio Regime 요약 (DB rule-based)
+    # 오늘의 Portfolio review — Portfolio Regime 요약 (DB rule-based)
     render_brief_regime_section()
 
     # 금일 시장 환경 — 3블록 카드 (첫 블록은 자산 테이블)
@@ -3472,6 +3791,9 @@ def render_stock_detail():
 
     # ================== Alpha Score (통합 투자 매력도) ==================
     render_alpha_score_section(detail.get("alpha_score"))
+
+    # ============ Capital Efficiency (Phase 2) 보조 점수 ============
+    render_capital_efficiency_section(ticker)
 
     # Mag 7 Cohort Relative Performance chip — Mag 7 종목만 표시
     try:

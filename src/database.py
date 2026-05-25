@@ -2183,3 +2183,149 @@ def upsert_article_summary(
             now_iso(), now_iso(),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Capital Efficiency (Phase 2) — capital_efficiency_scores / profit_protection /
+# parking_candidates
+# ---------------------------------------------------------------------------
+
+_CAPITAL_EFFICIENCY_COLS: tuple[str, ...] = (
+    "capital_efficiency_score", "expected_return_potential",
+    "time_to_target_probability", "downside_risk_score",
+    "catalyst_visibility_score", "qld_relative_score", "liquidity_exit_score",
+    "qld_relative_view", "commentary_ko",
+)
+
+
+def upsert_capital_efficiency_score(
+    conn: sqlite3.Connection, date_iso: str, ticker: str, fields: dict[str, Any]
+) -> None:
+    """capital_efficiency_scores 행 upsert ((date, ticker) PK). 없는 키는 NULL."""
+    cols = ["date", "ticker"] + list(_CAPITAL_EFFICIENCY_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in cols if c not in ("date", "ticker")
+    )
+    sql = (
+        f"INSERT INTO capital_efficiency_scores ({', '.join(cols)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = [date_iso, ticker]
+    for c in _CAPITAL_EFFICIENCY_COLS:
+        params.append(fields.get(c))
+    params.append(now_iso())
+    conn.execute(sql, params)
+
+
+def fetch_capital_efficiency_score(
+    conn: sqlite3.Connection, ticker: str, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """종목별 최신 (또는 지정일) capital_efficiency_scores 행."""
+    if date_iso:
+        cur = conn.execute(
+            "SELECT * FROM capital_efficiency_scores WHERE date=? AND ticker=?",
+            (date_iso, ticker),
+        )
+        return cur.fetchone()
+    cur = conn.execute(
+        "SELECT * FROM capital_efficiency_scores WHERE ticker=? "
+        "ORDER BY date DESC LIMIT 1",
+        (ticker,),
+    )
+    return cur.fetchone()
+
+
+_PROFIT_PROTECTION_COLS: tuple[str, ...] = (
+    "current_gain", "leverage_flag", "valuation_stretch_score",
+    "technical_extension_score", "narrative_crowding_score",
+    "profit_protection_score", "suggested_action", "commentary_ko",
+)
+
+
+def upsert_profit_protection(
+    conn: sqlite3.Connection, date_iso: str, ticker: str, fields: dict[str, Any]
+) -> None:
+    """profit_protection 행 upsert ((date, ticker) PK). 없는 키는 NULL."""
+    cols = ["date", "ticker"] + list(_PROFIT_PROTECTION_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in cols if c not in ("date", "ticker")
+    )
+    sql = (
+        f"INSERT INTO profit_protection ({', '.join(cols)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = [date_iso, ticker]
+    for c in _PROFIT_PROTECTION_COLS:
+        v = fields.get(c)
+        if c == "leverage_flag" and v is not None:
+            v = int(bool(v))
+        params.append(v)
+    params.append(now_iso())
+    conn.execute(sql, params)
+
+
+def fetch_profit_protection(
+    conn: sqlite3.Connection, ticker: str, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """종목별 최신 (또는 지정일) profit_protection 행."""
+    if date_iso:
+        cur = conn.execute(
+            "SELECT * FROM profit_protection WHERE date=? AND ticker=?",
+            (date_iso, ticker),
+        )
+        return cur.fetchone()
+    cur = conn.execute(
+        "SELECT * FROM profit_protection WHERE ticker=? "
+        "ORDER BY date DESC LIMIT 1",
+        (ticker,),
+    )
+    return cur.fetchone()
+
+
+_PARKING_COLS: tuple[str, ...] = (
+    "name", "parking_score", "beta", "drawdown_resilience_score",
+    "earnings_stability_score", "valuation_reasonableness_score",
+    "dividend_buyback_score", "technical_support_score",
+    "why_parking_ko", "risk_ko",
+)
+
+
+def upsert_parking_candidate(
+    conn: sqlite3.Connection, date_iso: str, ticker: str, fields: dict[str, Any]
+) -> None:
+    """parking_candidates 행 upsert ((date, ticker) PK). 없는 키는 NULL."""
+    cols = ["date", "ticker"] + list(_PARKING_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in cols if c not in ("date", "ticker")
+    )
+    sql = (
+        f"INSERT INTO parking_candidates ({', '.join(cols)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = [date_iso, ticker]
+    for c in _PARKING_COLS:
+        params.append(fields.get(c))
+    params.append(now_iso())
+    conn.execute(sql, params)
+
+
+def fetch_parking_candidates(
+    conn: sqlite3.Connection, date_iso: str | None = None, limit: int = 30
+) -> list[sqlite3.Row]:
+    """최신 (또는 지정일) parking_candidates — parking_score 내림차순."""
+    if not date_iso:
+        r = conn.execute("SELECT MAX(date) AS d FROM parking_candidates").fetchone()
+        date_iso = r["d"] if r and r["d"] else None
+    if not date_iso:
+        return []
+    return list(conn.execute(
+        "SELECT * FROM parking_candidates WHERE date=? "
+        "ORDER BY parking_score DESC LIMIT ?",
+        (date_iso, limit),
+    ))

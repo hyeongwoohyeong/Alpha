@@ -1,0 +1,27 @@
+{
+  "as_of": "2026-05-25",
+  "base_currency": "KRW",
+  "note": "사용자 실제 보유 종목. 자산관리 대시보드(Personal_Asset_Management.xlsx) 기준 스냅샷. 변동 시 수동 갱신.",
+  "holdings": [
+    {"ticker": "TIGER_SEMI_2X", "name": "TIGER 반도체TOP10 레버리지", "yf_ticker": null, "value_krw": 63053550, "cost_krw": 60654960, "pnl_krw": 2398590, "return_pct": 4.0, "net_worth_pct": 40.5, "leverage": true, "high_vol": true, "type": "레버리지 ETF", "memo": "순자산 최대 비중 — 단일 종목 과집중"},
+    {"ticker": "360750", "name": "TIGER 미국S&P500", "yf_ticker": "360750.KS", "value_krw": 30713300, "cost_krw": 24140460, "pnl_krw": 6572840, "return_pct": 27.2, "net_worth_pct": 19.7, "leverage": false, "high_vol": false, "type": "지수 ETF", "memo": "S&P500 추종"},
+    {"ticker": "133690", "name": "TIGER 미국나스닥100", "yf_ticker": "133690.KS", "value_krw": 6533670, "cost_krw": 5375530, "pnl_krw": 1158140, "return_pct": 21.5, "net_worth_pct": 4.2, "leverage": false, "high_vol": false, "type": "지수 ETF", "memo": "나스닥100 추종"},
+    {"ticker": "TSLL", "name": "TSLL (TSLA 2X)", "yf_ticker": "TSLL", "value_krw": 4607431, "cost_krw": 4326302, "pnl_krw": 281129, "return_pct": 6.5, "net_worth_pct": 3.0, "leverage": true, "high_vol": true, "type": "단일종목 레버리지 ETF", "memo": "TSLA 2X"},
+    {"ticker": "SN", "name": "샤크닌자", "yf_ticker": "SN", "value_krw": 4385186, "cost_krw": 4505615, "pnl_krw": -120429, "return_pct": -2.7, "net_worth_pct": 2.8, "leverage": false, "high_vol": false, "type": "개별주", "memo": "가전/리테일"},
+    {"ticker": "JEPQ", "name": "JEPQ", "yf_ticker": "JEPQ", "value_krw": 2836830, "cost_krw": 2744652, "pnl_krw": 92178, "return_pct": 3.4, "net_worth_pct": 1.8, "leverage": false, "high_vol": false, "type": "인컴 ETF", "memo": "나스닥 커버드콜 인컴"},
+    {"ticker": "SCHD", "name": "SCHD", "yf_ticker": "SCHD", "value_krw": 2430956, "cost_krw": 2309108, "pnl_krw": 121848, "return_pct": 5.3, "net_worth_pct": 1.6, "leverage": false, "high_vol": false, "type": "배당 ETF", "memo": "배당성장"},
+    {"ticker": "RISE_HD_PHYSAI", "name": "RISE 현대차고정피지컬AI", "yf_ticker": null, "value_krw": 1226140, "cost_krw": 1208300, "pnl_krw": 17840, "return_pct": 1.5, "net_worth_pct": 0.8, "leverage": false, "high_vol": false, "type": "테마 ETF", "memo": "피지컬 AI 테마"},
+    {"ticker": "RL", "name": "랄프 로렌", "yf_ticker": "RL", "value_krw": 568747, "cost_krw": 534665, "pnl_krw": 34082, "return_pct": 6.4, "net_worth_pct": 0.4, "leverage": false, "high_vol": false, "type": "개별주", "memo": "패션/리테일"},
+    {"ticker": "MCD", "name": "맥도날드", "yf_ticker": "MCD", "value_krw": 439906, "cost_krw": 435099, "pnl_krw": 4807, "return_pct": 1.1, "net_worth_pct": 0.3, "leverage": false, "high_vol": false, "type": "개별주", "memo": "방어적 quality — parking 후보 성격"},
+    {"ticker": "TDG", "name": "트랜스다임 그룹", "yf_ticker": "TDG", "value_krw": 311356, "cost_krw": 305263, "pnl_krw": 6093, "return_pct": 2.0, "net_worth_pct": 0.2, "leverage": false, "high_vol": false, "type": "개별주", "memo": "항공/방산"},
+    {"ticker": "QLD", "name": "ProShares Ultra QQQ (QLD)", "yf_ticker": "QLD", "value_krw": 122371, "cost_krw": 90658, "pnl_krw": 31713, "return_pct": 35.0, "net_worth_pct": 0.1, "leverage": true, "high_vol": true, "type": "레버리지 ETF", "memo": "나스닥 2X — 큰 수익 발생"},
+    {"ticker": "TQQQ", "name": "ProShares UltraPro QQQ (TQQQ)", "yf_ticker": "TQQQ", "value_krw": 108179, "cost_krw": 63198, "pnl_krw": 44981, "return_pct": 71.2, "net_worth_pct": 0.1, "leverage": true, "high_vol": true, "type": "레버리지 ETF", "memo": "나스닥 3X — 큰 수익 발생"},
+    {"ticker": "SLV", "name": "iShares Silver Trust (SLV)", "yf_ticker": "SLV", "value_krw": 102915, "cost_krw": 100019, "pnl_krw": 2896, "return_pct": 2.9, "net_worth_pct": 0.1, "leverage": false, "high_vol": false, "type": "원자재 ETF", "memo": "은"},
+    {"ticker": "NASA", "name": "NASA ETF", "yf_ticker": "NASA", "value_krw": 80818, "cost_krw": 67994, "pnl_krw": 12824, "return_pct": 18.9, "net_worth_pct": 0.1, "leverage": false, "high_vol": false, "type": "테마 ETF", "memo": "우주/항공 테마"},
+    {"ticker": "QQQ", "name": "Invesco QQQ", "yf_ticker": "QQQ", "value_krw": 55431, "cost_krw": 45893, "pnl_krw": 9538, "return_pct": 20.8, "net_worth_pct": 0.0, "leverage": false, "high_vol": false, "type": "지수 ETF", "memo": "나스닥100"},
+    {"ticker": "NFXL", "name": "NFXL (Direxion NFLX 2X)", "yf_ticker": "NFXL", "value_krw": 37095, "cost_krw": 36308, "pnl_krw": 787, "return_pct": 2.2, "net_worth_pct": 0.0, "leverage": true, "high_vol": true, "type": "단일종목 레버리지 ETF", "memo": "NFLX 2X"},
+    {"ticker": "GLD", "name": "SPDR Gold Shares (GLD)", "yf_ticker": "GLD", "value_krw": 27072, "cost_krw": 29058, "pnl_krw": -1986, "return_pct": -6.8, "net_worth_pct": 0.0, "leverage": false, "high_vol": false, "type": "원자재 ETF", "memo": "금"},
+    {"ticker": "NFLX", "name": "Netflix", "yf_ticker": "NFLX", "value_krw": 21683, "cost_krw": 19560, "pnl_krw": 2123, "return_pct": 10.9, "net_worth_pct": 0.0, "leverage": false, "high_vol": false, "type": "개별주", "memo": "미디어/스트리밍"},
+    {"ticker": "SOL_AI_SEMI", "name": "SOL AI반도체TOP2 플러스", "yf_ticker": null, "value_krw": 39960, "cost_krw": 33681, "pnl_krw": 6279, "return_pct": 18.6, "net_worth_pct": 0.0, "leverage": false, "high_vol": false, "type": "테마 ETF", "memo": "AI 반도체 — 거의 전량 매도"}
+  ]
+}
