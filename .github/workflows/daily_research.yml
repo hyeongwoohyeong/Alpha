@@ -24,9 +24,9 @@ jobs:
         with:
           # rebase 가 가능하도록 전체 history fetch
           fetch-depth: 0
-          # GITHUB_TOKEN 권한이 막혀 403 이 뜨는 환경 대비 — 사용자가 발급한
-          # GITHUB_PAT 으로 git auth 를 잡는다(워치리스트·결정 저널과 동일 토큰).
-          token: ${{ secrets.GITHUB_PAT }}
+          # token 은 명시 X — 기본 GITHUB_TOKEN 사용. push 권한은 (1) 워크플로 의
+          # `permissions: contents: write` 블록과 (2) Repo Settings → Actions →
+          # Workflow permissions → "Read and write permissions" 양쪽으로 부여된다.
 
       - name: Setup Python
         uses: actions/setup-python@v5
