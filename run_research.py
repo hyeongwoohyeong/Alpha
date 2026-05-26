@@ -1188,6 +1188,7 @@ def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
             generate_holding_briefing, select_meaningful_holdings,
         )
         from src.config import load_config, make_budget
+        from src.market_cycle_analyzer import locate_current_market
     except Exception as e:
         log.warning("[Holdings Briefing] 모듈 import 실패 — skip: %s", e)
         return result
@@ -1214,6 +1215,14 @@ def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
         log.warning("[Holdings Briefing] market_regime 조회 실패: %s", e)
         regime = None
 
+    # 현재 시장 사이클 위치 (QQQ 기준) — today_focus/today_action 입력
+    # step_market_cycle 이후라 데이터는 최신. 실패해도 None 으로 폴백.
+    try:
+        cycle = locate_current_market(conn, "QQQ")
+    except Exception as e:
+        log.warning("[Holdings Briefing] market_cycle 조회 실패 — None 폴백: %s", e)
+        cycle = None
+
     # 기존 브리핑 (idempotent skip 용)
     try:
         existing = {
@@ -1235,7 +1244,7 @@ def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
             continue
         try:
             brief = generate_holding_briefing(
-                h, regime, budget=budget, cfg=cfg, conn=conn,
+                h, regime, budget=budget, cfg=cfg, conn=conn, cycle=cycle,
             )
             db.upsert_holding_briefing(conn, date_iso, ticker, {
                 "name": h.get("name") or ticker,
@@ -1244,6 +1253,9 @@ def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
                 "key_drivers_ko": brief.get("key_drivers_ko"),
                 "risks_ko": brief.get("risks_ko"),
                 "portfolio_note_ko": brief.get("portfolio_note_ko"),
+                "today_focus_ko": brief.get("today_focus_ko"),
+                "today_action_ko": brief.get("today_action_ko"),
+                "upcoming_catalysts_ko": brief.get("upcoming_catalysts_ko"),
                 "model_used": brief.get("model_used"),
             })
             result["generated"] += 1

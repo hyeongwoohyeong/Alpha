@@ -616,16 +616,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     # ── 보유 종목 브리핑 — 사용자 보유 종목 일일 LLM 리서치 브리핑 ────────
     """
     CREATE TABLE IF NOT EXISTS holdings_briefing (
-        date              TEXT NOT NULL,
-        ticker            TEXT NOT NULL,
-        name              TEXT,
-        exposure_theme    TEXT,
-        summary_ko        TEXT,
-        key_drivers_ko    TEXT,
-        risks_ko          TEXT,
-        portfolio_note_ko TEXT,
-        model_used        TEXT,
-        created_at        TEXT,
+        date                  TEXT NOT NULL,
+        ticker                TEXT NOT NULL,
+        name                  TEXT,
+        exposure_theme        TEXT,
+        summary_ko            TEXT,
+        key_drivers_ko        TEXT,
+        risks_ko              TEXT,
+        portfolio_note_ko     TEXT,
+        today_focus_ko        TEXT,
+        today_action_ko       TEXT,
+        upcoming_catalysts_ko TEXT,
+        model_used            TEXT,
+        created_at            TEXT,
         PRIMARY KEY (date, ticker)
     )
     """,
@@ -3026,8 +3029,9 @@ def fetch_parking_candidates(
 
 _HOLDINGS_BRIEFING_COLS: tuple[str, ...] = (
     "date", "ticker", "name", "exposure_theme", "summary_ko",
-    "key_drivers_ko", "risks_ko", "portfolio_note_ko", "model_used",
-    "created_at",
+    "key_drivers_ko", "risks_ko", "portfolio_note_ko",
+    "today_focus_ko", "today_action_ko", "upcoming_catalysts_ko",
+    "model_used", "created_at",
 )
 
 
@@ -3036,7 +3040,9 @@ def upsert_holding_briefing(
 ) -> None:
     """holdings_briefing 행 upsert ((date, ticker) PK).
 
-    key_drivers_ko 가 list 면 JSON 문자열로 직렬화해 저장한다.
+    key_drivers_ko / upcoming_catalysts_ko 가 list 면 JSON 문자열로 직렬화해 저장.
+    pre-existing DB 에 신규 컬럼이 없으면 SQLite 가 에러를 내므로 graceful 하게
+    이전 스키마(누락 컬럼) 로 폴백 후 재시도한다.
     """
     placeholders = ", ".join("?" for _ in _HOLDINGS_BRIEFING_COLS)
     update_set = ", ".join(
@@ -3048,21 +3054,51 @@ def upsert_holding_briefing(
         f"VALUES ({placeholders}) "
         f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set}"
     )
-    params: list[Any] = []
-    for c in _HOLDINGS_BRIEFING_COLS:
-        if c == "date":
-            params.append(date_iso)
-        elif c == "ticker":
-            params.append(ticker)
-        elif c == "key_drivers_ko":
-            v = fields.get("key_drivers_ko")
-            params.append(dump_json(v) if isinstance(v, (list, tuple)) else v)
-        elif c == "created_at":
-            params.append(fields.get("created_at") or now_iso())
-        else:
-            params.append(fields.get(c))
-    conn.execute(sql, params)
-    conn.commit()
+
+    def _build_params(cols: tuple[str, ...]) -> list[Any]:
+        params: list[Any] = []
+        for c in cols:
+            if c == "date":
+                params.append(date_iso)
+            elif c == "ticker":
+                params.append(ticker)
+            elif c in ("key_drivers_ko", "upcoming_catalysts_ko"):
+                v = fields.get(c)
+                params.append(dump_json(v) if isinstance(v, (list, tuple)) else v)
+            elif c == "created_at":
+                params.append(fields.get("created_at") or now_iso())
+            else:
+                params.append(fields.get(c))
+        return params
+
+    try:
+        conn.execute(sql, _build_params(_HOLDINGS_BRIEFING_COLS))
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        # pre-existing DB 에 신규 컬럼이 아직 추가되지 않은 경우 — 누락 컬럼을
+        # 빼고 한 번 더 시도. 다음 파이프라인 실행 때 새 DB(또는 ALTER) 로 정상화.
+        msg = str(e).lower()
+        if "no column named" not in msg:
+            raise
+        # 신규 컬럼 후보를 제거하고 재시도
+        new_cols = tuple(
+            c for c in _HOLDINGS_BRIEFING_COLS
+            if c not in (
+                "today_focus_ko", "today_action_ko", "upcoming_catalysts_ko",
+            )
+        )
+        placeholders2 = ", ".join("?" for _ in new_cols)
+        update_set2 = ", ".join(
+            f"{c}=excluded.{c}" for c in new_cols
+            if c not in ("date", "ticker")
+        )
+        sql2 = (
+            f"INSERT INTO holdings_briefing ({', '.join(new_cols)}) "
+            f"VALUES ({placeholders2}) "
+            f"ON CONFLICT(date, ticker) DO UPDATE SET {update_set2}"
+        )
+        conn.execute(sql2, _build_params(new_cols))
+        conn.commit()
 
 
 def fetch_holdings_briefings(

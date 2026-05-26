@@ -62,6 +62,28 @@ def _regime_fields(regime: Any | None) -> tuple[str | None, float | None]:
     return _rget(regime, "current_regime"), _f(_rget(regime, "market_overheat_score"))
 
 
+def _cycle_fields(cycle: Any | None) -> dict[str, Any]:
+    """locate_current_market(conn, asset) 결과에서 주요 필드를 안전 추출.
+
+    프롬프트·rule fallback 양쪽에서 공통으로 쓰는 형태로 정규화.
+    fractions(drawdown_pct/similar_forward_*) 은 그대로 둔다 (× 100 은 사용처에서).
+    """
+    if cycle is None:
+        return {
+            "trend_state": None, "drawdown_pct": None, "ath_bucket": None,
+            "similar_forward_3m": None, "similar_sample_count": 0,
+            "verdict_ko": None,
+        }
+    return {
+        "trend_state": _rget(cycle, "trend_state"),
+        "drawdown_pct": _f(_rget(cycle, "drawdown_pct")),
+        "ath_bucket": _rget(cycle, "ath_bucket"),
+        "similar_forward_3m": _f(_rget(cycle, "similar_forward_3m")),
+        "similar_sample_count": _rget(cycle, "similar_sample_count") or 0,
+        "verdict_ko": _rget(cycle, "verdict_ko"),
+    }
+
+
 # ---------------------------------------------------------------------------
 # 의미 있는 보유 종목 선별
 # ---------------------------------------------------------------------------
@@ -86,6 +108,57 @@ def select_meaningful_holdings(
 # ---------------------------------------------------------------------------
 # Rule-based 테마 추론
 # ---------------------------------------------------------------------------
+
+# 테마 버킷별 차기(1~3개월) 구조적 변수 — 단발 뉴스 X, 항상 구조적·테마 변수.
+# rule-based 폴백에서 upcoming_catalysts_ko 채울 때 사용.
+_THEME_CATALYSTS: dict[str, list[str]] = {
+    "korea_semi": [
+        "다음 분기 메모리 실적·HBM 가이던스",
+        "AI 인프라 capex 사이클 인플렉션 신호",
+        "원/달러 환율 — 한국 반도체 실적 레버리지",
+    ],
+    "ai_semi": [
+        "하이퍼스케일러 AI 인프라 capex 가이던스",
+        "AI 매출의 ROI 검증 진행도",
+        "테마 ETF 핵심 종목 비중 쏠림",
+    ],
+    "us_index": [
+        "빅테크 분기 실적·AI 매출 모멘텀",
+        "연준 통화정책 경로와 장기금리",
+        "원/달러 환율 — 환노출 ETF 의 원화 수익 좌우",
+    ],
+    "dividend": [
+        "배당 인상 발표·배당성장률 추세",
+        "금리 환경 — 배당주 상대 매력도",
+        "방어 섹터 이익 안정성",
+    ],
+    "income": [
+        "VIX·기초지수 변동성 — 옵션 프리미엄 수준",
+        "월배당 분배율 추세",
+        "강세장에서의 상승 제한(capped upside)",
+    ],
+    "commodity": [
+        "실질금리·달러 인덱스 추세",
+        "지정학 리스크·안전자산 수요",
+        "산업용 수요(은의 경우 태양광) vs 투자 수요",
+    ],
+    "space": [
+        "정부 우주·국방 예산과 발사·위성 수주",
+        "민간 우주 상업화 진행도",
+        "테마 ETF 비중 쏠림·변동성",
+    ],
+    "tsla": [
+        "전기차 인도량·자동차 마진 가이던스",
+        "FSD·로보택시 등 AI 옵션 가치",
+        "에너지 저장 사업 성장 기여",
+    ],
+    "nflx": [
+        "구독자 순증·광고형 요금제 매출 기여",
+        "콘텐츠 투자 효율과 영업레버리지",
+        "글로벌 스트리밍 경쟁 강도",
+    ],
+}
+
 
 # (테마 키, 키워드 목록, 테마 라벨, 구조적 변수 목록, 요약 한 줄)
 _THEME_BUCKETS: list[tuple[str, list[str], str, list[str], str]] = [
@@ -218,10 +291,11 @@ _BUCKET_PRIORITY: list[str] = [
 ]
 
 
-def _infer_theme_bucket(name: str, type_: str, memo: str) -> tuple[str, list[str], str]:
-    """name/type/memo 키워드 매칭으로 (테마 라벨, 구조적 변수, 요약 한 줄) 추론.
+def _infer_theme_bucket(name: str, type_: str, memo: str) -> tuple[str, list[str], str, str]:
+    """name/type/memo 키워드 매칭으로 (테마 라벨, 구조적 변수, 요약 한 줄, 버킷 키) 추론.
 
     구체적인 테마(개별주·전략 ETF)를 포괄적인 지수 테마보다 먼저 평가한다.
+    버킷 키는 _THEME_CATALYSTS 조회용.
     """
     text = f"{name} {type_} {memo}".lower()
     by_key = {b[0]: b for b in _THEME_BUCKETS}
@@ -229,11 +303,11 @@ def _infer_theme_bucket(name: str, type_: str, memo: str) -> tuple[str, list[str
     for key in _BUCKET_PRIORITY:
         b = by_key.get(key)
         if b and any(kw.lower() in text for kw in b[1]):
-            return b[2], list(b[3]), b[4]
+            return b[2], list(b[3]), b[4], b[0]
     # 2) 우선순위 목록에 없는 버킷도 안전하게 평가 (버킷 추가 대비)
     for _key, kws, label, drivers, summary in _THEME_BUCKETS:
         if _key not in _BUCKET_PRIORITY and any(kw.lower() in text for kw in kws):
-            return label, list(drivers), summary
+            return label, list(drivers), summary, _key
     # 폴백 — 토픽 미분류
     return (
         "개별 종목 / 기타 익스포저",
@@ -244,14 +318,17 @@ def _infer_theme_bucket(name: str, type_: str, memo: str) -> tuple[str, list[str
         ],
         "개별 종목 수준의 익스포저로, 종목·섹터 고유의 이익 흐름과 거시 민감도가 "
         "성과를 좌우합니다.",
+        "other",
     )
 
 
-def _briefing_rule_based(holding: dict, regime: Any | None) -> dict[str, Any]:
+def _briefing_rule_based(
+    holding: dict, regime: Any | None, cycle: Any | None = None
+) -> dict[str, Any]:
     """LLM 없이 동작하는 결정론적 폴백 브리핑.
 
-    name/type/memo 키워드로 테마를 추론하고, 레버리지·비중·현재 국면을
-    엮은 정직하고 얇은 구조적 메모를 생성한다. 어떤 필드도 비우지 않는다.
+    name/type/memo 키워드로 테마를 추론하고, 레버리지·비중·현재 국면(+ 시장 사이클
+    위치) 을 엮은 정직하고 얇은 구조적 메모를 생성한다. 어떤 필드도 비우지 않는다.
     """
     name = (holding.get("name") or holding.get("ticker") or "해당 종목").strip()
     type_ = (holding.get("type") or "").strip()
@@ -260,8 +337,9 @@ def _briefing_rule_based(holding: dict, regime: Any | None) -> dict[str, Any]:
     nw = _f(holding.get("net_worth_pct"))
     ret = _f(holding.get("return_pct"))
     cur_regime, overheat = _regime_fields(regime)
+    cyc = _cycle_fields(cycle)
 
-    label, drivers, theme_summary = _infer_theme_bucket(name, type_, memo)
+    label, drivers, theme_summary, bucket_key = _infer_theme_bucket(name, type_, memo)
 
     # 테마 라벨에 레버리지 표기 부착
     exposure_theme = label
@@ -351,12 +429,110 @@ def _briefing_rule_based(holding: dict, regime: Any | None) -> dict[str, Any]:
         )
     portfolio_note_ko = " ".join(note_parts)
 
+    # ── today_focus_ko — 사이클 위치 + 테마 한 줄 ─────────────────────────
+    trend = cyc.get("trend_state")
+    bucket = cyc.get("ath_bucket")
+    dd_pct = cyc.get("drawdown_pct")
+    sim3 = cyc.get("similar_forward_3m")
+    sim_n = cyc.get("similar_sample_count") or 0
+
+    cycle_phrase: str
+    if bucket and dd_pct is not None:
+        cycle_phrase = f"시장은 '{bucket}' 근처(전고점 {dd_pct*100:+.1f}%)"
+    elif bucket:
+        cycle_phrase = f"시장은 '{bucket}' 근처"
+    elif trend:
+        cycle_phrase = f"시장 추세 상태 '{trend}'"
+    else:
+        cycle_phrase = "시장 사이클 데이터 부족"
+
+    theme_focus_map = {
+        "korea_semi": "한국 반도체 사이클은 AI 메모리 capex 강도와 동조 — 메모리 가격 모멘텀·HBM 가이던스 신호에 민감",
+        "ai_semi": "AI 인프라 capex 사이클 강도와 ROI 검증 진행도가 핵심 변수",
+        "us_index": "빅테크 AI 매출 모멘텀과 장기금리 경로가 지수 향방을 좌우",
+        "dividend": "방어 섹터 이익 안정성과 금리 환경에 따른 상대 매력도",
+        "income": "옵션 프리미엄(VIX) 수준과 강세장 상승 제한 구조",
+        "commodity": "실질금리·달러 인덱스와 안전자산 수요 흐름",
+        "space": "정부 우주·국방 예산 사이클과 테마 비중 쏠림",
+        "tsla": "전기차 마진·FSD 옵션 가치 — 단일 종목 이벤트 리스크 집중",
+        "nflx": "구독자 성장·광고 사업 확장 — 분기 실적 이벤트 리스크",
+        "other": "종목 고유의 이익 흐름과 거시 민감도",
+    }
+    theme_focus = theme_focus_map.get(bucket_key, theme_focus_map["other"])
+
+    extra_focus = ""
+    if trend == "Strong Uptrend" and (bucket and "전고점" in (bucket or "")):
+        extra_focus = " 전고점 근처라 모멘텀 둔화 신호에 특히 민감"
+    elif trend == "Trend Breakdown":
+        extra_focus = " 추세 붕괴 국면이라 추가 하락·반등 강도 확인 필요"
+    elif trend == "Pullback in Uptrend":
+        extra_focus = " 상승추세 내 눌림 구간"
+
+    today_focus_ko = f"{cycle_phrase} — {theme_focus}.{extra_focus}".strip()
+
+    # ── today_action_ko — 비중·레버리지·사이클을 엮은 한 줄 액션 ──────────
+    weight_hi = nw is not None and nw >= 35
+    weight_mid = nw is not None and 15 <= nw < 35
+
+    action_parts: list[str] = []
+    if nw is not None:
+        action_parts.append(f"순자산 {nw:.1f}% 비중")
+    if is_lev:
+        action_parts.append("레버리지")
+    if trend:
+        action_parts.append(f"추세 '{trend}'")
+    elif cur_regime:
+        action_parts.append(f"국면 '{cur_regime}'")
+    if bucket:
+        action_parts.append(f"{bucket} 근처")
+    head = " + ".join(action_parts) if action_parts else "포지션 상태 확인 필요"
+
+    # 액션 추천 — 비중·레버리지·사이클 매트릭스
+    if weight_hi and is_lev and trend == "Strong Uptrend":
+        tail = "신규 추격 금지, 일부 비중 분할 익절·방어 종목 분산 검토."
+    elif weight_hi and is_lev and trend in ("Uptrend but Extended", "Pullback in Uptrend"):
+        tail = "신규 추격 자제, 부분 익절·헤지로 변동성 대비."
+    elif weight_hi and is_lev and trend == "Trend Breakdown":
+        tail = "분산 강화·레버리지 축소 — 손실 증폭 위험 우선 제어."
+    elif weight_hi and trend == "Strong Uptrend":
+        tail = "추격 자제, 차익 일부 분산 검토."
+    elif weight_hi and trend == "Trend Breakdown":
+        tail = "분산 강화·리스크 축소 검토."
+    elif is_lev and trend == "Strong Uptrend":
+        tail = "익절 가이드 점검 — 신규 추격은 신중하게."
+    elif is_lev and trend == "Trend Breakdown":
+        tail = "레버리지 비중 축소 검토."
+    elif weight_mid and is_lev:
+        tail = "비중·변동성 노출 점검, 추격 매수 자제."
+    elif trend == "Trend Breakdown":
+        tail = "추세 회복 신호 확인 후 분할 매수 — 무리한 추격 금지."
+    elif trend == "Strong Uptrend":
+        tail = "기존 비중 유지 — 추격 매수보다 분할 접근."
+    else:
+        tail = "현 비중 유지·신규 결정 보류."
+    today_action_ko = f"{head} → {tail}"
+
+    # ── upcoming_catalysts_ko — 테마 버킷 매핑 (no fabricated dates) ────
+    catalysts = list(_THEME_CATALYSTS.get(bucket_key, []))
+    if not catalysts:
+        catalysts = [
+            "해당 종목·섹터의 이익 모멘텀",
+            "거시 환경(금리·환율) 변화",
+        ]
+    # 비중 큰 단일 종목·레버리지 포지션은 변동성 변수도 함께 보도록
+    if is_lev:
+        catalysts.append("기초지수 변동성(VIX) — 레버리지 누적 효과 좌우")
+    upcoming_catalysts_ko = catalysts[:3]
+
     return {
         "exposure_theme": exposure_theme,
         "summary_ko": summary_ko,
         "key_drivers_ko": key_drivers,
         "risks_ko": risks_ko,
         "portfolio_note_ko": portfolio_note_ko,
+        "today_focus_ko": today_focus_ko,
+        "today_action_ko": today_action_ko,
+        "upcoming_catalysts_ko": upcoming_catalysts_ko,
         "model_used": "rule-based",
     }
 
@@ -380,16 +556,34 @@ _BRIEFING_PROMPT = """너는 국내 탑티어 증권사 리서치센터의 애�
 - 시장 국면(regime): {regime}
 - Overheat Score: {overheat}
 
+[현재 시장 사이클 위치 — QQQ 기반 실증 분석, today_focus·today_action 의 입력]
+- 추세 상태(trend_state): {trend_state}
+- 전고점 대비 낙폭(drawdown_pct): {drawdown_pct}
+- ATH 근접 버킷(ath_bucket): {ath_bucket}
+- 과거 유사 구간 3개월 평균 수익률(similar_forward_3m): {similar_forward_3m}
+- 과거 유사 구간 표본 수(similar_sample_count): {similar_sample_count}
+- 사이클 verdict: {cycle_verdict}
+
 [작성 규칙]
 - 종목명/유형/메모를 보고 이 종목의 '실제 익스포저 테마' 를 네가 직접 추론하라.
   (예: "TIGER 반도체TOP10 레버리지" + "레버리지 ETF" → 한국 반도체 대형주 2배 레버리지,
    삼성전자·SK하이닉스 AI 메모리 사이클)
 - 이것은 STRUCTURAL / THEMATIC 분석이다. 너는 knowledge cutoff 가 있으므로
-  '오늘의 뉴스', 최근 며칠간의 구체적 주가 변동을 지어내지 마라.
+  '오늘의 뉴스', 최근 며칠간의 구체적 주가 변동, 특정 날짜·이벤트를 지어내지 마라.
 - key_drivers 는 '지금 주목할 구조적 변수' 로 프레이밍하라 (단발 뉴스 X).
 - risks 는 이 종목의 레버리지 여부·포트폴리오 비중·현재 시장 국면과 반드시 연결하라.
 - portfolio_note 는 이 종목이 사용자 포트폴리오에서 갖는 의미를
   비중·수익률·시장 국면 관점에서 구체적으로 코멘트하라.
+- today_focus_ko: 위 [현재 시장 사이클 위치] 와 이 종목의 익스포저를 합쳐
+  '오늘 이 종목에서 무엇을 봐야 하나' 를 1~2문장으로. 입력으로 받은 cycle 값만 사용하고,
+  cycle 외 정보(특정 발표·뉴스·날짜)는 절대 지어내지 마라.
+- today_action_ko: 위 비중·레버리지·사이클 입력값을 명시적으로 엮어 '오늘 이 종목에 대해
+  무엇을 할지' 를 1문장 액션으로. 반드시 비중(%) 또는 레버리지 여부 + 현재 사이클 상태를
+  한 번 이상 참조하라. (예: '40% 비중 + 레버리지 + 전고점 근처 → 신규 추격 금지, 일부
+  익절·방어 종목 분산 검토.')
+- upcoming_catalysts_ko: 다음 1~3개월 동안 이 테마/종목에서 모니터해야 할 STRUCTURAL,
+  THEME-LEVEL 변수 0~3개. 특정 날짜·발표 일정·이름 붙은 이벤트(신규 ETF 상장명, X사
+  실적일 같은 것)는 절대 지어내지 마라 — 가이던스·사이클·환율 같은 구조적 변수만 허용.
 - 모든 출력은 한국어. 거짓 정밀(false precision) 금지.
 - "원문/공시를 확인하라" 같은 무의미한 안내 문구 금지.
 - summary 는 2~4문장, key_drivers 는 3~5개.
@@ -400,15 +594,23 @@ _BRIEFING_PROMPT = """너는 국내 탑티어 증권사 리서치센터의 애�
   "summary_ko": "핵심 요약 2~4문장",
   "key_drivers_ko": ["지금 주목할 구조적 변수", "...", "..."],
   "risks_ko": "리스크 — 레버리지·비중·현재 국면과 연계",
-  "portfolio_note_ko": "이 종목이 포트폴리오에서 갖는 의미 — 비중·수익률·국면 관점"
+  "portfolio_note_ko": "이 종목이 포트폴리오에서 갖는 의미 — 비중·수익률·국면 관점",
+  "today_focus_ko": "사이클 위치 + 테마 — 오늘 이 종목에서 봐야 할 것 1~2문장",
+  "today_action_ko": "비중·레버리지·사이클을 엮은 오늘의 액션 1문장",
+  "upcoming_catalysts_ko": ["다음 1~3개월 구조적·테마 변수", "...", "..."]
 }}
 """
 
 
-def _format_briefing_prompt(holding: dict, regime: Any | None) -> str:
+def _format_briefing_prompt(
+    holding: dict, regime: Any | None, cycle: Any | None = None
+) -> str:
     cur_regime, overheat = _regime_fields(regime)
     nw = _f(holding.get("net_worth_pct"))
     ret = _f(holding.get("return_pct"))
+    cyc = _cycle_fields(cycle)
+    dd = cyc.get("drawdown_pct")
+    sim3 = cyc.get("similar_forward_3m")
     return _BRIEFING_PROMPT.format(
         name=holding.get("name") or holding.get("ticker") or "(미상)",
         type=holding.get("type") or "(미상)",
@@ -418,11 +620,17 @@ def _format_briefing_prompt(holding: dict, regime: Any | None) -> str:
         return_pct=f"{ret:+.1f}%" if ret is not None else "확인 필요",
         regime=cur_regime or "확인 필요",
         overheat=f"{overheat:.0f}/100" if overheat is not None else "확인 필요",
+        trend_state=cyc.get("trend_state") or "확인 필요",
+        drawdown_pct=f"{dd*100:+.1f}%" if dd is not None else "확인 필요",
+        ath_bucket=cyc.get("ath_bucket") or "확인 필요",
+        similar_forward_3m=f"{sim3*100:+.1f}%" if sim3 is not None else "확인 필요",
+        similar_sample_count=cyc.get("similar_sample_count") or 0,
+        cycle_verdict=cyc.get("verdict_ko") or "확인 필요",
     )
 
 
 def _normalize_briefing_payload(
-    data: dict, holding: dict, regime: Any | None
+    data: dict, holding: dict, regime: Any | None, cycle: Any | None = None
 ) -> dict[str, Any]:
     """LLM 응답 키 정규화 — 키 변형 흡수 + 빈 필드는 rule-based 로 보강."""
     out: dict[str, Any] = {}
@@ -450,6 +658,24 @@ def _normalize_briefing_payload(
         or data.get("portfolio_comment_ko")
         or ""
     )
+    # 신규 필드 — today_focus / today_action / upcoming_catalysts
+    out["today_focus_ko"] = (
+        data.get("today_focus_ko") or data.get("today_focus") or ""
+    )
+    out["today_action_ko"] = (
+        data.get("today_action_ko") or data.get("today_action") or ""
+    )
+    uc = (
+        data.get("upcoming_catalysts_ko")
+        or data.get("upcoming_catalysts")
+        or data.get("catalysts")
+        or []
+    )
+    if isinstance(uc, str):
+        uc = [s.strip("- •·\t ").strip() for s in uc.splitlines() if s.strip()]
+    out["upcoming_catalysts_ko"] = [
+        str(x).strip() for x in uc if str(x).strip()
+    ][:3]
 
     # 빈 필드는 rule-based 폴백으로 보강 — UI 빈 카드 방지
     if not all(
@@ -459,9 +685,12 @@ def _normalize_briefing_payload(
             out["key_drivers_ko"],
             out["risks_ko"],
             out["portfolio_note_ko"],
+            out["today_focus_ko"],
+            out["today_action_ko"],
+            out["upcoming_catalysts_ko"],
         ]
     ):
-        rb = _briefing_rule_based(holding, regime)
+        rb = _briefing_rule_based(holding, regime, cycle)
         if not out["exposure_theme"]:
             out["exposure_theme"] = rb["exposure_theme"]
         if not out["summary_ko"]:
@@ -472,6 +701,12 @@ def _normalize_briefing_payload(
             out["risks_ko"] = rb["risks_ko"]
         if not out["portfolio_note_ko"]:
             out["portfolio_note_ko"] = rb["portfolio_note_ko"]
+        if not out["today_focus_ko"]:
+            out["today_focus_ko"] = rb["today_focus_ko"]
+        if not out["today_action_ko"]:
+            out["today_action_ko"] = rb["today_action_ko"]
+        if not out["upcoming_catalysts_ko"]:
+            out["upcoming_catalysts_ko"] = rb["upcoming_catalysts_ko"]
     return out
 
 
@@ -479,35 +714,39 @@ def _normalize_briefing_payload(
 # LLM 호출
 # ---------------------------------------------------------------------------
 
-def _briefing_with_openai(holding: dict, regime: Any | None) -> dict[str, Any]:
+def _briefing_with_openai(
+    holding: dict, regime: Any | None, cycle: Any | None = None
+) -> dict[str, Any]:
     """OpenAI API 호출 (openai SDK 필요)."""
     import openai
 
     client = openai.OpenAI()
-    prompt = _format_briefing_prompt(holding, regime)
+    prompt = _format_briefing_prompt(holding, regime, cycle)
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=1200,
+        max_tokens=1400,
         response_format={"type": "json_object"},
     )
     try:
         data = json.loads(resp.choices[0].message.content)
     except Exception as e:
         log.warning("OpenAI 브리핑 응답 JSON 파싱 실패: %s", e)
-        return _briefing_rule_based(holding, regime)
-    return _normalize_briefing_payload(data, holding, regime)
+        return _briefing_rule_based(holding, regime, cycle)
+    return _normalize_briefing_payload(data, holding, regime, cycle)
 
 
-def _briefing_with_anthropic(holding: dict, regime: Any | None) -> dict[str, Any]:
+def _briefing_with_anthropic(
+    holding: dict, regime: Any | None, cycle: Any | None = None
+) -> dict[str, Any]:
     """Claude API 호출 (anthropic SDK 필요)."""
     import anthropic
 
     client = anthropic.Anthropic()
-    prompt = _format_briefing_prompt(holding, regime)
+    prompt = _format_briefing_prompt(holding, regime, cycle)
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=1200,
+        max_tokens=1400,
         messages=[{"role": "user", "content": prompt}],
     )
     text = msg.content[0].text.strip()
@@ -515,8 +754,8 @@ def _briefing_with_anthropic(holding: dict, regime: Any | None) -> dict[str, Any
         data = json.loads(text[text.index("{"):text.rindex("}") + 1])
     except Exception as e:
         log.warning("Anthropic 브리핑 응답 JSON 파싱 실패: %s", e)
-        return _briefing_rule_based(holding, regime)
-    return _normalize_briefing_payload(data, holding, regime)
+        return _briefing_rule_based(holding, regime, cycle)
+    return _normalize_briefing_payload(data, holding, regime, cycle)
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +769,7 @@ def generate_holding_briefing(
     budget=None,
     cfg=None,
     conn=None,
+    cycle: Any | None = None,
 ) -> dict[str, Any]:
     """보유 종목 1개 → 한국어 리서치 브리핑.
 
@@ -541,11 +781,15 @@ def generate_holding_briefing(
         최신 market_regime 행 (current_regime / market_overheat_score 안전 읽기).
     budget, cfg : LLM 예산 / 설정 (미지정 시 새로 생성).
     conn : 미사용 (시그니처 일관성 — 향후 캐시 확장 여지).
+    cycle : dict | None
+        market_cycle_analyzer.locate_current_market(conn, asset) 의 결과.
+        today_focus / today_action 입력으로 사용 — 없으면 폴백이 우아하게 동작.
 
     Returns
     -------
     dict — exposure_theme / summary_ko / key_drivers_ko(list) / risks_ko /
-           portfolio_note_ko / model_used.
+           portfolio_note_ko / today_focus_ko / today_action_ko /
+           upcoming_catalysts_ko(list) / model_used.
     어떤 경우에도 예외를 던지지 않으며, 모든 필드가 채워진다.
     """
     # cfg / budget lazy import (순환 import 회피)
@@ -564,7 +808,7 @@ def generate_holding_briefing(
         if not os.environ.get("OPENAI_API_KEY"):
             return None
         try:
-            payload = _briefing_with_openai(holding, regime)
+            payload = _briefing_with_openai(holding, regime, cycle)
             budget.record()
             return "gpt-4o-mini" if not cfg.use_high_quality_llm else "gpt-4o"
         except Exception as e:
@@ -576,7 +820,7 @@ def generate_holding_briefing(
         if not os.environ.get("ANTHROPIC_API_KEY"):
             return None
         try:
-            payload = _briefing_with_anthropic(holding, regime)
+            payload = _briefing_with_anthropic(holding, regime, cycle)
             budget.record()
             return "claude-haiku-4-5" if not cfg.use_high_quality_llm else "claude-opus-4"
         except Exception as e:
@@ -597,7 +841,7 @@ def generate_holding_briefing(
         model_used = "rule-based"
 
     if payload is None:
-        payload = _briefing_rule_based(holding, regime)
+        payload = _briefing_rule_based(holding, regime, cycle)
         model_used = "rule-based"
 
     payload["model_used"] = model_used
