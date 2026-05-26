@@ -541,6 +541,20 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (date, ticker)
     )
     """,
+    # ── Graduation Tracker — 능동 전술 → ETF 시스템 졸업 준비도 ────────
+    """
+    CREATE TABLE IF NOT EXISTS graduation_status (
+        date                 TEXT PRIMARY KEY,
+        net_worth_krw        REAL,
+        target_krw           REAL,
+        seed_proximity_pct   REAL,
+        readiness_score      REAL,
+        status               TEXT,
+        commentary_ko        TEXT,
+        components_json      TEXT,
+        created_at           TEXT
+    )
+    """,
     # ── Phase 4-A — 백테스트: 시장 일봉 캐시 ────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS market_price_history (
@@ -3021,6 +3035,75 @@ def fetch_parking_candidates(
         "ORDER BY parking_score DESC LIMIT ?",
         (date_iso, limit),
     ))
+
+
+# ---------------------------------------------------------------------------
+# graduation_status — 능동 전술 → ETF 시스템 졸업 준비도
+# ---------------------------------------------------------------------------
+
+_GRADUATION_COLS: tuple[str, ...] = (
+    "net_worth_krw", "target_krw", "seed_proximity_pct",
+    "readiness_score", "status", "commentary_ko", "components_json",
+)
+
+
+def upsert_graduation_status(
+    conn: sqlite3.Connection, date_iso: str, fields: dict[str, Any]
+) -> None:
+    """graduation_status 일일 행 upsert (date PK).
+
+    fields: graduation.evaluate_graduation_readiness 결과 dict.
+    components_ko (list) 는 components_json (TEXT) 으로 직렬화해 저장.
+    """
+    cols = ["date"] + list(_GRADUATION_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in cols if c != "date"
+    )
+    sql = (
+        f"INSERT INTO graduation_status ({', '.join(cols)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = [date_iso]
+    for c in _GRADUATION_COLS:
+        if c == "components_json":
+            params.append(dump_json(fields.get("components_ko")))
+        elif c == "status":
+            params.append(fields.get("status_ko") or fields.get("status"))
+        else:
+            params.append(fields.get(c))
+    params.append(now_iso())
+    try:
+        conn.execute(sql, params)
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        # 기존 DB 에 테이블이 없는 경우 — 한 번 init_schema 시도 후 재시도
+        log.warning("graduation_status upsert 실패, schema 재초기화 시도: %s", e)
+        try:
+            init_schema(conn)
+            conn.execute(sql, params)
+            conn.commit()
+        except Exception as e2:
+            log.warning("graduation_status upsert 재시도 실패 — skip: %s", e2)
+
+
+def fetch_latest_graduation_status(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """최신 (또는 지정일) graduation_status 행. 테이블 없으면 None."""
+    try:
+        if date_iso:
+            cur = conn.execute(
+                "SELECT * FROM graduation_status WHERE date=?", (date_iso,)
+            )
+            return cur.fetchone()
+        cur = conn.execute(
+            "SELECT * FROM graduation_status ORDER BY date DESC LIMIT 1"
+        )
+        return cur.fetchone()
+    except sqlite3.OperationalError:
+        return None
 
 
 # ---------------------------------------------------------------------------

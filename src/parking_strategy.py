@@ -14,18 +14,31 @@
 - Rule-based. LLM 없이 완전 동작.
 - 입력 데이터 없는 sub-score 는 '확인 필요' 로 표시·가중치 제외·재정규화.
 - 모든 함수는 예외를 던지지 않는다.
+
+유니버스 도출 원칙 (2026-05 개편):
+- 더 이상 고정 12개 종목만 보지 않는다 — 시장을 '리서치' 해 후보 선정.
+- 1) 항상 포함: 방어적 ETF whitelist (SCHD/VYM/USMV/SPLV/VTV/VIG/NOBL/BIL/SHV/SGOV)
+  — 카테고리 자체가 방어/인컴/단기채여서 유니버스 스캔이 놓쳐도 무조건 후보.
+- 2) data/wide_universe.csv 에서 방어적 quality 게이트 통과 종목 필터링
+  (large-cap + 방어적 섹터: Consumer Defensive / Healthcare / Utilities /
+  성숙 large-cap Tech). 메타데이터 부족 시 게이트 완화 — graceful.
+- 3) 기존 12개 PARKING_UNIVERSE 는 (1)+(2) 가 너무 적을 때만 fallback.
+- 결과는 dedupe 후 50~150개 정도 — 너무 좁지도 너무 넓지도 않게.
 """
 from __future__ import annotations
 
+import csv
 from typing import Any
 
-from .utils import get_logger
+from .utils import WIDE_UNIVERSE_CSV, get_logger
 
 log = get_logger("parking_strategy")
 
 NEEDS_CHECK = "확인 필요"
 
-# Parking 후보 고정 유니버스 (방어적 quality)
+# Parking 후보 fallback 유니버스 (방어적 quality)
+# NOTE: 더 이상 메인 유니버스가 아니다 — derive_parking_universe() 가 자체
+# 도출에 실패해(예: wide_universe.csv 부재) 후보가 매우 적을 때만 fallback.
 PARKING_UNIVERSE: dict[str, str] = {
     "MCD": "맥도날드",
     "KO": "코카콜라",
@@ -40,6 +53,70 @@ PARKING_UNIVERSE: dict[str, str] = {
     "PG": "프록터앤드갬블",
     "WM": "웨이스트 매니지먼트",
 }
+
+# ── (1) 항상 포함하는 방어적 ETF whitelist ─────────────────────────────
+# 카테고리 자체가 방어적이라 정량 스캔에서 누락돼도 parking 후보 풀에 넣어야 함.
+# - SCHD/VYM/VIG/NOBL: 배당성장·고배당 (Equity Income)
+# - VTV: large-cap Value
+# - USMV/SPLV: low-volatility / minimum-volatility factor
+# - BIL/SHV/SGOV: 1~3M 미국 국채 — 현금 등가물(parking 의 가장 안전한 형태)
+DEFENSIVE_ETF_WHITELIST: dict[str, str] = {
+    "SCHD": "Schwab US Dividend Equity ETF",
+    "VYM": "Vanguard High Dividend Yield ETF",
+    "USMV": "iShares MSCI USA Min Vol ETF",
+    "SPLV": "Invesco S&P 500 Low Volatility ETF",
+    "VTV": "Vanguard Value ETF",
+    "VIG": "Vanguard Dividend Appreciation ETF",
+    "NOBL": "ProShares S&P 500 Dividend Aristocrats ETF",
+    "BIL": "SPDR Bloomberg 1-3 Month T-Bill ETF",
+    "SHV": "iShares Short Treasury Bond ETF",
+    "SGOV": "iShares 0-3 Month Treasury Bond ETF",
+}
+
+# Cash-equivalent 단기채 ETF 그룹 — Crisis/Dislocation 국면에서 bonus 적용
+SHORT_DURATION_BOND_ETFS: frozenset[str] = frozenset({"BIL", "SHV", "SGOV"})
+
+# wide_universe.csv 에서 방어적으로 인정할 섹터
+DEFENSIVE_SECTORS: frozenset[str] = frozenset({
+    "Consumer Defensive",
+    "Consumer Staples",
+    "Healthcare",
+    "Health Care",
+    "Utilities",
+})
+
+# 성숙 large-cap Tech 의 일부 산업(가격결정력·현금흐름 견고) — 보조 게이트
+# NOTE: Semiconductors 는 일부 cash-cow 가 있지만 sector-wide beta 가 높아
+# 명시 화이트리스트로만 통과시킨다. 일반 Tech 산업은 Software 만 게이트 통과,
+# 그 안에서도 mature 대장주(아래 화이트리스트)만 허용.
+DEFENSIVE_TECH_INDUSTRIES: frozenset[str] = frozenset({
+    "Software",
+})
+# 성숙 large-cap Tech 화이트리스트 — 안정적 현금흐름·낮은 변동성
+# (이름은 정량 메타에서 확인 어렵기에 보수적으로 명시 — 추가 시 신중히)
+MATURE_LARGE_CAP_TECH_WHITELIST: frozenset[str] = frozenset({
+    "MSFT",   # 운영체제·클라우드, 배당 지속
+    "AAPL",   # 거대 cash flow, 자사주
+    "GOOGL",  # 광고 cash cow, 다만 베타 다소 있음
+    "ORCL",   # 소프트웨어 cash flow
+    "CSCO",   # 통신 장비, 배당
+    "IBM",    # 배당주
+    "TXN",    # 반도체 cash cow + 고배당
+    "AVGO",   # 반도체 + 강한 배당 — 베타 다소 있음
+})
+
+# Financial 의 일부 — 결제 네트워크는 방어적 quality (V/MA)
+DEFENSIVE_FINANCIAL_INDUSTRIES: frozenset[str] = frozenset({
+    "Credit Services",
+    "Insurance",
+})
+
+# Consumer Discretionary 에서 방어 성격이 강한 일부 (Home Improvement/Discount 등)
+DEFENSIVE_DISCRETIONARY_INDUSTRIES: frozenset[str] = frozenset({
+    "Home Improvement",
+    "Discount Stores",
+    "Restaurants",
+})
 
 # Parking Stock Score sub-score 가중치 (합 = 1.0)
 SUBSCORE_WEIGHTS: dict[str, float] = {
@@ -254,16 +331,22 @@ def _parking_band_ko(score: float) -> str:
 # Parking Stock Score — 메인
 # ---------------------------------------------------------------------------
 
-def calculate_parking_stock_score(stock: dict[str, Any]) -> dict[str, Any]:
+def calculate_parking_stock_score(
+    stock: dict[str, Any],
+    *,
+    weights: dict[str, float] | None = None,
+) -> dict[str, Any]:
     """Parking Stock Score 0~100 산정.
 
     stock: ticker / market_data dict (또는 market_data 자체).
+    weights: regime-aware 로 조정한 가중치 dict. None 이면 기본 SUBSCORE_WEIGHTS.
 
     Returns dict: parking_score, parking_band_ko, beta, 각 *_score,
     각 *_commentary_ko, used_weights, missing_subscores, why_parking_ko, risk_ko.
     """
     stock = stock or {}
     md = _md_of(stock)
+    weight_table = weights if weights is not None else SUBSCORE_WEIGHTS
 
     low_beta_score, low_beta_comment, beta = _score_low_beta(md)
 
@@ -292,8 +375,13 @@ def calculate_parking_stock_score(stock: dict[str, Any]) -> dict[str, Any]:
     missing = [k for k, v in sub_scores.items() if v is None]
 
     if available:
-        total_w = sum(SUBSCORE_WEIGHTS[k] for k in available)
-        used_weights = {k: SUBSCORE_WEIGHTS[k] / total_w for k in available}
+        total_w = sum(weight_table.get(k, SUBSCORE_WEIGHTS[k]) for k in available)
+        if total_w <= 0:
+            total_w = 1.0
+        used_weights = {
+            k: weight_table.get(k, SUBSCORE_WEIGHTS[k]) / total_w
+            for k in available
+        }
         parking = sum(available[k] * used_weights[k] for k in available)
         parking = round(_clamp(parking), 1)
     else:
@@ -364,17 +452,203 @@ def generate_parking_commentary(
     return why, risk
 
 
-def screen_parking_candidates(
-    market_data_map: dict[str, dict] | None = None
-) -> list[dict[str, Any]]:
-    """Parking 후보 고정 유니버스를 fetch + 점수화.
+def derive_parking_universe(
+    *, max_candidates: int = 150, min_fallback_threshold: int = 20,
+) -> dict[str, str]:
+    """Parking 후보 유니버스를 시장 메타데이터로부터 도출.
 
-    market_data_map: {ticker: market_data dict} 가 주어지면 그것을 사용 (파이프라인용).
-                     None 이면 직접 yfinance 로 fetch (graceful — 실패 시 빈 list).
+    파이프라인:
+      1) DEFENSIVE_ETF_WHITELIST — 무조건 포함 (10종 안팎).
+      2) data/wide_universe.csv 에서 방어적 quality 게이트 통과 종목 필터링:
+         - is_active=1, is_etf=0, is_spac=0 (universe.py 와 동일)
+         - market_cap_tier == 'large' (소형주 제외)
+         - sector 가 DEFENSIVE_SECTORS 에 속함, 또는
+         - Financial Services + Credit Services/Insurance (V·MA·BRK 류), 또는
+         - Consumer Discretionary + 방어 성격 산업 (MCD·HD·COST 류), 또는
+         - Technology + 성숙 large-cap (대형 cash flow 머신 일부).
+      3) (1)+(2) 결과가 min_fallback_threshold 보다 적으면 PARKING_UNIVERSE 추가.
+      4) dedupe 후 max_candidates 까지만 유지.
+
+    데이터/필드 부족은 절대 예외로 던지지 않고 graceful 하게 fallback.
+
+    Returns: {ticker: display_name} dict.
+    """
+    derived: dict[str, str] = {}
+
+    # 1) ETF whitelist — 항상 포함
+    derived.update(DEFENSIVE_ETF_WHITELIST)
+
+    # 2) wide_universe.csv 필터링
+    if WIDE_UNIVERSE_CSV.exists():
+        try:
+            with WIDE_UNIVERSE_CSV.open("r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    ticker = (r.get("ticker") or "").strip().upper()
+                    if not ticker:
+                        continue
+                    if (r.get("is_active") or "1").strip() == "0":
+                        continue
+                    if (r.get("is_etf") or "0").strip() == "1":
+                        continue
+                    if (r.get("is_spac") or "0").strip() == "1":
+                        continue
+                    tier = (r.get("market_cap_tier") or "").strip().lower()
+                    sector = (r.get("sector") or "").strip()
+                    industry = (r.get("industry") or "").strip()
+                    name = (r.get("name") or "").strip() or ticker
+
+                    # large-cap 게이트 — tier 가 비어있으면 게이트를 우회 (graceful)
+                    if tier and tier != "large":
+                        continue
+
+                    # 섹터/산업 게이트
+                    passes = False
+                    if sector in DEFENSIVE_SECTORS:
+                        passes = True
+                    elif sector == "Financial Services" and (
+                        industry in DEFENSIVE_FINANCIAL_INDUSTRIES
+                    ):
+                        passes = True
+                    elif sector == "Consumer Discretionary" and (
+                        industry in DEFENSIVE_DISCRETIONARY_INDUSTRIES
+                    ):
+                        passes = True
+                    elif sector == "Technology":
+                        # Tech 는 large-cap 이면서 (Software 산업 OR 명시
+                        # mature-large-cap 화이트리스트) 인 경우만 통과 —
+                        # 베타 데이터 없이는 보수적으로 거른다.
+                        if (
+                            industry in DEFENSIVE_TECH_INDUSTRIES
+                            and ticker in MATURE_LARGE_CAP_TECH_WHITELIST
+                        ) or ticker in MATURE_LARGE_CAP_TECH_WHITELIST:
+                            passes = True
+
+                    if not passes:
+                        continue
+
+                    # wide_universe 는 종종 "BRK.B" 처럼 . 표기 — 그대로 둠
+                    derived.setdefault(ticker, name)
+        except Exception as e:
+            log.warning("wide_universe.csv 필터링 실패 (graceful): %s", e)
+    else:
+        log.info("wide_universe.csv 없음 — ETF whitelist + fallback 만 사용")
+
+    # 3) fallback — 결과가 너무 적으면 기존 12종 추가
+    if len(derived) < min_fallback_threshold:
+        log.info(
+            "parking 후보가 %d개로 적음 — PARKING_UNIVERSE fallback 추가 (12종)",
+            len(derived),
+        )
+        for t, n in PARKING_UNIVERSE.items():
+            derived.setdefault(t, n)
+
+    # 4) 너무 많아도 절단 — ETF whitelist 우선 유지를 위해 우선순위 정렬
+    if len(derived) > max_candidates:
+        whitelist_keys = list(DEFENSIVE_ETF_WHITELIST.keys())
+        fallback_keys = list(PARKING_UNIVERSE.keys())
+        priority = {k: 0 for k in whitelist_keys}
+        for k in fallback_keys:
+            priority.setdefault(k, 1)
+        ordered = sorted(
+            derived.items(), key=lambda kv: priority.get(kv[0], 2),
+        )
+        derived = dict(ordered[:max_candidates])
+
+    return derived
+
+
+def _regime_adjusted_weights(regime: Any | None) -> tuple[dict[str, float], str]:
+    """현재 시장 국면에 따라 SUBSCORE_WEIGHTS 를 재조정.
+
+    - High overheat (>=65) OR Overheated/Expensive but Stable
+      → low_beta / dividend_buyback 상향, valuation_reasonableness 하향
+        (전부 비싸서 valuation 게이트 효용 감소).
+    - Defensive (Correction Watch / Dislocation / Crisis)
+      → drawdown_resilience / earnings_stability 상향.
+    - 그 외 → 기존 가중치 유지.
+
+    Returns: (weights dict (합계 1.0), regime_mode 라벨 문자열).
+    """
+    base = dict(SUBSCORE_WEIGHTS)
+    mode = "normal"
+
+    if regime is None:
+        return base, mode
+
+    cur_regime = None
+    overheat = None
+    try:
+        keys = regime.keys() if hasattr(regime, "keys") else []
+        if "current_regime" in keys:
+            cur_regime = regime["current_regime"]
+        if "market_overheat_score" in keys:
+            overheat = _f(regime["market_overheat_score"])
+    except Exception:
+        return base, mode
+
+    expensive_regimes = {"Overheated", "Expensive but Stable"}
+    defensive_regimes = {"Correction Watch", "Dislocation", "Crisis"}
+
+    is_expensive = (
+        (cur_regime in expensive_regimes)
+        or (overheat is not None and overheat >= 65)
+    )
+    is_defensive = cur_regime in defensive_regimes
+
+    if is_expensive:
+        mode = "expensive"
+        base["low_beta_score"] = 0.22
+        base["dividend_buyback_score"] = 0.17
+        base["valuation_reasonableness_score"] = 0.08
+        # 합 = 0.20 + 0.15 + 0.22 + 0.15 + 0.17 + 0.08 + 0.10 = 1.07
+        # → 재정규화
+    elif is_defensive:
+        mode = "defensive"
+        base["drawdown_resilience_score"] = 0.22
+        base["earnings_stability_score"] = 0.25
+        # 합 = 0.25 + 0.15 + 0.15 + 0.22 + 0.10 + 0.15 + 0.10 = 1.12
+        # → 재정규화
+
+    total = sum(base.values()) or 1.0
+    base = {k: v / total for k, v in base.items()}
+    return base, mode
+
+
+def _bond_etf_bonus(ticker: str, regime_mode: str) -> float:
+    """Crisis/Dislocation 국면에서 단기채 ETF 에 적용할 점수 bonus.
+
+    BIL/SHV/SGOV 는 사실상 현금 등가물 — 위기 국면 parking 의 정답에 가깝다.
+    score 가 None 이거나 defensive 모드가 아니면 0.
+    """
+    if regime_mode != "defensive":
+        return 0.0
+    if ticker.upper() in SHORT_DURATION_BOND_ETFS:
+        return 12.0  # 0~100 스케일에서 의미 있는 가산
+    return 0.0
+
+
+def screen_parking_candidates(
+    market_data_map: dict[str, dict] | None = None,
+    *,
+    regime: Any | None = None,
+    universe: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Parking 후보 유니버스를 fetch + (regime-aware) 점수화.
+
+    - 유니버스: derive_parking_universe() 가 도출 (ETF whitelist + wide_universe
+      방어적 필터 + 부족 시 PARKING_UNIVERSE fallback). universe 인자를 직접
+      넘기면 그것을 그대로 사용 (테스트/디버깅용).
+    - market_data_map: {ticker: market_data dict} 가 주어지면 그것을 사용
+      (파이프라인용). None 이면 직접 yfinance 로 fetch (graceful — 실패 시 빈
+      market_data 로 점수만 NULL 화).
+    - regime: market_regime 테이블의 sqlite3.Row / dict / None — 현재 국면에
+      맞춰 SUBSCORE_WEIGHTS 를 조정. defensive 국면이면 단기채 ETF 에 bonus.
 
     Returns: parking_score 내림차순 정렬된 후보 dict list.
     """
-    tickers = list(PARKING_UNIVERSE.keys())
+    parking_universe = universe if universe is not None else derive_parking_universe()
+    tickers = list(parking_universe.keys())
 
     if market_data_map is None:
         try:
@@ -384,16 +658,38 @@ def screen_parking_candidates(
             log.warning("parking 유니버스 fetch 실패: %s", e)
             market_data_map = {}
 
+    weights, regime_mode = _regime_adjusted_weights(regime)
+
     candidates: list[dict[str, Any]] = []
     for ticker in tickers:
-        md = (market_data_map or {}).get(ticker) or {}
+        # yfinance ticker 정규화 (BRK.B ↔ BRK-B 등 미세 차이 흡수)
+        md = (market_data_map or {}).get(ticker)
+        if md is None:
+            md = (market_data_map or {}).get(ticker.replace(".", "-"))
+        if md is None:
+            md = (market_data_map or {}).get(ticker.replace("-", "."))
+        md = md or {}
         try:
-            scored = calculate_parking_stock_score({"ticker": ticker, "market_data": md})
+            scored = calculate_parking_stock_score(
+                {"ticker": ticker, "market_data": md},
+                weights=weights,
+            )
         except Exception as e:
             log.warning("[%s] parking score 계산 실패: %s", ticker, e)
             continue
         scored["ticker"] = ticker
-        scored["name"] = PARKING_UNIVERSE.get(ticker, ticker)
+        scored["name"] = parking_universe.get(ticker, ticker)
+        scored["regime_mode"] = regime_mode
+
+        # 단기채 ETF bonus — defensive 국면
+        bonus = _bond_etf_bonus(ticker, regime_mode)
+        if bonus > 0 and scored.get("parking_score") is not None:
+            adjusted = min(100.0, scored["parking_score"] + bonus)
+            scored["bond_etf_bonus"] = bonus
+            scored["parking_score_raw"] = scored["parking_score"]
+            scored["parking_score"] = round(adjusted, 1)
+            scored["parking_band_ko"] = _parking_band_ko(adjusted)
+
         candidates.append(scored)
 
     # parking_score 내림차순 (None 은 뒤로)

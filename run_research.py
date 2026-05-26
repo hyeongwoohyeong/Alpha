@@ -786,9 +786,15 @@ def step_capital_efficiency(
         except Exception as e:
             log.debug("[CapEff] QLD 컨텍스트 fetch 실패: %s", e)
 
-        # ── 1) parking 후보 스크리닝 ────────────────────────────────────
+        # ── 1) parking 후보 스크리닝 (regime-aware 유니버스 도출) ────────
         try:
-            candidates = screen_parking_candidates()  # 고정 유니버스, graceful
+            # 최신 regime 행 — screen 의 가중치 조정 + 단기채 ETF bonus 입력
+            try:
+                _pk_regime = db.fetch_latest_market_regime(conn)
+            except Exception as _e:
+                log.debug("[CapEff] parking 용 regime fetch 실패: %s", _e)
+                _pk_regime = None
+            candidates = screen_parking_candidates(regime=_pk_regime)
             for c in candidates:
                 try:
                     db.upsert_parking_candidate(conn, date_iso, c.get("ticker"), c)
@@ -951,6 +957,62 @@ def step_market_cycle(conn, run_id: str, date_iso: str) -> dict:
                     "current": cur.get("verdict_ko")}
     except Exception as e:
         log.warning("[Market Cycle] Stage A 분석 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+def step_graduation(conn, run_id: str, date_iso: str) -> dict:
+    """Graduation Tracker — 능동 전술 운용 → ETF 시스템 졸업 준비도.
+
+    포트폴리오 진단(diagnose_portfolio) + 최신 regime + 시장 사이클 위치(QQQ)
+    를 합쳐 readiness_score (0~10) 를 산정하고 graduation_status 테이블에
+    upsert. step_market_cycle 이후에 호출되어야 cycle 데이터를 활용할 수 있다.
+
+    완전 graceful — 어떤 실패도 파이프라인을 죽이지 않는다.
+    """
+    log.info("[Graduation] ETF 시스템 졸업 준비도 평가 시작...")
+    try:
+        from src.graduation import evaluate_graduation_readiness
+        from src.portfolio_review import diagnose_portfolio, load_portfolio
+        from src.market_cycle_analyzer import locate_current_market
+
+        pf = load_portfolio()
+        holdings = pf.get("holdings") if pf.get("available") else []
+        diag = diagnose_portfolio(holdings or [])
+
+        # 최신 regime
+        try:
+            regime = db.fetch_latest_market_regime(conn)
+        except Exception as e:
+            log.warning("[Graduation] regime fetch 실패: %s", e)
+            regime = None
+
+        # 현재 시장 사이클 위치 (QQQ)
+        try:
+            cycle = locate_current_market(conn, "QQQ")
+        except Exception as e:
+            log.warning("[Graduation] market_cycle 위치 조회 실패: %s", e)
+            cycle = None
+
+        result = evaluate_graduation_readiness(
+            diag, regime, cycle, holdings=holdings or [],
+        )
+        try:
+            db.upsert_graduation_status(conn, date_iso, result)
+        except Exception as e:
+            log.warning("[Graduation] graduation_status upsert 실패: %s", e)
+
+        log.info(
+            "[Graduation] readiness=%s status=%s",
+            result.get("readiness_score"), result.get("status_ko"),
+        )
+        return {
+            "ok": True,
+            "readiness_score": result.get("readiness_score"),
+            "status": result.get("status_ko"),
+            "seed_proximity_pct": result.get("seed_proximity_pct"),
+        }
+    except Exception as e:
+        log.warning("[Graduation] 평가 실패 — skip: %s", e)
         return {"ok": False, "error": str(e)}
 
 
@@ -1476,6 +1538,14 @@ def run_research(
         except Exception as e:
             log.warning("시장 사이클 분석 실패: %s", e)
             summary["market_cycle"] = None
+
+        # Graduation Tracker — 능동 전술 → ETF 시스템 졸업 준비도 (cycle 직후).
+        try:
+            grad_res = step_graduation(conn, run_id, date_iso)
+            summary["graduation"] = grad_res
+        except Exception as e:
+            log.warning("Graduation 평가 실패: %s", e)
+            summary["graduation"] = None
 
         # 백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
         # '오늘 무엇을 할지' 의 처방을 backtest_solution 테이블에 저장.
