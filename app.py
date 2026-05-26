@@ -4446,36 +4446,7 @@ def render_today_brief():
                     append_decision(r, reason="brief picks")
                     st.toast("decision_log.csv 에 저장했습니다.")
 
-    # ── Graduation 준비도 — 단일 라인 마커 (페이지 X, footer 직전) ────
-    # 능동 전술 → 패시브 ETF 시스템 졸업 준비도. compact 한 줄로만 표기.
-    # 데이터 없으면 silently 생략.
-    try:
-        _grad_conn = db.open_db()
-        try:
-            _grad = db.fetch_latest_graduation_status(_grad_conn)
-        finally:
-            _grad_conn.close()
-    except Exception:
-        _grad = None
-    if _grad is not None:
-        try:
-            _score = _grad["readiness_score"]
-            _status = _grad["status"] or ""
-            _comm = _grad["commentary_ko"] or ""
-        except Exception:
-            _score, _status, _comm = None, "", ""
-        if _score is not None:
-            # 짧게 — commentary 첫 한 문장만
-            _short = _comm.split(".")[0].strip()
-            if _short and not _short.endswith("."):
-                _short += "."
-            st.markdown(
-                '<div style="font-size:12.5px; color:var(--muted); '
-                'margin-top:14px; opacity:0.85;">'
-                f"졸업 준비도 {_score:.1f}/10 — {_status}. {_short}"
-                "</div>",
-                unsafe_allow_html=True,
-            )
+    # (Graduation Tracker 는 시스템 복잡도 대비 가치가 낮아 제거 — 사용자 요청.)
 
 
 # ---------------------------------------------------------------------------
