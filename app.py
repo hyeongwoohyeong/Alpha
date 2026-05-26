@@ -4021,6 +4021,8 @@ def render_my_portfolio_review(regime: Any | None):
             "name": h.get("name") or (h.get("ticker") or "").upper(),
             "return_pct": h.get("return_pct"),
             "leverage": bool(h.get("leverage")),
+            # 중요성(materiality) 필터를 위해 절대 평가액도 전달.
+            "value_krw": h.get("value_krw"),
         }
         for h in holdings
     ]

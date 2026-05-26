@@ -18,6 +18,11 @@ log = get_logger("portfolio_review")
 
 NEEDS_CHECK = "확인 필요"
 
+# 중요성(materiality) 임계 — 종목별 알림은 절대 평가액 이 이하 면 노이즈로 간주하고
+# 띄우지 않는다. QLD ₩12만원·TQQQ ₩11만원 같은 미미한 포지션의 +71% 같은 비율
+# 알림이 의사결정에 의미 없어서 도입(2026-05 사용자 요청).
+_MIN_NOTABLE_VALUE_KRW: float = 5_000_000.0
+
 
 # ---------------------------------------------------------------------------
 # portfolio.json 로드
@@ -258,9 +263,13 @@ def generate_portfolio_commentary(
         parts.append(lev_msg)
 
     # 4) 큰 수익 레버리지 포지션 — Profit Protection 관점
+    # 중요성 필터: 절대 평가액 ≥ ₩5M 인 포지션만 (작은 포지션의 +71% 알림은 노이즈).
     big_lev_winners: list[str] = []
     for r in (position_reviews or []):
-        if r.get("leverage") and (_f(r.get("return_pct")) or 0.0) >= 25:
+        v = _f(r.get("value_krw")) or 0.0
+        if (r.get("leverage")
+                and (_f(r.get("return_pct")) or 0.0) >= 25
+                and v >= _MIN_NOTABLE_VALUE_KRW):
             big_lev_winners.append(
                 f"{r.get('name') or r.get('ticker')} ({_f(r.get('return_pct')):+.0f}%)"
             )
@@ -473,9 +482,13 @@ def generate_daily_action_plan(
         })
 
     # E) 큰 수익 난 레버리지 포지션 — 부분 익절
+    # 중요성 필터: 절대 평가액 ≥ ₩5M 인 포지션만 (작은 포지션의 +71% 알림은 노이즈).
     big_lev: list[str] = []
     for h in (holdings or []):
-        if h.get("leverage") and (_f(h.get("return_pct")) or 0.0) >= 25:
+        v = _f(h.get("value_krw")) or 0.0
+        if (h.get("leverage")
+                and (_f(h.get("return_pct")) or 0.0) >= 25
+                and v >= _MIN_NOTABLE_VALUE_KRW):
             big_lev.append(
                 f"{h.get('name') or h.get('ticker')} "
                 f"({_f(h.get('return_pct')):+.0f}%)")
