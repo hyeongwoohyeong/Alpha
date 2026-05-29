@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Iterable
 
 from .market_data import (
@@ -51,21 +52,38 @@ def build_rows(
 
     md_map = fetch_universe(tickers)
 
+    # 뉴스 fetch 병렬화 — Google News RSS 가 종목당 2~5s 라 순차 처리하면
+    # 42 종목 × 3s ≈ 2분 이상 걸렸음. ThreadPoolExecutor 로 동시 ~10 개 fetch
+    # 하면 전체가 10~20s 수준으로 줄어든다. RSS 는 I/O bound 라 GIL 영향 거의 없음.
+    news_map: dict[str, list[dict[str, Any]]] = {}
+    if fetch_news:
+        if progress_cb:
+            progress_cb(0, total, "뉴스 병렬 수집")
+        eligible = [r for r in uni
+                    if (md_map.get(r["ticker"]) or {}).get("available")]
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = {
+                pool.submit(
+                    fetch_ticker_news,
+                    r["ticker"], r.get("name_en"), 5,
+                ): r["ticker"]
+                for r in eligible
+            }
+            for fut in as_completed(futures):
+                t = futures[fut]
+                try:
+                    news_map[t] = fut.result()
+                except Exception as e:
+                    log.warning("[%s] 뉴스 수집 실패: %s", t, e)
+                    news_map[t] = []
+
     rows: list[dict[str, Any]] = []
     for i, row in enumerate(uni, start=1):
         ticker = row["ticker"]
         if progress_cb:
             progress_cb(i, total, ticker)
         md = md_map.get(ticker) or fetch_one(ticker)
-
-        if fetch_news and md.get("available"):
-            try:
-                news = fetch_ticker_news(ticker, name_en=row.get("name_en"), limit=5)
-            except Exception as e:
-                log.warning("[%s] 뉴스 수집 실패: %s", ticker, e)
-                news = []
-        else:
-            news = []
+        news = news_map.get(ticker, [])
         agg = aggregate_importance(news)
 
         # 큐레이션 이벤트 enrich (status/staleness/thesis_impact 자동)

@@ -1413,12 +1413,16 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # 캐시
 # ---------------------------------------------------------------------------
 
-@st.cache_data(show_spinner=False, ttl=60 * 30)
+# TTL 30분 → 6시간으로 — Streamlit Cloud 가 idle 후 깨어날 때마다 ~42 종목
+# 뉴스 RSS·yfinance 재수집 (수십 초~수 분)이 매번 일어나 첫 로드가 너무 느렸음.
+# 파이프라인이 1일 2회 돌고 서버측 데이터도 그 주기로 갱신되므로 6시간 캐시는
+# 신선도 측면에서도 충분하다. 사용자가 trigger_refresh() 누르면 즉시 갱신됨.
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
 def cached_build_rows(_token: int, fetch_news: bool = True) -> list[dict[str, Any]]:
     return build_rows(fetch_news=fetch_news)
 
 
-@st.cache_data(show_spinner=False, ttl=60 * 30)
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
 def cached_market_context(_token: int) -> tuple[dict[str, Any], str]:
     return fetch_market_context()
 
@@ -6765,6 +6769,90 @@ def _render_market_cycle_sections(_pd):
         "</div></div>",
         unsafe_allow_html=True,
     )
+
+    # ── 12) 데이터 사다리 — 낙폭 버킷별 실증 forward return ─────────────
+    st.markdown(
+        '<div class="section-title">12 · 데이터 사다리 — 낙폭 버킷별 실증 '
+        'forward return</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "QQQ 52주 rolling 고점 대비 낙폭 버킷마다 QQQ / QLD / TQQQ 의 3개월(63영업일) "
+        "forward return·승률·표본수를 실증 집계합니다. 하드코딩 단계매수 사다리가 "
+        "아니라, 데이터 자체가 말하는 자산별 우월 구간을 그대로 노출합니다 — "
+        "예) TQQQ 의 sweet spot 은 데이터상 -10~-15% 구간입니다.")
+    try:
+        with db.db_session() as conn:
+            etb_rows = [dict(r) for r in db.fetch_entry_timing_buckets(
+                conn, base_asset="QQQ")]
+    except Exception as e:
+        etb_rows = []
+        log.debug("entry_timing_buckets fetch 실패: %s", e)
+
+    # 3M(63d) 만 표 형태로 노출 — 1M/6M 은 별도 expander
+    bucket_order = [
+        "0~-2%", "-2~-5%", "-5~-10%", "-10~-15%",
+        "-15~-20%", "-20~-25%", "-25~-35%", "-35%+",
+    ]
+    rows_3m = [r for r in etb_rows if int(r.get("window_days") or 0) == 63]
+    if not rows_3m:
+        _vl_empty_card(
+            "데이터 누적 중 — 데이터 사다리 통계가 아직 계산되지 않았습니다. "
+            "월초 파이프라인 실행 시 entry_timing_buckets 가 채워지면 표시됩니다.")
+    else:
+        # bucket × asset 매핑
+        by_b: dict[str, dict[str, dict]] = {}
+        for r in rows_3m:
+            b = r.get("bucket_label") or ""
+            a = r.get("target_asset") or ""
+            by_b.setdefault(b, {})[a] = r
+        etb_table = []
+        for b in bucket_order:
+            row_map = by_b.get(b) or {}
+            qqq = row_map.get("QQQ") or {}
+            qld = row_map.get("QLD") or {}
+            tqq = row_map.get("TQQQ") or {}
+            etb_table.append({
+                "낙폭 버킷": b,
+                "표본(QQQ)": qqq.get("sample_count") or 0,
+                "QQQ 3M 평균": _vl_pct(qqq.get("avg_return")),
+                "QQQ 승률": _vl_pct(qqq.get("win_rate"), 0),
+                "QLD 3M 평균": _vl_pct(qld.get("avg_return")),
+                "QLD 승률": _vl_pct(qld.get("win_rate"), 0),
+                "QLD n": qld.get("sample_count") or 0,
+                "TQQQ 3M 평균": _vl_pct(tqq.get("avg_return")),
+                "TQQQ 승률": _vl_pct(tqq.get("win_rate"), 0),
+                "TQQQ n": tqq.get("sample_count") or 0,
+            })
+        st.dataframe(_pd.DataFrame(etb_table), use_container_width=True,
+                     hide_index=True)
+        st.caption(
+            "표본 수가 작은 깊은 낙폭(-20% 이하)은 신뢰도가 낮습니다. "
+            "QLD 는 2006-06~, TQQQ 는 2010-02~ 이라 같은 버킷에서도 QQQ 표본 "
+            "대비 자연스럽게 작습니다.")
+
+        # 오늘의 진입 추천 한 줄
+        try:
+            with db.db_session() as conn:
+                from src.market_cycle_analyzer import recommend_current_entry
+                rec = recommend_current_entry(conn, "QQQ")
+        except Exception as e:
+            rec = {"rationale_ko": f"추천 계산 실패: {e}"}
+        dd_now = rec.get("current_drawdown_pct")
+        bucket_now = rec.get("current_bucket") or "—"
+        best = rec.get("best_asset") or "—"
+        verdict = rec.get("verdict") or "—"
+        st.markdown(
+            '<div class="card" style="margin-top:10px;">'
+            '<div class="pick-type">데이터 사다리 — 오늘의 판단</div>'
+            '<div class="env-block-body" style="margin-top:8px;">'
+            f'QQQ 52주 낙폭 <b>{_vl_pct(dd_now, 1)}</b> · 버킷 <b>{bucket_now}</b> · '
+            f'데이터상 best <b>{best}</b><br>'
+            f'<b>판정: {verdict}</b><br>'
+            f'<span style="color:var(--text-dim);">{rec.get("rationale_ko","")}</span>'
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_discovery():
