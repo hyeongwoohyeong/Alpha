@@ -117,6 +117,16 @@ _THEME_CATALYSTS: dict[str, list[str]] = {
         "AI 인프라 capex 사이클 인플렉션 신호",
         "원/달러 환율 — 한국 반도체 실적 레버리지",
     ],
+    "korea_auto": [
+        "현대차·기아 글로벌 판매·인센티브 추세",
+        "전동화·하이브리드 믹스와 영업레버리지",
+        "원/달러 환율 — 수출 비중 큰 한국 자동차 마진 영향",
+    ],
+    "korea_defense": [
+        "K-방산 수출 수주 사이클·해외 계약 진행도",
+        "정부 국방 예산과 후속 양산 가시성",
+        "핵심 부품 공급망과 납기 리스크",
+    ],
     "ai_semi": [
         "하이퍼스케일러 AI 인프라 capex 가이던스",
         "AI 매출의 ROI 검증 진행도",
@@ -160,8 +170,59 @@ _THEME_CATALYSTS: dict[str, list[str]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# 테마 → KR 기초자산(underlying) 매핑 — Stage 3
+# ---------------------------------------------------------------------------
+# 사용자가 실제로 보유한 한국 테마 익스포저에 한해 기초자산 티커를 매핑한다.
+# 큐레이션이 아니라 *테마 → 기초자산* 의 작은 정적 매핑 — 한국 반도체·자동차·
+# 방산 정도만 다룬다. 임의로 키우지 않는다 (작고 안정적 매핑 유지).
+_KR_UNDERLYING_HINTS: dict[str, list[tuple[str, str]]] = {
+    # 한국 반도체 — TIGER 반도체TOP10 레버리지 등이 추종하는 핵심 종목
+    "korea_semi": [
+        ("005930", "삼성전자"),
+        ("000660", "SK하이닉스"),
+    ],
+    # 한국 자동차 — RISE 현대차고정피지컬AI 등이 핵심으로 담는 자동차 빅2
+    "korea_auto": [
+        ("005380", "현대차"),
+        ("000270", "기아"),
+    ],
+    # 한국 방산 — 추후 방산 ETF 추가 시 사용 (현재는 잠재 분류만)
+    "korea_defense": [
+        ("012450", "한화에어로스페이스"),
+        ("047810", "한국항공우주"),
+    ],
+}
+
+
 # (테마 키, 키워드 목록, 테마 라벨, 구조적 변수 목록, 요약 한 줄)
 _THEME_BUCKETS: list[tuple[str, list[str], str, list[str], str]] = [
+    (
+        "korea_auto",
+        ["현대차", "기아", "hyundai motor", "kia motor", "korean auto"],
+        "한국 자동차 (현대차·기아 등 완성차 빅2)",
+        [
+            "현대차·기아의 글로벌 판매량과 인센티브 추세",
+            "전동화·하이브리드 믹스와 자동차 영업레버리지",
+            "원/달러 환율 — 수출 비중이 큰 한국 자동차 마진 변수",
+            "미국·유럽 시장 점유율과 관세·정책 리스크",
+        ],
+        "한국 자동차 빅2에 집중된 익스포저로, 글로벌 판매와 환율·믹스가 마진을 "
+        "좌우합니다.",
+    ),
+    (
+        "korea_defense",
+        ["방산", "방위산업", "k-방산", "한화에어로", "한국항공우주", "lig넥스원"],
+        "한국 방산 (K-방산 — 한화에어로·KAI 등)",
+        [
+            "K-방산 수출 수주 사이클과 해외 양산 진행도",
+            "정부 국방 예산과 국내 후속 양산 가시성",
+            "핵심 부품·소재 공급망과 납기 리스크",
+            "지정학 리스크 — 안보 수요의 구조적 변수",
+        ],
+        "한국 방산 익스포저로, 수출 수주 사이클과 국내 국방 예산이 핵심 변수인 "
+        "구조적 성장 테마입니다.",
+    ),
     (
         "korea_semi",
         ["반도체", "semi", "semiconductor"],
@@ -287,6 +348,7 @@ _THEME_BUCKETS: list[tuple[str, list[str], str, list[str], str]] = [
 #     "SOL AI반도체" 는 korea_semi("반도체")보다 ai_semi 가 먼저여야 한다.
 _BUCKET_PRIORITY: list[str] = [
     "income", "dividend", "commodity", "space", "tsla", "nflx",
+    "korea_auto", "korea_defense",
     "ai_semi", "korea_semi", "us_index",
 ]
 
@@ -322,8 +384,139 @@ def _infer_theme_bucket(name: str, type_: str, memo: str) -> tuple[str, list[str
     )
 
 
+# ---------------------------------------------------------------------------
+# KR 기초자산 스냅샷 — 실데이터(market_price_history)에서 안전 계산
+# ---------------------------------------------------------------------------
+
+def _kr_underlying_snapshot_for_ticker(
+    conn: Any, ticker: str, name_ko: str
+) -> dict[str, Any] | None:
+    """단일 KR 기초자산 티커의 라이브 시세 스냅샷.
+
+    market_price_history 에서 종가 시계열을 읽어 (1) 마지막 종가, (2) 52주 고점,
+    (3) 고점 대비 낙폭, (4) 30영업일 수익률을 계산한다.
+
+    데이터가 부족하면 None — 호출자가 graceful 하게 처리하도록 한다.
+    어떤 예외도 위로 던지지 않는다.
+    """
+    if conn is None or not ticker:
+        return None
+    try:
+        from . import database as _db
+        rows = _db.fetch_market_price_history(conn, ticker)
+    except Exception as e:
+        log.debug("[%s] price history 로드 실패: %s", ticker, e)
+        return None
+    if not rows:
+        return None
+
+    closes: list[float] = []
+    for r in rows:
+        v: Any = None
+        # sqlite3.Row 우선
+        try:
+            keys = r.keys() if hasattr(r, "keys") else None
+        except Exception:
+            keys = None
+        if keys:
+            v = r["adj_close"] if "adj_close" in keys else None
+            if v is None and "close" in keys:
+                v = r["close"]
+        else:
+            # tuple-ish fallback — adj_close 가 보통 index 6, close 가 5
+            try:
+                v = r[6] if len(r) > 6 else None
+            except Exception:
+                v = None
+            if v is None:
+                try:
+                    v = r[5] if len(r) > 5 else None
+                except Exception:
+                    v = None
+        if v is None:
+            continue
+        try:
+            closes.append(float(v))
+        except (TypeError, ValueError):
+            continue
+
+    if not closes:
+        return None
+
+    last = closes[-1]
+    if last <= 0:
+        return None
+    # 52주 고점 — 최근 252영업일
+    window = closes[-252:] if len(closes) > 252 else closes
+    peak = max(window)
+    dd_from_high = (last / peak - 1.0) if peak > 0 else None
+    ret_30d: float | None = None
+    if len(closes) > 30:
+        prev = closes[-31]
+        if prev > 0:
+            ret_30d = last / prev - 1.0
+
+    return {
+        "ticker": ticker,
+        "name_ko": name_ko,
+        "last_close": round(last, 2),
+        "peak_52w": round(peak, 2),
+        "dd_from_52w_high": round(dd_from_high, 4) if dd_from_high is not None else None,
+        "return_30d": round(ret_30d, 4) if ret_30d is not None else None,
+    }
+
+
+def build_kr_underlying_snapshot(
+    conn: Any, bucket_key: str | None
+) -> tuple[list[dict[str, Any]], str | None]:
+    """테마 bucket_key 에 대응하는 KR 기초자산 스냅샷 리스트와 한국어 한 줄.
+
+    Returns:
+        (snapshots, text_ko) — snapshots 가 비어 있으면 (이용 가능 데이터 없음)
+        text_ko 는 None.
+    """
+    if not bucket_key:
+        return [], None
+    hints = _KR_UNDERLYING_HINTS.get(bucket_key) or []
+    if not hints or conn is None:
+        return [], None
+
+    snaps: list[dict[str, Any]] = []
+    for ticker, name_ko in hints:
+        s = _kr_underlying_snapshot_for_ticker(conn, ticker, name_ko)
+        if s is not None:
+            snaps.append(s)
+
+    if not snaps:
+        return [], None
+
+    # 한국어 한 줄 — 각 종목별 52주 고점 대비 낙폭 + 30일 수익률을 압축적으로.
+    parts: list[str] = []
+    for s in snaps:
+        dd = s.get("dd_from_52w_high")
+        r30 = s.get("return_30d")
+        name = s.get("name_ko") or s.get("ticker") or ""
+        if dd is None and r30 is None:
+            continue
+        seg = name
+        bits: list[str] = []
+        if dd is not None:
+            bits.append(f"52주 고점 대비 {dd * 100:+.1f}%")
+        if r30 is not None:
+            bits.append(f"30일 {r30 * 100:+.1f}%")
+        if bits:
+            seg += " " + ", ".join(bits)
+        parts.append(seg)
+
+    if not parts:
+        return snaps, None
+    text_ko = "기초자산 — " + " / ".join(parts) + "."
+    return snaps, text_ko
+
+
 def _briefing_rule_based(
-    holding: dict, regime: Any | None, cycle: Any | None = None
+    holding: dict, regime: Any | None, cycle: Any | None = None,
+    *, underlying_snapshot_ko: str | None = None,
 ) -> dict[str, Any]:
     """LLM 없이 동작하는 결정론적 폴백 브리핑.
 
@@ -448,6 +641,8 @@ def _briefing_rule_based(
 
     theme_focus_map = {
         "korea_semi": "한국 반도체 사이클은 AI 메모리 capex 강도와 동조 — 메모리 가격 모멘텀·HBM 가이던스 신호에 민감",
+        "korea_auto": "현대차·기아의 글로벌 판매와 환율·전동화 믹스가 마진 변수",
+        "korea_defense": "K-방산 수출 수주 사이클과 국방 예산 가시성이 핵심 변수",
         "ai_semi": "AI 인프라 capex 사이클 강도와 ROI 검증 진행도가 핵심 변수",
         "us_index": "빅테크 AI 매출 모멘텀과 장기금리 경로가 지수 향방을 좌우",
         "dividend": "방어 섹터 이익 안정성과 금리 환경에 따른 상대 매력도",
@@ -524,7 +719,7 @@ def _briefing_rule_based(
         catalysts.append("기초지수 변동성(VIX) — 레버리지 누적 효과 좌우")
     upcoming_catalysts_ko = catalysts[:3]
 
-    return {
+    out_rb: dict[str, Any] = {
         "exposure_theme": exposure_theme,
         "summary_ko": summary_ko,
         "key_drivers_ko": key_drivers,
@@ -535,6 +730,10 @@ def _briefing_rule_based(
         "upcoming_catalysts_ko": upcoming_catalysts_ko,
         "model_used": "rule-based",
     }
+    # underlying_snapshot_ko 가 있으면 노출 — 없으면 키 자체를 생략 (graceful).
+    if underlying_snapshot_ko:
+        out_rb["underlying_snapshot_ko"] = underlying_snapshot_ko
+    return out_rb
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +763,9 @@ _BRIEFING_PROMPT = """너는 국내 탑티어 증권사 리서치센터의 애�
 - 과거 유사 구간 표본 수(similar_sample_count): {similar_sample_count}
 - 사이클 verdict: {cycle_verdict}
 
+[KR 기초자산 라이브 시세 — 있을 때만, 없으면 '해당 없음']
+- {underlying_snapshot}
+
 [작성 규칙]
 - 종목명/유형/메모를 보고 이 종목의 '실제 익스포저 테마' 를 네가 직접 추론하라.
   (예: "TIGER 반도체TOP10 레버리지" + "레버리지 ETF" → 한국 반도체 대형주 2배 레버리지,
@@ -581,6 +783,10 @@ _BRIEFING_PROMPT = """너는 국내 탑티어 증권사 리서치센터의 애�
   무엇을 할지' 를 1문장 액션으로. 반드시 비중(%) 또는 레버리지 여부 + 현재 사이클 상태를
   한 번 이상 참조하라. (예: '40% 비중 + 레버리지 + 전고점 근처 → 신규 추격 금지, 일부
   익절·방어 종목 분산 검토.')
+- underlying_snapshot_ko: 위 [KR 기초자산 라이브 시세] 가 '해당 없음' 이 아닐 때만
+  채워라. 그 입력 문자열 자체의 숫자만 인용해 한 줄로 압축 — "삼성전자 52주 고점
+  대비 -3.2%, 30일 +5.4%" 같은 형태. 절대 다른 수치를 추가 생성하지 마라.
+  입력이 없으면 빈 문자열 ("") 을 그대로 두라.
 - upcoming_catalysts_ko: 다음 1~3개월 동안 이 테마/종목에서 모니터해야 할 STRUCTURAL,
   THEME-LEVEL 변수 0~3개. 특정 날짜·발표 일정·이름 붙은 이벤트(신규 ETF 상장명, X사
   실적일 같은 것)는 절대 지어내지 마라 — 가이던스·사이클·환율 같은 구조적 변수만 허용.
@@ -597,13 +803,15 @@ _BRIEFING_PROMPT = """너는 국내 탑티어 증권사 리서치센터의 애�
   "portfolio_note_ko": "이 종목이 포트폴리오에서 갖는 의미 — 비중·수익률·국면 관점",
   "today_focus_ko": "사이클 위치 + 테마 — 오늘 이 종목에서 봐야 할 것 1~2문장",
   "today_action_ko": "비중·레버리지·사이클을 엮은 오늘의 액션 1문장",
+  "underlying_snapshot_ko": "KR 기초자산 라이브 시세 한 줄 (입력 없으면 빈 문자열)",
   "upcoming_catalysts_ko": ["다음 1~3개월 구조적·테마 변수", "...", "..."]
 }}
 """
 
 
 def _format_briefing_prompt(
-    holding: dict, regime: Any | None, cycle: Any | None = None
+    holding: dict, regime: Any | None, cycle: Any | None = None,
+    *, underlying_snapshot_ko: str | None = None,
 ) -> str:
     cur_regime, overheat = _regime_fields(regime)
     nw = _f(holding.get("net_worth_pct"))
@@ -626,11 +834,13 @@ def _format_briefing_prompt(
         similar_forward_3m=f"{sim3*100:+.1f}%" if sim3 is not None else "확인 필요",
         similar_sample_count=cyc.get("similar_sample_count") or 0,
         cycle_verdict=cyc.get("verdict_ko") or "확인 필요",
+        underlying_snapshot=underlying_snapshot_ko or "해당 없음",
     )
 
 
 def _normalize_briefing_payload(
-    data: dict, holding: dict, regime: Any | None, cycle: Any | None = None
+    data: dict, holding: dict, regime: Any | None, cycle: Any | None = None,
+    *, underlying_snapshot_ko: str | None = None,
 ) -> dict[str, Any]:
     """LLM 응답 키 정규화 — 키 변형 흡수 + 빈 필드는 rule-based 로 보강."""
     out: dict[str, Any] = {}
@@ -677,6 +887,24 @@ def _normalize_briefing_payload(
         str(x).strip() for x in uc if str(x).strip()
     ][:3]
 
+    # underlying_snapshot_ko — LLM 이 못 채우거나 입력이 없는 경우 모두 graceful.
+    us = (
+        data.get("underlying_snapshot_ko")
+        or data.get("underlying_snapshot")
+        or ""
+    )
+    us = str(us).strip()
+    # LLM 이 환각으로 임의 데이터를 만든 경우를 방지 — 실데이터(underlying_snapshot_ko)
+    # 가 비어 있으면 LLM 출력도 무시한다.
+    if underlying_snapshot_ko:
+        # LLM 가 채우지 못했으면 실데이터 한 줄을 그대로 사용.
+        out["underlying_snapshot_ko"] = us or underlying_snapshot_ko
+    elif us:
+        # 실데이터 없는데 LLM 이 채웠다면 — 환각 가능성 — 폐기.
+        out["underlying_snapshot_ko"] = ""
+    else:
+        out["underlying_snapshot_ko"] = ""
+
     # 빈 필드는 rule-based 폴백으로 보강 — UI 빈 카드 방지
     if not all(
         [
@@ -690,7 +918,10 @@ def _normalize_briefing_payload(
             out["upcoming_catalysts_ko"],
         ]
     ):
-        rb = _briefing_rule_based(holding, regime, cycle)
+        rb = _briefing_rule_based(
+            holding, regime, cycle,
+            underlying_snapshot_ko=underlying_snapshot_ko,
+        )
         if not out["exposure_theme"]:
             out["exposure_theme"] = rb["exposure_theme"]
         if not out["summary_ko"]:
@@ -715,13 +946,17 @@ def _normalize_briefing_payload(
 # ---------------------------------------------------------------------------
 
 def _briefing_with_openai(
-    holding: dict, regime: Any | None, cycle: Any | None = None
+    holding: dict, regime: Any | None, cycle: Any | None = None,
+    *, underlying_snapshot_ko: str | None = None,
 ) -> dict[str, Any]:
     """OpenAI API 호출 (openai SDK 필요)."""
     import openai
 
     client = openai.OpenAI()
-    prompt = _format_briefing_prompt(holding, regime, cycle)
+    prompt = _format_briefing_prompt(
+        holding, regime, cycle,
+        underlying_snapshot_ko=underlying_snapshot_ko,
+    )
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
@@ -732,18 +967,28 @@ def _briefing_with_openai(
         data = json.loads(resp.choices[0].message.content)
     except Exception as e:
         log.warning("OpenAI 브리핑 응답 JSON 파싱 실패: %s", e)
-        return _briefing_rule_based(holding, regime, cycle)
-    return _normalize_briefing_payload(data, holding, regime, cycle)
+        return _briefing_rule_based(
+            holding, regime, cycle,
+            underlying_snapshot_ko=underlying_snapshot_ko,
+        )
+    return _normalize_briefing_payload(
+        data, holding, regime, cycle,
+        underlying_snapshot_ko=underlying_snapshot_ko,
+    )
 
 
 def _briefing_with_anthropic(
-    holding: dict, regime: Any | None, cycle: Any | None = None
+    holding: dict, regime: Any | None, cycle: Any | None = None,
+    *, underlying_snapshot_ko: str | None = None,
 ) -> dict[str, Any]:
     """Claude API 호출 (anthropic SDK 필요)."""
     import anthropic
 
     client = anthropic.Anthropic()
-    prompt = _format_briefing_prompt(holding, regime, cycle)
+    prompt = _format_briefing_prompt(
+        holding, regime, cycle,
+        underlying_snapshot_ko=underlying_snapshot_ko,
+    )
     msg = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1400,
@@ -754,8 +999,14 @@ def _briefing_with_anthropic(
         data = json.loads(text[text.index("{"):text.rindex("}") + 1])
     except Exception as e:
         log.warning("Anthropic 브리핑 응답 JSON 파싱 실패: %s", e)
-        return _briefing_rule_based(holding, regime, cycle)
-    return _normalize_briefing_payload(data, holding, regime, cycle)
+        return _briefing_rule_based(
+            holding, regime, cycle,
+            underlying_snapshot_ko=underlying_snapshot_ko,
+        )
+    return _normalize_briefing_payload(
+        data, holding, regime, cycle,
+        underlying_snapshot_ko=underlying_snapshot_ko,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -799,6 +1050,22 @@ def generate_holding_briefing(
     if budget is None:
         budget = make_budget(cfg)
 
+    # ── KR 기초자산 스냅샷 — bucket_key 추론 후 market_price_history 에서 계산.
+    # conn 이 없거나 데이터가 없거나 매핑이 없으면 None — 모든 경로 graceful.
+    underlying_snapshot_ko: str | None = None
+    try:
+        name_in = (holding.get("name") or holding.get("ticker") or "").strip()
+        type_in = (holding.get("type") or "").strip()
+        memo_in = (holding.get("memo") or "").strip()
+        _label, _drivers, _summary, bucket_key = _infer_theme_bucket(
+            name_in, type_in, memo_in)
+        if conn is not None and bucket_key in _KR_UNDERLYING_HINTS:
+            _snaps, underlying_snapshot_ko = build_kr_underlying_snapshot(
+                conn, bucket_key)
+    except Exception as e:
+        log.debug("KR underlying snapshot 계산 실패 (graceful): %s", e)
+        underlying_snapshot_ko = None
+
     payload: dict[str, Any] | None = None
     model_used = "rule-based"
     provider = (os.environ.get("LLM_PROVIDER") or "auto").strip().lower()
@@ -808,7 +1075,10 @@ def generate_holding_briefing(
         if not os.environ.get("OPENAI_API_KEY"):
             return None
         try:
-            payload = _briefing_with_openai(holding, regime, cycle)
+            payload = _briefing_with_openai(
+                holding, regime, cycle,
+                underlying_snapshot_ko=underlying_snapshot_ko,
+            )
             budget.record()
             return "gpt-4o-mini" if not cfg.use_high_quality_llm else "gpt-4o"
         except Exception as e:
@@ -820,7 +1090,10 @@ def generate_holding_briefing(
         if not os.environ.get("ANTHROPIC_API_KEY"):
             return None
         try:
-            payload = _briefing_with_anthropic(holding, regime, cycle)
+            payload = _briefing_with_anthropic(
+                holding, regime, cycle,
+                underlying_snapshot_ko=underlying_snapshot_ko,
+            )
             budget.record()
             return "claude-haiku-4-5" if not cfg.use_high_quality_llm else "claude-opus-4"
         except Exception as e:
@@ -841,8 +1114,14 @@ def generate_holding_briefing(
         model_used = "rule-based"
 
     if payload is None:
-        payload = _briefing_rule_based(holding, regime, cycle)
+        payload = _briefing_rule_based(
+            holding, regime, cycle,
+            underlying_snapshot_ko=underlying_snapshot_ko,
+        )
         model_used = "rule-based"
 
     payload["model_used"] = model_used
+    # 안전 — 데이터 없으면 키 자체 생략(빈 문자열도 제거)
+    if not (payload.get("underlying_snapshot_ko") or "").strip():
+        payload.pop("underlying_snapshot_ko", None)
     return payload

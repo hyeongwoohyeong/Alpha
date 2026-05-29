@@ -61,6 +61,10 @@ class AlphaConfig:
     enable_discovery: bool = True
     enable_promotion: bool = True
 
+    # KR 시장 데이터 캐싱 토글 (Stage 2 — KR 확장).
+    # 끄면 step_kr_market_data / step_kospi_regime 가 자동으로 skip 된다.
+    kr_history_enabled: bool = True
+
     # Wide Scan 처리 한도 (필터 통과 후 상위 N개만 가격 fetch)
     wide_universe_limit: int = 1500
     # Wide Scan → Discovery Candidate (큐 통합 상위 K)
@@ -138,6 +142,7 @@ def load_config() -> AlphaConfig:
         enable_summary_cache=_env_bool("ENABLE_SUMMARY_CACHE", True),
         enable_discovery=_env_bool("ENABLE_DISCOVERY", True),
         enable_promotion=_env_bool("ENABLE_PROMOTION", True),
+        kr_history_enabled=_env_bool("KR_HISTORY_ENABLED", True),
         wide_universe_limit=_env_int("WIDE_UNIVERSE_LIMIT", 1500),
         # 새 환경변수 우선 → 없으면 구 이름 fallback
         discovery_top_k=_env_int("DISCOVERY_TOP_K", _env_int("TIER1_TOP_K", 80)),

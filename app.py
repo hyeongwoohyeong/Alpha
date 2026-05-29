@@ -3209,6 +3209,68 @@ def render_today_decision(regime: Any, crash: Any):
     cur_regime = _regime_row_get(regime, "current_regime")
     market_line += f" 국면: {_plain_regime(cur_regime)}."
 
+    # ── 2-a-KR) KR 시장 한 줄 — KOSPI overheat + KODEX 200 사이클 ──────
+    # 데이터가 모이지 않았으면 줄 자체를 조용히 생략 (KR 은 보조 시그널).
+    kr_market_line = ""
+    try:
+        with db.db_session() as conn:
+            kr_regime = db.fetch_latest_kospi_market_regime(conn)
+            try:
+                from src.market_cycle_analyzer import recommend_current_entry
+                kr_rec = recommend_current_entry(conn, base_asset="069500")
+            except Exception as e:
+                log.debug(f"KR recommend_current_entry 실패: {e}")
+                kr_rec = None
+    except Exception as e:
+        log.debug(f"KR 시장 한 줄 데이터 로드 실패: {e}")
+        kr_regime, kr_rec = None, None
+
+    if kr_regime is not None:
+        kr_overheat = _regime_row_get(kr_regime, "overheat_score")
+        kr_band = (_regime_row_get(kr_regime, "band") or "").strip()
+        kr_regime_label = (_regime_row_get(kr_regime, "regime_ko") or "").strip()
+        kr_dd = _regime_row_get(kr_regime, "kospi_drawdown_from_52w_high")
+        kr_dd_pct = None
+        if kr_dd is not None:
+            try:
+                kr_dd_pct = float(kr_dd)
+                if abs(kr_dd_pct) <= 1:
+                    kr_dd_pct *= 100
+            except (TypeError, ValueError):
+                kr_dd_pct = None
+        # plain overheat band — 동일 어조로
+        oh_label = _plain_overheat(kr_overheat) if kr_overheat is not None else None
+        bits: list[str] = []
+        if oh_label:
+            bits.append(f"KOSPI {oh_label}")
+        elif kr_band:
+            bits.append(f"KOSPI {kr_band}")
+        if kr_regime_label:
+            bits.append(kr_regime_label)
+        head = " · ".join(bits) if bits else "KOSPI 데이터 누적 중"
+        tail_parts: list[str] = []
+        if kr_dd_pct is not None:
+            tail_parts.append(f"KODEX 200 {kr_dd_pct:+.1f}%")
+        kr_verdict = None
+        if kr_rec is not None:
+            kr_verdict = (kr_rec.get("verdict") or "").strip()
+        if kr_verdict and kr_verdict != "데이터 누적 중":
+            tail_parts.append(kr_verdict)
+        if tail_parts:
+            kr_market_line = (
+                '<div class="env-block-body" style="margin-top:4px; '
+                'font-size:13px; color:var(--muted); line-height:1.6;">'
+                f'{head}. ' + " — ".join(tail_parts) + '.'
+                '</div>'
+            )
+        else:
+            kr_market_line = (
+                '<div class="env-block-body" style="margin-top:4px; '
+                'font-size:13px; color:var(--muted); line-height:1.6;">'
+                f'{head}.'
+                '</div>'
+            )
+
     # ── 2-b) 시장 사이클 위치 — 시장이 과거 어느 구간에 있나 ─────────
     # cycle_position 이 비었으면 줄 자체를 생략 (빈 placeholder·에러 없음).
     cycle_block = ""
@@ -3337,6 +3399,7 @@ def render_today_decision(regime: Any, crash: Any):
         f'margin:4px 0 2px; line-height:1.5;">{headline}</div>'
         '<div class="env-block-body" style="margin-top:8px;">'
         f'{market_line}</div>'
+        f'{kr_market_line}'
         f'{cycle_block}'
         f'{action_block}'
         f'{delta_block}'
@@ -3928,6 +3991,8 @@ def _render_holdings_briefing_section(holdings: list[dict]):
         risks = _g(row, "risks_ko") or ""
         pf_note = _g(row, "portfolio_note_ko") or ""
         model_used = _g(row, "model_used") or ""
+        # Stage 3 — KR 기초자산 라이브 시세 한 줄 (있을 때만)
+        underlying_snap = (_g(row, "underlying_snapshot_ko") or "").strip()
 
         # key_drivers — JSON 문자열을 list 로 방어적 파싱
         raw_kd = _g(row, "key_drivers_ko")
@@ -3962,6 +4027,13 @@ def _render_holdings_briefing_section(holdings: list[dict]):
             "</span>"
         )
 
+        # 기초자산 스냅샷 — 한 줄, 구조적 브리핑 아래 차분히. 없으면 생략.
+        underlying_html = (
+            f'<div style="{_lbl}">기초자산 라이브 시세</div>'
+            f'<div style="{_txt}">{underlying_snap}</div>'
+            if underlying_snap else ""
+        )
+
         st.markdown(
             '<div class="card" style="margin-bottom:10px;">'
             + header
@@ -3974,6 +4046,7 @@ def _render_holdings_briefing_section(holdings: list[dict]):
                f'<div style="{_txt}">{risks}</div>' if risks else "")
             + (f'<div style="{_lbl}">포트폴리오 관점</div>'
                f'<div style="{_txt}">{pf_note}</div>' if pf_note else "")
+            + underlying_html
             + f'<div style="margin-top:10px; text-align:right;">{model_tag}</div>'
             + "</div>",
             unsafe_allow_html=True,
@@ -6853,6 +6926,328 @@ def _render_market_cycle_sections(_pd):
             "</div></div>",
             unsafe_allow_html=True,
         )
+
+    # ── 13) 한국 시장 — 우량주 + KR 데이터 사다리 + KOSPI 사이클 ─────────
+    _render_validation_lab_kr_section(_pd)
+
+
+def _render_validation_lab_kr_section(_pd):
+    """Validation Lab 의 한국 시장 region — 세 가지 sub-block.
+
+    1) 한국 우량주 관찰 — kr_universe.csv 기반
+    2) KR 데이터 사다리 — entry_timing_buckets (base_asset='069500')
+    3) KOSPI 사이클 위치 — kospi_market_regime + recommend_current_entry
+
+    데이터 없으면 차분한 "데이터 누적 중" 카드. 절대 raise 하지 않는다.
+    """
+    st.markdown(
+        '<div class="section-title">13 · 한국 시장 — 우량주 + KR 데이터 '
+        '사다리 + KOSPI 사이클</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Stage 2 KR 시장 확장의 산출물 — KOSPI 우량주 universe, KODEX 200 "
+        "기반 데이터 사다리, KOSPI Overheat Score 와 KR 사이클 verdict."
+    )
+
+    # ── 13-1) 한국 우량주 관찰 ────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:15px; margin-top:16px;">'
+        '13-1 · 한국 우량주 관찰</div>',
+        unsafe_allow_html=True,
+    )
+    try:
+        from src.kr_universe import load_kr_universe
+        kr_rows = load_kr_universe() or []
+    except Exception as e:
+        log.debug(f"kr_universe 로드 실패: {e}")
+        kr_rows = []
+
+    # CSV 헤더의 SKIPPED 필터 노트(있을 때) — 정직성
+    kr_skipped_notes: list[str] = []
+    try:
+        from src.utils import DATA_DIR as _DATA_DIR
+        kr_csv = _DATA_DIR / "kr_universe.csv"
+        if kr_csv.exists():
+            in_skipped = False
+            with kr_csv.open("r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.lstrip()
+                    if not s.startswith("#"):
+                        break
+                    body = s.lstrip("#").strip()
+                    if "SKIPPED" in body:
+                        in_skipped = True
+                        continue
+                    if in_skipped and body and body.startswith("-"):
+                        kr_skipped_notes.append(body.lstrip("- ").strip())
+                    elif in_skipped and not body.startswith("-"):
+                        in_skipped = False
+    except Exception as e:
+        log.debug(f"kr_universe header note 추출 실패: {e}")
+
+    if not kr_rows:
+        _vl_empty_card(
+            "한국 우량주 universe 데이터 누적 중 — "
+            "`python scripts/build_kr_universe.py` 실행 후 표시됩니다."
+        )
+    else:
+        # 시총 내림차순 top 30
+        sorted_rows = sorted(
+            kr_rows,
+            key=lambda r: (r.get("market_cap_krw") or 0),
+            reverse=True,
+        )
+        top = sorted_rows[:30]
+        extra_n = max(0, len(sorted_rows) - len(top))
+
+        # 1Y price return — market_price_history 가 있으면 계산
+        ret_by_ticker: dict[str, float | None] = {}
+        try:
+            with db.db_session() as conn:
+                for r in top:
+                    t = r["ticker"]
+                    try:
+                        prs = db.fetch_market_price_history(conn, t)
+                    except Exception:
+                        prs = []
+                    if not prs:
+                        ret_by_ticker[t] = None
+                        continue
+                    closes: list[float] = []
+                    for pr in prs:
+                        v = None
+                        try:
+                            keys = pr.keys() if hasattr(pr, "keys") else None
+                        except Exception:
+                            keys = None
+                        if keys:
+                            v = pr["adj_close"] if "adj_close" in keys else None
+                            if v is None and "close" in keys:
+                                v = pr["close"]
+                        if v is None:
+                            continue
+                        try:
+                            closes.append(float(v))
+                        except (TypeError, ValueError):
+                            continue
+                    if len(closes) < 30:
+                        ret_by_ticker[t] = None
+                        continue
+                    # 1Y ≈ 252 영업일, 부족하면 가용 첫 종가 대비
+                    base_idx = max(0, len(closes) - 252)
+                    base = closes[base_idx]
+                    last = closes[-1]
+                    ret_by_ticker[t] = (last / base - 1.0) if base > 0 else None
+        except Exception as e:
+            log.debug(f"kr 1Y return 계산 실패: {e}")
+
+        def _fmt_mcap(v):
+            try:
+                if v is None:
+                    return "—"
+                v = float(v)
+                if v >= 1e12:
+                    return f"{v / 1e12:.1f}조"
+                if v >= 1e8:
+                    return f"{v / 1e8:.0f}억"
+                return f"{v:,.0f}"
+            except Exception:
+                return "—"
+
+        def _pct(v):
+            if v is None:
+                return "—"
+            try:
+                return f"{float(v) * 100:+.1f}%"
+            except Exception:
+                return "—"
+
+        def _pct_simple(v):
+            if v is None:
+                return "—"
+            try:
+                # roe_5y_avg / debt_ratio 는 이미 분수 형태로 저장됨.
+                return f"{float(v) * 100:.1f}%"
+            except Exception:
+                return "—"
+
+        kr_table = []
+        for r in top:
+            kr_table.append({
+                "이름": r.get("name_ko") or "—",
+                "티커": r.get("ticker") or "—",
+                "시총": _fmt_mcap(r.get("market_cap_krw")),
+                "5Y ROE": _pct_simple(r.get("roe_5y_avg")),
+                "부채비율": _pct_simple(r.get("debt_ratio")),
+                "1Y 수익률": _pct(ret_by_ticker.get(r.get("ticker"))),
+            })
+        st.dataframe(
+            _pd.DataFrame(kr_table), use_container_width=True, hide_index=True,
+        )
+        footer_bits: list[str] = []
+        if extra_n > 0:
+            footer_bits.append(f"외 {extra_n}개")
+        if kr_skipped_notes:
+            footer_bits.append("SKIPPED 필터: " + "; ".join(kr_skipped_notes))
+        if footer_bits:
+            st.caption(" · ".join(footer_bits))
+
+    # ── 13-2) KR 데이터 사다리 ────────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:15px; margin-top:18px;">'
+        '13-2 · KR 데이터 사다리 (069500 / 122630)</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "KODEX 200(069500) 52주 rolling 고점 대비 낙폭 버킷마다 "
+        "KODEX 200 / KODEX 레버리지(122630) 의 3개월 forward return·승률·표본수."
+    )
+    try:
+        with db.db_session() as conn:
+            kr_etb_rows = [
+                dict(r) for r in db.fetch_entry_timing_buckets(
+                    conn, base_asset="069500")
+            ]
+    except Exception as e:
+        kr_etb_rows = []
+        log.debug(f"KR entry_timing_buckets fetch 실패: {e}")
+
+    bucket_order_kr = [
+        "0~-2%", "-2~-5%", "-5~-10%", "-10~-15%",
+        "-15~-20%", "-20~-25%", "-25~-35%", "-35%+",
+    ]
+    kr_rows_3m = [r for r in kr_etb_rows if int(r.get("window_days") or 0) == 63]
+    if not kr_rows_3m:
+        _vl_empty_card(
+            "데이터 누적 중 — KR 데이터 사다리 통계가 아직 계산되지 않았습니다. "
+            "KR 일봉이 누적되면 entry_timing_buckets(base_asset='069500') 가 "
+            "채워져 표시됩니다."
+        )
+    else:
+        by_b_kr: dict[str, dict[str, dict]] = {}
+        for r in kr_rows_3m:
+            b = r.get("bucket_label") or ""
+            a = r.get("target_asset") or ""
+            by_b_kr.setdefault(b, {})[a] = r
+        kr_table_etb = []
+        for b in bucket_order_kr:
+            row_map = by_b_kr.get(b) or {}
+            kx = row_map.get("069500") or {}
+            kl = row_map.get("122630") or {}
+            kr_table_etb.append({
+                "낙폭 버킷": b,
+                "표본(KODEX 200)": kx.get("sample_count") or 0,
+                "KODEX 200 3M 평균": _vl_pct(kx.get("avg_return")),
+                "KODEX 200 승률": _vl_pct(kx.get("win_rate"), 0),
+                "레버리지 3M 평균": _vl_pct(kl.get("avg_return")),
+                "레버리지 승률": _vl_pct(kl.get("win_rate"), 0),
+                "레버리지 n": kl.get("sample_count") or 0,
+            })
+        st.dataframe(
+            _pd.DataFrame(kr_table_etb), use_container_width=True,
+            hide_index=True,
+        )
+        st.caption(
+            "KR 레버리지 ETF (122630) 는 표본이 작아 깊은 낙폭 신뢰도가 "
+            "낮습니다 — 데이터가 누적되면 자연스럽게 정밀해집니다."
+        )
+
+    # ── 13-3) KOSPI 사이클 위치 ──────────────────────────────────────
+    st.markdown(
+        '<div class="section-title" style="font-size:15px; margin-top:18px;">'
+        '13-3 · KOSPI 사이클 위치</div>',
+        unsafe_allow_html=True,
+    )
+    try:
+        with db.db_session() as conn:
+            kr_reg = db.fetch_latest_kospi_market_regime(conn)
+            try:
+                from src.market_cycle_analyzer import recommend_current_entry
+                kr_rec = recommend_current_entry(conn, base_asset="069500")
+            except Exception as e:
+                log.debug(f"KR recommend_current_entry 실패: {e}")
+                kr_rec = None
+    except Exception as e:
+        log.debug(f"KR regime 조회 실패: {e}")
+        kr_reg, kr_rec = None, None
+
+    if kr_reg is None and (kr_rec is None or not kr_rec.get("available")):
+        _vl_empty_card(
+            "데이터 누적 중 — KOSPI Overheat Score 와 KR 사이클 verdict 가 "
+            "아직 없습니다. 파이프라인이 KR 일봉을 누적하면 표시됩니다."
+        )
+    else:
+        kr_overheat = _regime_row_get(kr_reg, "overheat_score") if kr_reg else None
+        kr_band = (_regime_row_get(kr_reg, "band") or "—") if kr_reg else "—"
+        kr_regime_label = (
+            (_regime_row_get(kr_reg, "regime_ko") or "—") if kr_reg else "—"
+        )
+        kr_dd = (
+            _regime_row_get(kr_reg, "kospi_drawdown_from_52w_high") if kr_reg else None
+        )
+        kr_commentary = (
+            (_regime_row_get(kr_reg, "commentary_ko") or "").strip()
+            if kr_reg else ""
+        )
+        rec_verdict = (kr_rec or {}).get("verdict") or "—"
+        rec_best = (kr_rec or {}).get("best_asset") or "—"
+        rec_bucket = (kr_rec or {}).get("current_bucket") or "—"
+        rec_rationale = (kr_rec or {}).get("rationale_ko") or ""
+        # similar_forward_3m 은 base recommend 의 evidence 안에 없을 수도 있다.
+        # locate_current_market 의 결과가 더 정확하지만, recommend_current_entry
+        # 의 evidence n 합산을 차분히 노출한다.
+        ev_n_total = 0
+        for ev in ((kr_rec or {}).get("evidence") or []):
+            try:
+                ev_n_total += int(ev.get("n") or 0)
+            except Exception:
+                continue
+
+        oh_str = (
+            f"{kr_overheat:.0f}/100" if kr_overheat is not None else "확인 필요"
+        )
+        dd_str = "—"
+        if kr_dd is not None:
+            try:
+                ddf = float(kr_dd)
+                if abs(ddf) <= 1:
+                    ddf *= 100
+                dd_str = f"{ddf:+.1f}%"
+            except (TypeError, ValueError):
+                dd_str = "—"
+
+        st.markdown(
+            '<div class="card">'
+            '<div class="pick-type">KOSPI 200 — 오늘</div>'
+            '<div class="env-block-body" style="margin-top:8px;">'
+            f'52주 낙폭 <b>{dd_str}</b> · Overheat <b>{oh_str}</b> · '
+            f'밴드 <b>{kr_band}</b> · 국면 <b>{kr_regime_label}</b><br>'
+            f'KR 사이클 — 버킷 <b>{rec_bucket}</b> · 데이터상 best '
+            f'<b>{rec_best}</b><br>'
+            f'<b>판정: {rec_verdict}</b>'
+            + (f' · 유사 표본 합계 n={ev_n_total}' if ev_n_total else '')
+            + '</div></div>',
+            unsafe_allow_html=True,
+        )
+        if kr_commentary:
+            st.markdown(
+                '<div class="card" style="margin-top:8px;">'
+                f'<div class="pick-type">KOSPI 코멘트</div>'
+                '<div class="env-block-body" style="margin-top:6px; '
+                'color:var(--text-dim);">'
+                f'{kr_commentary}</div></div>',
+                unsafe_allow_html=True,
+            )
+        if rec_rationale:
+            st.markdown(
+                '<div class="card" style="margin-top:8px;">'
+                f'<div class="pick-type">KR 사이클 rationale</div>'
+                '<div class="env-block-body" style="margin-top:6px; '
+                'color:var(--text-dim);">'
+                f'{rec_rationale}</div></div>',
+                unsafe_allow_html=True,
+            )
 
 
 def render_discovery():

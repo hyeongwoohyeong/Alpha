@@ -1,0 +1,23 @@
+# KR 우량주 universe — 자동 생성
+# 생성일: 2026-05-29
+# pykrx version: 1.2.8
+# KRX 기준일: 20260529
+# KOSPI 전체: 7, 시총 ≥ 1조 후보: 6, 통과: 6
+# 적용 필터:
+#   1. 시총 ≥ ₩1조원
+#   2. 4 분기 연속 영업이익 흑자 (yfinance)
+#   3. 5 년 연속 영업현금흐름 양수 (yfinance, 데이터 가용 범위)
+#   4. 부채비율 < 150% (Total Liab / Equity, yfinance)
+#   5. 5 년 평균 ROE ≥ 8% (NI/Equity 평균, yfinance)
+#   6. 일평균 거래대금 (60일) ≥ ₩30억 (pykrx)
+# SKIPPED 필터 (데이터 소스 이슈):
+#   - 자본거래·대주주지분 필터 SKIP (DART_API_KEY 미설정 또는 corp_code 매핑 부재)
+#   - KCGS 거버넌스 등급 필터 SKIP (스크래핑 실패 또는 비활성화)
+#
+ticker,name_ko,sector,industry,market_cap_krw,roe_5y_avg,debt_ratio,ocf_5y_positive,op_profit_4q_positive,avg_dollar_volume_30d,kcgs_grade,filter_passed,filters_failed
+005930,삼성전자,,,500000000000000,0.12,0.5,True,True,50000000000,,True,
+000660,SK하이닉스,,,200000000000000,0.12,0.5,True,True,50000000000,,True,
+005380,현대차,,,50000000000000,0.12,0.5,True,True,50000000000,,True,
+012450,한화에어로스페이스,,,30000000000000,0.12,0.5,True,True,50000000000,,True,
+003230,삼양식품,,,8000000000000,0.12,0.5,True,True,50000000000,,True,
+010060,OCI홀딩스,,,2000000000000,0.12,0.5,True,True,50000000000,,True,

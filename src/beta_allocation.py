@@ -35,7 +35,12 @@ MODE_KO: dict[str, str] = {
     MODE_CRISIS_DEFENSE: "위기 방어 (Crisis Defense)",
 }
 
-# regime → mode 매핑
+# regime → mode 매핑 (기본값 — verdict 가 비어 있을 때의 행동)
+#
+# 알파 추구가 1순위, 보존은 알파가 소진된 뒤의 default 다.
+# 따라서 데이터 사다리 verdict 가 적극 진입을 가리킬 때는
+# classify_portfolio_mode 내부에서 이 매핑을 한 단계 격상한다 (Aggressive).
+# 반대로 overheat ≥ 85 면 한 단계 보수화한다 (Profit Protection).
 _REGIME_TO_MODE: dict[str, str] = {
     REGIME_RISK_ON: MODE_SELECTIVE,
     REGIME_EXPENSIVE_STABLE: MODE_QUALITY_PARKING,
@@ -44,6 +49,16 @@ _REGIME_TO_MODE: dict[str, str] = {
     REGIME_DISLOCATION: MODE_AGGRESSIVE,
     REGIME_CRISIS: MODE_CRISIS_DEFENSE,
 }
+
+# 데이터 사다리 verdict 중 '적극 진입' 신호 — Aggressive 격상 트리거
+# (src/market_cycle_analyzer.py recommend_current_entry 의 verdict 문자열과 정확히 매칭)
+_BOLD_ENTRY_VERDICTS: frozenset[str] = frozenset({
+    "황금 진입 구간 — QQQ+QLD 동시 진입 데이터 우월",
+    "TQQQ 진입 적기 (데이터상 정점)",
+})
+
+# '고점권' verdict — Quality Parking 유지(격상 금지)
+_TOPPISH_VERDICT = "고점권 — 추격 매수 데이터적 가치 낮음"
 
 # mode 별 권장 파라미터
 _MODE_PARAMS: dict[str, dict[str, str]] = {
@@ -108,31 +123,80 @@ _MODE_COMMENTARY_KO: dict[str, str] = {
 }
 
 
-def classify_portfolio_mode(regime: str, overheat: float | None) -> dict[str, Any]:
-    """regime + overheat → 포트폴리오 모드 + 권장 파라미터.
+def classify_portfolio_mode(
+    regime: str,
+    overheat: float | None,
+    cycle_recommendation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """regime + overheat (+ 데이터 사다리 verdict) → 포트폴리오 모드 + 권장 파라미터.
+
+    cycle_recommendation 은 src/market_cycle_analyzer.recommend_current_entry 결과 dict.
+    verdict 가 적극 진입을 가리키면 Aggressive 로 격상 (알파 추구 우선 정책).
+    verdict 가 비어 있거나 unavailable → 기존 동작 그대로 (변화 없음).
 
     Returns dict: portfolio_mode, portfolio_mode_ko, recommended_beta_level,
     recommended_cash_level, recommended_equity_type, commentary_ko,
-    index_buy_ok (지수 신규매수 가부), leverage_ok (레버리지 가부).
+    index_buy_ok (지수 신규매수 가부), leverage_ok (레버리지 가부),
+    mode_upgrade_reason (verdict 격상 사유 — 격상 시에만 채움).
     """
-    mode = _REGIME_TO_MODE.get(regime, MODE_SELECTIVE)
+    base_mode = _REGIME_TO_MODE.get(regime, MODE_SELECTIVE)
+    mode = base_mode
+    upgrade_reason: str | None = None
+    extra_commentary: str | None = None
 
-    # overheat 가 매우 높으면 Selective/Quality 라도 한 단계 보수화
-    if overheat is not None and overheat >= 85 and mode in (MODE_SELECTIVE, MODE_QUALITY_PARKING):
-        mode = MODE_PROFIT_PROTECTION
+    # 1) 알파 시그널 격상 — verdict 가 적극 진입을 가리키면 Aggressive 로
+    verdict: str | None = None
+    if cycle_recommendation and isinstance(cycle_recommendation, dict):
+        verdict = (cycle_recommendation.get("verdict") or "").strip() or None
+
+    if verdict and verdict in _BOLD_ENTRY_VERDICTS \
+            and regime in (REGIME_RISK_ON, REGIME_EXPENSIVE_STABLE):
+        mode = MODE_AGGRESSIVE
+        upgrade_reason = (
+            f"데이터 사다리 verdict('{verdict}')가 적극 진입을 가리켜 "
+            f"기본 모드({MODE_KO.get(base_mode, base_mode)})에서 "
+            f"{MODE_KO[MODE_AGGRESSIVE]} 로 격상."
+        )
+        extra_commentary = (
+            "※ 데이터 사다리 verdict 가 적극 진입을 가리켜 Aggressive 로 격상. "
+            "regime 자체는 격상 전 상태였으나, 실증 분포가 알파 추구를 지지하므로 "
+            "한 단계 공격적으로 운용 가능합니다 (분할 매수 원칙은 유지)."
+        )
+    elif verdict == _TOPPISH_VERDICT and regime == REGIME_EXPENSIVE_STABLE:
+        # 고평가·안정 국면에서 verdict 가 고점권을 가리키면 Quality Parking 유지
+        mode = base_mode
+
+    # 2) overheat 보호 — 매우 높으면 한 단계 보수화 (격상 후에도 적용)
+    #    Aggressive 격상 후라도 과열이 극단이면 Profit Protection 으로 끌어내림
+    if overheat is not None and overheat >= 85:
+        if mode in (MODE_SELECTIVE, MODE_QUALITY_PARKING, MODE_AGGRESSIVE):
+            mode = MODE_PROFIT_PROTECTION
+            # 격상 commentary 무효화 — 과열 보호가 우선
+            extra_commentary = (
+                f"※ Overheat Score {overheat:.0f} ≥ 85 — 데이터 사다리 verdict 보다 "
+                "과열 보호를 우선해 Profit Protection 으로 보수화."
+            )
+            upgrade_reason = None
 
     params = _MODE_PARAMS.get(mode, _MODE_PARAMS[MODE_SELECTIVE])
 
     index_buy_ok = mode in (MODE_AGGRESSIVE, MODE_SELECTIVE, MODE_QUALITY_PARKING)
     leverage_ok = mode in (MODE_AGGRESSIVE, MODE_SELECTIVE)
 
-    return {
+    commentary = _MODE_COMMENTARY_KO.get(mode, "")
+    if extra_commentary:
+        commentary = (commentary + " " + extra_commentary).strip()
+
+    out: dict[str, Any] = {
         "portfolio_mode": mode,
         "portfolio_mode_ko": MODE_KO.get(mode, mode),
         "recommended_beta_level": params["recommended_beta_level"],
         "recommended_cash_level": params["recommended_cash_level"],
         "recommended_equity_type": params["recommended_equity_type"],
-        "commentary_ko": _MODE_COMMENTARY_KO.get(mode, ""),
+        "commentary_ko": commentary,
         "index_buy_ok": index_buy_ok,
         "leverage_ok": leverage_ok,
     }
+    if upgrade_reason:
+        out["mode_upgrade_reason"] = upgrade_reason
+    return out

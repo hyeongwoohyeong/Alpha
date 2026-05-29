@@ -23,6 +23,12 @@ CAVEAT = (
 )
 
 # 낙폭 단계매수 사다리 — (낙폭 임계치 %, 단계, 권장 상품, 누적 목표비중 %)
+# *** 폴백 전용 (FALLBACK ONLY) ***
+# 이 표는 하드코딩 가설이다. 실증 데이터(QQQ 1999~)는 TQQQ 의 sweet spot 이
+# -20% 가 아니라 -10~-15% (avg +23.8%, win 81%) 임을 보여준다. 따라서 본 사다리는
+# entry_timing_buckets 통계가 비었거나 recommend_current_entry 결과가 없을 때만
+# 사용되는 *graceful fallback* 으로 격하되었다. 정상 동작에서는
+# build_backtest_solution(cycle_recommendation=...) 가 데이터 기반 추천을 그대로 쓴다.
 _DEPLOY_LADDER: list[tuple[float, int, str, int]] = [
     (-5.0, 1, "QQQ", 20),
     (-10.0, 2, "QLD", 45),
@@ -30,6 +36,12 @@ _DEPLOY_LADDER: list[tuple[float, int, str, int]] = [
     (-20.0, 4, "TQQQ", 80),
     (-25.0, 5, "TQQQ", 100),
 ]
+
+# 익절(Item C) 트리거 — 소유자의 materiality 원칙
+_PROFIT_ITEM_MIN_VALUE_KRW = 5_000_000   # ₩5M 미만 포지션은 의사결정 비대상
+_PROFIT_ITEM_MIN_GAIN_KRW = 2_000_000    # 미실현 수익 ₩2M 미만은 보호할 가치 없음
+_PROFIT_ITEM_MIN_RETURN_PCT = 15.0       # +15% 미만은 "익절할 winner" 라고 부르기 무리
+                                          # — 트림은 의미있는 % 수익이 났을 때 의미.
 
 _PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
 
@@ -114,8 +126,13 @@ def _credit_stress_level(crash_row: Any) -> str | None:
 def _build_drawdown_item(
     dd: float | None, bt_summary: dict,
     cycle: Any = None, crash_row: Any = None,
+    cycle_recommendation: dict | None = None,
 ) -> tuple[dict | None, bool]:
     """Item A — 낙폭 대응. (item, cited_backtest) 반환. item None 이면 skip.
+
+    cycle_recommendation (recommend_current_entry 결과) 가 있고 best_asset 이
+    채워져 있으면 그 데이터 기반 추천을 그대로 사용한다 — 하드코딩 _DEPLOY_LADDER
+    는 폴백으로 격하. 추세/크레딧 가중치는 그대로 적용.
 
     낙폭 깊이뿐 아니라 cycle 의 trend_state 와 crash_row 의 credit_stress 를
     함께 가중한다 — '낙폭 깊이 + 추세 상태 + 크레딧 스트레스' 의 합성 판단.
@@ -164,15 +181,43 @@ def _build_drawdown_item(
     if dd > -5.0:
         return None, False
 
-    # 사다리에서 도달한 가장 깊은 단계 선택
-    step = _DEPLOY_LADDER[0]
-    for entry in _DEPLOY_LADDER:
-        if dd <= entry[0]:
-            step = entry
+    # ── 데이터 기반 자산/단계 결정 ─────────────────────────────────────
+    # cycle_recommendation 이 있고 best_asset 이 정해졌으면 실증 통계 기반.
+    # 그렇지 않으면 (DB 비었거나 표본 부족) 하드코딩 _DEPLOY_LADDER 폴백.
+    rec = cycle_recommendation if isinstance(cycle_recommendation, dict) else None
+    used_recommendation = False
+    if rec and rec.get("available") and rec.get("best_asset"):
+        instrument = rec.get("best_asset")
+        # 누적 목표비중은 실증 권고에는 없는 정보 — 낙폭 깊이에서 보수적으로 산출.
+        # 데이터 사다리는 자산 선택을 데이터에 위임하지만, 목표 비중은 변동성
+        # 위험 한도(소유자의 5M materiality 원칙 + 자본 보존)로 단순 룰을 둔다.
+        if dd <= -25.0:
+            target_pct = 100
+            stage = 5
+        elif dd <= -20.0:
+            target_pct = 80
+            stage = 4
+        elif dd <= -15.0:
+            target_pct = 65
+            stage = 3
+        elif dd <= -10.0:
+            target_pct = 45
+            stage = 2
         else:
-            break
-    _thr, stage, instrument, target_pct = step
-    priority = "high" if dd <= -10.0 else "medium"
+            target_pct = 20
+            stage = 1
+        priority = "high" if dd <= -10.0 else "medium"
+        used_recommendation = True
+    else:
+        # 폴백 — 하드코딩 사다리에서 도달한 가장 깊은 단계 선택.
+        step = _DEPLOY_LADDER[0]
+        for entry in _DEPLOY_LADDER:
+            if dd <= entry[0]:
+                step = entry
+            else:
+                break
+        _thr, stage, instrument, target_pct = step
+        priority = "high" if dd <= -10.0 else "medium"
 
     # 추세 상태·크레딧 스트레스로 배치 속도/우선순위 조정
     cautions: list[str] = []
@@ -214,6 +259,16 @@ def _build_drawdown_item(
 
     if basis_extra:
         basis = basis + " | " + " · ".join(basis_extra)
+
+    # 데이터 사다리(empirical) 인용 — 사용된 경우 가장 앞에 명시
+    if used_recommendation and rec:
+        rec_rationale = (rec.get("rationale_ko") or "").strip()
+        verdict = (rec.get("verdict") or "").strip()
+        if rec_rationale:
+            basis = "데이터 사다리 — " + rec_rationale + " | " + basis
+        if verdict:
+            action = f"[데이터 판단: {verdict}] " + action
+        cited = True  # 실증 통계 인용 — 룰 폴백 아님
 
     item = {
         "title": "낙폭 대응",
@@ -368,10 +423,82 @@ def _build_overheat_item(
     return item, False
 
 
+def _material_leveraged_winners(
+    portfolio_holdings: list[dict] | None,
+) -> list[dict]:
+    """포트폴리오에서 익절 대응 트리거 조건을 만족하는 포지션 목록.
+
+    소유자의 De minimis materiality 원칙 — 모든 조건 AND:
+    - leverage == True
+    - value_krw ≥ ₩5,000,000 (포지션 규모)
+    - 미실현 수익 ≥ ₩2,000,000 (절대 금액 — value_krw - cost_krw 또는 pnl_krw)
+    - return_pct ≥ +15% (의미있는 % 수익 — "winner" 라 부를 만한 수준)
+
+    +4% 정도의 미미한 % 수익은 절대 금액이 ₩2M 넘어도 "익절할 winner" 라 부르기
+    무리. % 임계까지 합쳐 "진짜로 보호할 만한 큰 수익이 난 레버리지 포지션" 만
+    트리거하도록 한다.
+
+    holdings 가 None/비어있으면 빈 리스트. dict 가 아니면 무시.
+    """
+    if not portfolio_holdings:
+        return []
+    out: list[dict] = []
+    for h in portfolio_holdings:
+        if not isinstance(h, dict):
+            continue
+        if not h.get("leverage"):
+            continue
+        value = _to_float(h.get("value_krw"))
+        if value is None or value < _PROFIT_ITEM_MIN_VALUE_KRW:
+            continue
+        # 미실현 수익 — pnl_krw 우선, 없으면 value - cost
+        gain = _to_float(h.get("pnl_krw"))
+        if gain is None:
+            cost = _to_float(h.get("cost_krw"))
+            if value is not None and cost is not None:
+                gain = value - cost
+        if gain is None or gain < _PROFIT_ITEM_MIN_GAIN_KRW:
+            continue
+        # % 수익률도 의미있는 수준이어야 — +4% 짜리는 "winner" 라 부르기 무리
+        ret_pct = _to_float(h.get("return_pct"))
+        if ret_pct is None or ret_pct < _PROFIT_ITEM_MIN_RETURN_PCT:
+            continue
+        out.append(h)
+    return out
+
+
+def _format_position_name(h: dict) -> str:
+    """포지션 한 줄 인용용 — '이름(₩63M, +4% / +₩2.4M)' 같은 형식."""
+    name = h.get("name") or h.get("ticker") or "포지션"
+    value = _to_float(h.get("value_krw"))
+    pnl = _to_float(h.get("pnl_krw"))
+    if pnl is None:
+        cost = _to_float(h.get("cost_krw"))
+        if value is not None and cost is not None:
+            pnl = value - cost
+    ret_pct = _to_float(h.get("return_pct"))
+    bits: list[str] = []
+    if value is not None:
+        bits.append(f"₩{value/1_000_000:.0f}M")
+    if ret_pct is not None:
+        bits.append(f"{ret_pct:+.0f}%")
+    if pnl is not None:
+        bits.append(f"+₩{pnl/1_000_000:.1f}M")
+    suffix = f"({', '.join(bits)})" if bits else ""
+    return f"{name}{suffix}"
+
+
 def _build_profit_item(
-    score: float | None, bt_summary: dict
+    score: float | None, bt_summary: dict,
+    portfolio_holdings: list[dict] | None = None,
 ) -> tuple[dict | None, bool]:
-    """Item C — 익절 대응. score>=60 일 때만 포함. (item, cited) 반환."""
+    """Item C — 익절 대응.
+
+    score>=60 + profit_protection 백테스트가 MDD 를 개선하고,
+    포트폴리오에 materiality 임계를 충족하는 레버리지 수익 포지션이
+    *최소 1개* 존재할 때만 발동한다 (소유자의 De minimis 원칙).
+    조건 어느 하나라도 미달이면 None — 일반론적 노이즈 알림 금지.
+    """
     if score is None or score < 60.0:
         return None, False
 
@@ -390,16 +517,26 @@ def _build_profit_item(
         # 익절 룰이 MDD 를 개선하지 못함 — 항목 생략
         return None, False
 
+    # 소유자 materiality — 트리거 포지션이 없으면 무음
+    triggers = _material_leveraged_winners(portfolio_holdings)
+    if not triggers:
+        return None, False
+
     diff_pp = abs(w_mdd - n_mdd) * 100.0
+    # 가장 큰 포지션 기준 명명 — 최대 2개까지 인용
+    triggers.sort(key=lambda h: _to_float(h.get("value_krw")) or 0.0,
+                  reverse=True)
+    names = " · ".join(_format_position_name(h) for h in triggers[:2])
+    more = "" if len(triggers) <= 2 else f" 외 {len(triggers)-2}건"
     item = {
         "title": "익절 대응",
         "action": (
-            "고베타 수익 포지션(QLD·TQQQ·레버리지 ETF)은 과열 구간에서 "
-            "일부 익절을 검토하십시오."
+            f"{names}{more}이(가) 과열 구간 — 일부 익절(QLD→QQQ 식 비중 축소) "
+            "검토."
         ),
         "basis": (
             f"과거 검증: 과열(85+) 시 QLD→QQQ 익절 룰이 MDD를 "
-            f"{diff_pp:.0f}%p 축소"
+            f"{diff_pp:.0f}%p 축소 | 트리거: 레버리지 보유 ≥ ₩5M & 수익 ≥ ₩2M"
         ),
         "priority": "medium",
     }
@@ -413,6 +550,8 @@ def _build_profit_item(
 def build_backtest_solution(
     regime_row: Any, crash_row: Any, bt_summary: dict | None,
     cycle: dict | None = None,
+    cycle_recommendation: dict | None = None,
+    portfolio_holdings: list[dict] | None = None,
 ) -> dict[str, Any]:
     """백테스트 결과를 소화해 '오늘의 대응' 처방을 만든다.
 
@@ -423,12 +562,18 @@ def build_backtest_solution(
         cycle: market_cycle_analyzer.locate_current_market(conn) 결과 dict
             또는 None. None 이면 종전 동작과 완전히 동일하게 작동한다
             (하위 호환). drawdown_pct·similar_forward_* 는 분수 단위다.
+        cycle_recommendation: market_cycle_analyzer.recommend_current_entry
+            결과 dict. 데이터 사다리 기반 추천 — 있으면 하드코딩 _DEPLOY_LADDER
+            대신 사용한다 (헤드라인은 recommendation 의 verdict).
+        portfolio_holdings: portfolio.json 의 holdings 리스트 (또는 None).
+            Item C(익절 대응) 의 materiality 게이트 — 레버리지 ≥₩5M & 수익
+            ≥₩2M 포지션이 있을 때만 Item C 가 발동.
 
     Returns:
         {available, data_mode, headline, items, caveat, cycle_position}
         - available: regime_row·crash_row 가 모두 None 이면 False.
-        - data_mode: 실제 백테스트 수치를 인용한 항목이 1개 이상이면
-          "backtest", 아니면 "rule_fallback".
+        - data_mode: 실제 백테스트/데이터 사다리 수치를 인용한 항목이 1개
+          이상이면 "backtest", 아니면 "rule_fallback".
         - items: priority 순(high→medium→low) 정렬.
         - cycle_position: cycle["verdict_ko"] 또는 "" — 시장이 과거 어느
           구간에 있는지를 말하는 한 줄.
@@ -451,7 +596,8 @@ def build_backtest_solution(
         # Item A — 낙폭 대응 (낙폭 깊이 + 추세 상태 + 크레딧 스트레스 합성)
         try:
             item_a, cited_a = _build_drawdown_item(
-                dd, bt_summary, cycle=cycle, crash_row=crash_row)
+                dd, bt_summary, cycle=cycle, crash_row=crash_row,
+                cycle_recommendation=cycle_recommendation)
             if item_a:
                 items.append(item_a)
                 cited_any = cited_any or cited_a
@@ -476,9 +622,10 @@ def build_backtest_solution(
         except Exception as e:
             log.debug("Item B 생성 실패: %s", e)
 
-        # Item C — 익절 대응
+        # Item C — 익절 대응 (materiality 게이트: 레버리지 ≥₩5M & 수익 ≥₩2M)
         try:
-            item_c, cited_c = _build_profit_item(score, bt_summary)
+            item_c, cited_c = _build_profit_item(
+                score, bt_summary, portfolio_holdings=portfolio_holdings)
             if item_c:
                 items.append(item_c)
                 cited_any = cited_any or cited_c
@@ -488,8 +635,11 @@ def build_backtest_solution(
         # priority 정렬
         items.sort(key=lambda it: _PRIORITY_RANK.get(it.get("priority"), 9))
 
-        # headline — 최우선 항목 + 낙폭 컨텍스트
-        headline = _build_headline(dd, items)
+        # headline — 데이터 사다리 verdict 가 있으면 그것이 헤드라인의 핵심
+        rec_verdict = ""
+        if isinstance(cycle_recommendation, dict):
+            rec_verdict = (cycle_recommendation.get("verdict") or "").strip()
+        headline = _build_headline(dd, items, verdict=rec_verdict)
 
         data_mode = "backtest" if cited_any else "rule_fallback"
 
@@ -518,8 +668,38 @@ def build_backtest_solution(
         }
 
 
-def _build_headline(dd: float | None, items: list[dict]) -> str:
-    """최우선 항목과 낙폭 컨텍스트로 한 줄 헤드라인을 만든다."""
+def _build_headline(
+    dd: float | None, items: list[dict], verdict: str = "",
+) -> str:
+    """최우선 항목과 낙폭 컨텍스트로 한 줄 헤드라인을 만든다.
+
+    verdict 가 비어있지 않으면 (recommend_current_entry 의 verdict — 예:
+    "TQQQ 진입 적기 (데이터상 정점)", "고점권 — 추격 매수 데이터적 가치 낮음")
+    그 verdict 를 헤드라인의 핵심으로 사용한다.
+    """
+    if not items and not verdict:
+        return "오늘 백테스트 기반 특이 대응 없음 — 현 구조 유지"
+
+    # dd 정규화 (분수면 ×100)
+    norm_dd_pre = dd
+    if norm_dd_pre is not None and abs(norm_dd_pre) <= 1.0:
+        norm_dd_pre = norm_dd_pre * 100.0
+
+    # verdict 가 있고 의미있는 라벨이면 그것이 헤드라인의 핵심
+    if verdict and verdict not in ("데이터 누적 중", "중립 — 데이터 평이"):
+        # verdict 가 이미 "고점권"/"진입" 같은 시장 위치 표현을 포함하면 prefix
+        # 중복 방지 — 깔끔하게 verdict 만 사용 (낙폭 수치만 곁들임).
+        verdict_has_context = any(
+            k in verdict for k in ("고점", "진입", "구간", "추격", "분할")
+        )
+        if verdict_has_context and norm_dd_pre is not None:
+            return f"나스닥 {norm_dd_pre:+.1f}% · {verdict}"
+        if norm_dd_pre is not None and norm_dd_pre <= -5.0:
+            return f"나스닥 고점 대비 {norm_dd_pre:.0f}% — {verdict}"
+        if norm_dd_pre is not None:
+            return f"나스닥 고점권({norm_dd_pre:+.1f}%) — {verdict}"
+        return verdict
+
     if not items:
         return "오늘 백테스트 기반 특이 대응 없음 — 현 구조 유지"
 

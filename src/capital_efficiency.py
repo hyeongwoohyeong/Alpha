@@ -22,6 +22,7 @@ log = get_logger("capital_efficiency")
 NEEDS_CHECK = "확인 필요"
 
 # Capital Efficiency Score sub-score 가중치 (합 = 1.0)
+# ※ 손으로 정한 휴리스틱 — data-fit 아님. 점수는 ordinal 순위로만 신뢰.
 SUBSCORE_WEIGHTS: dict[str, float] = {
     "expected_return_potential": 0.25,
     "time_to_target_probability": 0.20,

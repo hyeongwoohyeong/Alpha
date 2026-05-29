@@ -321,69 +321,6 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_discovery_date ON discovery_scores(date, queue_type)",
     "CREATE INDEX IF NOT EXISTS idx_promotion_date ON promotion_candidates(date, promoted_to_deep_dive)",
     "CREATE INDEX IF NOT EXISTS idx_article_url ON article_summaries(article_url)",
-    # ── Logic Auditor — 로직 버전 / 실험 / 개선 제안 ──────────────────
-    """
-    CREATE TABLE IF NOT EXISTS logic_versions (
-        version_id        INTEGER PRIMARY KEY AUTOINCREMENT,
-        version_name      TEXT NOT NULL,
-        effective_date    TEXT NOT NULL,
-        change_summary    TEXT,
-        score_weights_json TEXT,
-        queue_rules_json  TEXT,
-        filters_json      TEXT,
-        created_by        TEXT,
-        approved_by_user  INTEGER NOT NULL DEFAULT 0,
-        rollback_available INTEGER NOT NULL DEFAULT 1,
-        status            TEXT NOT NULL DEFAULT 'pending',
-        parent_version_id INTEGER,
-        created_at        TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS logic_experiments (
-        experiment_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-        start_date        TEXT NOT NULL,
-        end_date          TEXT,
-        hypothesis        TEXT,
-        change_applied    TEXT,
-        control_version   TEXT,
-        test_version      TEXT,
-        target_metric     TEXT,
-        result_json       TEXT,
-        decision          TEXT,
-        created_at        TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS logic_improvements (
-        improvement_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-        proposal_date     TEXT NOT NULL,
-        category          TEXT NOT NULL,
-        problem           TEXT,
-        evidence_json     TEXT,
-        proposed_change   TEXT,
-        expected_effect   TEXT,
-        risk              TEXT,
-        auto_apply        INTEGER NOT NULL DEFAULT 0,
-        approval_required INTEGER NOT NULL DEFAULT 1,
-        status            TEXT NOT NULL DEFAULT 'pending',
-        applied_version_id INTEGER,
-        created_at        TEXT
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS logic_audit_reports (
-        report_id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        report_date       TEXT NOT NULL,
-        report_type       TEXT NOT NULL,
-        body_json         TEXT,
-        created_at        TEXT
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_logic_versions_status ON logic_versions(status, effective_date)",
-    "CREATE INDEX IF NOT EXISTS idx_logic_experiments_date ON logic_experiments(start_date)",
-    "CREATE INDEX IF NOT EXISTS idx_logic_improvements_status ON logic_improvements(status, proposal_date)",
-    "CREATE INDEX IF NOT EXISTS idx_logic_audit_type_date ON logic_audit_reports(report_type, report_date)",
     # ── Auto-Curation — LLM 기반 자동 큐레이션 캐시 ──────────────────
     """
     CREATE TABLE IF NOT EXISTS auto_curation (
@@ -471,6 +408,26 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         recommended_beta_level     TEXT,
         commentary_ko              TEXT,
         created_at                 TEXT
+    )
+    """,
+    # ── KR Portfolio Regime — 일일 KOSPI 시장 국면 / Overheat Score ─────
+    # 미국 regime 과 독립적인 한국 시장 국면 행. sub-score 6종은
+    # kr_market_regime.py 의 KOSPI 입력 (PB/PE, VKOSPI, 집중도, FX/금리,
+    # 실적 추정 리스크, 기술적 과열) 에 매핑된다.
+    """
+    CREATE TABLE IF NOT EXISTS kospi_market_regime (
+        date                               TEXT PRIMARY KEY,
+        kospi_overheat_score               REAL,
+        current_regime                     TEXT,
+        kospi_valuation_score              REAL,
+        kospi_sentiment_score              REAL,
+        kospi_concentration_score          REAL,
+        kospi_liquidity_score              REAL,
+        kospi_earnings_revision_score      REAL,
+        kospi_technical_score              REAL,
+        commentary_ko                      TEXT,
+        sample_caveats_json                TEXT,
+        created_at                         TEXT
     )
     """,
     # ── Portfolio Regime — Nasdaq 하락 단계별 투입 계획 ─────────────────
@@ -627,6 +584,7 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         today_focus_ko        TEXT,
         today_action_ko       TEXT,
         upcoming_catalysts_ko TEXT,
+        underlying_snapshot_ko TEXT,
         model_used            TEXT,
         created_at            TEXT,
         PRIMARY KEY (date, ticker)
@@ -715,12 +673,31 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (asset, ath_proximity_bucket)
     )
     """,
+    # ── 데이터 사다리 — 낙폭 버킷별 (자산 × forward window) 실증 stats ───
+    # base_asset(예: QQQ) 의 52주 rolling drawdown 버킷에서 target_asset 의
+    # forward return / MDD / 승률 / 표본수를 저장. 하드코딩 사다리 대체용.
+    """
+    CREATE TABLE IF NOT EXISTS entry_timing_buckets (
+        base_asset    TEXT NOT NULL,
+        bucket_label  TEXT NOT NULL,
+        target_asset  TEXT NOT NULL,
+        window_days   INTEGER NOT NULL,
+        avg_return    REAL,
+        median_return REAL,
+        win_rate      REAL,
+        worst_mdd     REAL,
+        sample_count  INTEGER,
+        updated_at    TEXT,
+        PRIMARY KEY (base_asset, bucket_label, target_asset, window_days)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
     "CREATE INDEX IF NOT EXISTS idx_mc_asset ON market_cycles(asset, peak_date)",
     "CREATE INDEX IF NOT EXISTS idx_acs_asset ON annual_correction_stats(asset, year)",
     "CREATE INDEX IF NOT EXISTS idx_brs_asset ON bull_run_stats(asset, start_date)",
+    "CREATE INDEX IF NOT EXISTS idx_etb_base ON entry_timing_buckets(base_asset, bucket_label)",
 )
 
 
@@ -780,6 +757,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE performance_tracking ADD COLUMN max_gain_since_decision REAL",
         "ALTER TABLE performance_tracking ADD COLUMN volatility REAL",
         "ALTER TABLE performance_tracking ADD COLUMN hit_status TEXT",
+        # ── Stage 3 — holdings_briefing 에 KR 기초자산 라이브 시세 한 줄 ──
+        "ALTER TABLE holdings_briefing ADD COLUMN underlying_snapshot_ko TEXT",
     )
     for s in _ALTER_STATEMENTS:
         try:
@@ -1700,237 +1679,6 @@ def fetch_performance_join_decisions(
 
 
 # ---------------------------------------------------------------------------
-# Logic Auditor — versions / experiments / improvements / reports
-# ---------------------------------------------------------------------------
-
-def insert_logic_version(
-    conn: sqlite3.Connection,
-    *,
-    version_name: str,
-    effective_date: str,
-    change_summary: str | None = None,
-    score_weights: dict | None = None,
-    queue_rules: dict | None = None,
-    filters: dict | None = None,
-    created_by: str = "auditor",
-    approved_by_user: bool = False,
-    parent_version_id: int | None = None,
-    status: str = "pending",
-) -> int:
-    cur = conn.execute(
-        """
-        INSERT INTO logic_versions (version_name, effective_date, change_summary,
-            score_weights_json, queue_rules_json, filters_json,
-            created_by, approved_by_user, status, parent_version_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            version_name, effective_date, change_summary,
-            dump_json(score_weights), dump_json(queue_rules), dump_json(filters),
-            created_by, 1 if approved_by_user else 0, status,
-            parent_version_id, now_iso(),
-        ),
-    )
-    return int(cur.lastrowid)
-
-
-def fetch_logic_versions(
-    conn: sqlite3.Connection, status: str | None = None,
-) -> list[sqlite3.Row]:
-    if status:
-        return list(conn.execute(
-            "SELECT * FROM logic_versions WHERE status=? ORDER BY effective_date DESC",
-            (status,),
-        ))
-    return list(conn.execute(
-        "SELECT * FROM logic_versions ORDER BY effective_date DESC",
-    ))
-
-
-def update_logic_version_status(
-    conn: sqlite3.Connection, version_id: int, status: str,
-    approved_by_user: bool | None = None,
-) -> None:
-    if approved_by_user is None:
-        conn.execute(
-            "UPDATE logic_versions SET status=? WHERE version_id=?",
-            (status, version_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE logic_versions SET status=?, approved_by_user=? WHERE version_id=?",
-            (status, 1 if approved_by_user else 0, version_id),
-        )
-
-
-def insert_logic_experiment(
-    conn: sqlite3.Connection,
-    *,
-    start_date: str,
-    end_date: str | None,
-    hypothesis: str,
-    change_applied: str,
-    control_version: str,
-    test_version: str,
-    target_metric: str,
-) -> int:
-    cur = conn.execute(
-        """
-        INSERT INTO logic_experiments (start_date, end_date, hypothesis,
-            change_applied, control_version, test_version, target_metric,
-            created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (start_date, end_date, hypothesis, change_applied,
-         control_version, test_version, target_metric, now_iso()),
-    )
-    return int(cur.lastrowid)
-
-
-def update_logic_experiment_result(
-    conn: sqlite3.Connection, experiment_id: int,
-    *, result: dict, decision: str, end_date: str | None = None,
-) -> None:
-    if end_date:
-        conn.execute(
-            "UPDATE logic_experiments SET result_json=?, decision=?, end_date=? "
-            "WHERE experiment_id=?",
-            (dump_json(result), decision, end_date, experiment_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE logic_experiments SET result_json=?, decision=? "
-            "WHERE experiment_id=?",
-            (dump_json(result), decision, experiment_id),
-        )
-
-
-def fetch_logic_experiments(
-    conn: sqlite3.Connection, decision: str | None = None,
-) -> list[sqlite3.Row]:
-    if decision:
-        return list(conn.execute(
-            "SELECT * FROM logic_experiments WHERE decision=? ORDER BY start_date DESC",
-            (decision,),
-        ))
-    return list(conn.execute(
-        "SELECT * FROM logic_experiments ORDER BY start_date DESC",
-    ))
-
-
-def insert_logic_improvement(
-    conn: sqlite3.Connection,
-    *,
-    proposal_date: str,
-    category: str,
-    problem: str,
-    evidence: dict,
-    proposed_change: str,
-    expected_effect: str,
-    risk: str,
-    auto_apply: bool = False,
-    approval_required: bool = True,
-) -> int:
-    # 같은 날 같은 카테고리 + 동일 problem 은 중복 방지
-    existing = conn.execute(
-        "SELECT improvement_id FROM logic_improvements "
-        "WHERE proposal_date=? AND category=? AND problem=?",
-        (proposal_date, category, problem),
-    ).fetchone()
-    if existing:
-        return int(existing[0])
-
-    cur = conn.execute(
-        """
-        INSERT INTO logic_improvements (proposal_date, category, problem,
-            evidence_json, proposed_change, expected_effect, risk,
-            auto_apply, approval_required, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-        """,
-        (proposal_date, category, problem, dump_json(evidence),
-         proposed_change, expected_effect, risk,
-         1 if auto_apply else 0, 1 if approval_required else 0, now_iso()),
-    )
-    return int(cur.lastrowid)
-
-
-def fetch_logic_improvements(
-    conn: sqlite3.Connection, status: str | None = None, limit: int = 200,
-) -> list[sqlite3.Row]:
-    if status:
-        return list(conn.execute(
-            "SELECT * FROM logic_improvements WHERE status=? "
-            "ORDER BY proposal_date DESC, improvement_id DESC LIMIT ?",
-            (status, limit),
-        ))
-    return list(conn.execute(
-        "SELECT * FROM logic_improvements "
-        "ORDER BY proposal_date DESC, improvement_id DESC LIMIT ?",
-        (limit,),
-    ))
-
-
-def update_logic_improvement_status(
-    conn: sqlite3.Connection, improvement_id: int, status: str,
-    applied_version_id: int | None = None,
-) -> None:
-    if applied_version_id is not None:
-        conn.execute(
-            "UPDATE logic_improvements SET status=?, applied_version_id=? "
-            "WHERE improvement_id=?",
-            (status, applied_version_id, improvement_id),
-        )
-    else:
-        conn.execute(
-            "UPDATE logic_improvements SET status=? WHERE improvement_id=?",
-            (status, improvement_id),
-        )
-
-
-def insert_audit_report(
-    conn: sqlite3.Connection,
-    *,
-    report_date: str,
-    report_type: str,   # 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'challenge'
-    body: dict,
-) -> int:
-    cur = conn.execute(
-        """
-        INSERT INTO logic_audit_reports (report_date, report_type, body_json, created_at)
-        VALUES (?, ?, ?, ?)
-        """,
-        (report_date, report_type, dump_json(body), now_iso()),
-    )
-    return int(cur.lastrowid)
-
-
-def fetch_audit_reports(
-    conn: sqlite3.Connection, report_type: str | None = None, limit: int = 50,
-) -> list[sqlite3.Row]:
-    if report_type:
-        return list(conn.execute(
-            "SELECT * FROM logic_audit_reports WHERE report_type=? "
-            "ORDER BY report_date DESC LIMIT ?",
-            (report_type, limit),
-        ))
-    return list(conn.execute(
-        "SELECT * FROM logic_audit_reports ORDER BY report_date DESC LIMIT ?",
-        (limit,),
-    ))
-
-
-def fetch_performance_for_decision(
-    conn: sqlite3.Connection, decision_id: int
-) -> list[sqlite3.Row]:
-    return list(
-        conn.execute(
-            "SELECT * FROM performance_tracking WHERE decision_id=? ORDER BY check_date DESC",
-            (decision_id,),
-        )
-    )
-
-
-# ---------------------------------------------------------------------------
 # Auto-Curation — LLM 기반 자동 큐레이션 캐시
 # ---------------------------------------------------------------------------
 
@@ -2066,6 +1814,79 @@ def fetch_latest_market_regime(
         return cur.fetchone()
     cur = conn.execute("SELECT * FROM market_regime ORDER BY date DESC LIMIT 1")
     return cur.fetchone()
+
+
+# ---------------------------------------------------------------------------
+# KR Portfolio Regime — kospi_market_regime (미국 regime 과 독립)
+# ---------------------------------------------------------------------------
+
+_KOSPI_REGIME_COLS: tuple[str, ...] = (
+    "kospi_overheat_score", "current_regime",
+    "kospi_valuation_score", "kospi_sentiment_score",
+    "kospi_concentration_score", "kospi_liquidity_score",
+    "kospi_earnings_revision_score", "kospi_technical_score",
+    "commentary_ko", "sample_caveats_json",
+)
+
+
+def upsert_kospi_market_regime(
+    conn: sqlite3.Connection, date_iso: str, fields: dict[str, Any]
+) -> None:
+    """kospi_market_regime 일일 행 upsert (date PK). 미국 market_regime 과 동일 패턴."""
+    cols = ["date"] + list(_KOSPI_REGIME_COLS) + ["created_at"]
+    placeholders = ", ".join("?" for _ in cols)
+    update_set = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "date")
+    sql = (
+        f"INSERT INTO kospi_market_regime ({', '.join(cols)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(date) DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = [date_iso]
+    for c in _KOSPI_REGIME_COLS:
+        v = fields.get(c)
+        # sample_caveats_json 은 리스트로 들어와도 자동 인코딩
+        if c == "sample_caveats_json" and v is not None and not isinstance(v, str):
+            v = dump_json(v)
+        params.append(v)
+    params.append(now_iso())
+    try:
+        conn.execute(sql, params)
+        conn.commit()
+    except Exception as e:
+        log.warning("kospi_market_regime upsert 실패 (graceful): %s", e)
+
+
+def fetch_latest_kospi_market_regime(
+    conn: sqlite3.Connection, date_iso: str | None = None
+) -> sqlite3.Row | None:
+    """가장 최신 (또는 지정일) kospi_market_regime 행."""
+    try:
+        if date_iso:
+            cur = conn.execute(
+                "SELECT * FROM kospi_market_regime WHERE date=?", (date_iso,)
+            )
+            return cur.fetchone()
+        cur = conn.execute(
+            "SELECT * FROM kospi_market_regime ORDER BY date DESC LIMIT 1"
+        )
+        return cur.fetchone()
+    except Exception as e:
+        log.debug("kospi_market_regime fetch 실패: %s", e)
+        return None
+
+
+def fetch_recent_kospi_market_regimes(
+    conn: sqlite3.Connection, limit: int = 2
+) -> list[sqlite3.Row]:
+    """최근 N개 kospi_market_regime 행 (date DESC)."""
+    try:
+        cur = conn.execute(
+            "SELECT * FROM kospi_market_regime ORDER BY date DESC LIMIT ?",
+            (int(limit),),
+        )
+        return list(cur.fetchall())
+    except Exception:
+        return []
 
 
 _CRASH_PLAN_COLS: tuple[str, ...] = (
@@ -2559,6 +2380,66 @@ def fetch_ath_forward_returns(
 
 
 # ---------------------------------------------------------------------------
+# 데이터 사다리 — entry_timing_buckets
+# ---------------------------------------------------------------------------
+
+_ENTRY_TIMING_COLS: tuple[str, ...] = (
+    "base_asset", "bucket_label", "target_asset", "window_days",
+    "avg_return", "median_return", "win_rate", "worst_mdd",
+    "sample_count", "updated_at",
+)
+
+
+def upsert_entry_timing_bucket(
+    conn: sqlite3.Connection, fields: dict[str, Any]
+) -> None:
+    """entry_timing_buckets 행 upsert
+    ((base_asset, bucket_label, target_asset, window_days) PK).
+
+    하드코딩 사다리(_DEPLOY_LADDER) 대체 — base_asset 의 52주 rolling
+    drawdown 버킷에서 target_asset 의 forward return/MDD/승률을 저장.
+    """
+    placeholders = ", ".join("?" for _ in _ENTRY_TIMING_COLS)
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in _ENTRY_TIMING_COLS
+        if c not in ("base_asset", "bucket_label", "target_asset", "window_days")
+    )
+    sql = (
+        f"INSERT INTO entry_timing_buckets ({', '.join(_ENTRY_TIMING_COLS)}) "
+        f"VALUES ({placeholders}) "
+        f"ON CONFLICT(base_asset, bucket_label, target_asset, window_days) "
+        f"DO UPDATE SET {update_set}"
+    )
+    params: list[Any] = []
+    for c in _ENTRY_TIMING_COLS:
+        v = fields.get(c)
+        if c == "updated_at" and v is None:
+            v = now_iso()
+        params.append(v)
+    try:
+        conn.execute(sql, params)
+        conn.commit()
+    except Exception as e:
+        log.debug("entry_timing_buckets upsert 실패: %s", e)
+
+
+def fetch_entry_timing_buckets(
+    conn: sqlite3.Connection, base_asset: str | None = None
+) -> list[sqlite3.Row]:
+    """entry_timing_buckets 전체 또는 특정 base_asset 행."""
+    if base_asset:
+        return list(conn.execute(
+            "SELECT * FROM entry_timing_buckets WHERE base_asset=? "
+            "ORDER BY bucket_label, target_asset, window_days",
+            (base_asset,),
+        ))
+    return list(conn.execute(
+        "SELECT * FROM entry_timing_buckets "
+        "ORDER BY base_asset, bucket_label, target_asset, window_days"
+    ))
+
+
+# ---------------------------------------------------------------------------
 # Phase 4-B — Decision Journal: decision_grades
 # ---------------------------------------------------------------------------
 
@@ -3031,6 +2912,7 @@ _HOLDINGS_BRIEFING_COLS: tuple[str, ...] = (
     "date", "ticker", "name", "exposure_theme", "summary_ko",
     "key_drivers_ko", "risks_ko", "portfolio_note_ko",
     "today_focus_ko", "today_action_ko", "upcoming_catalysts_ko",
+    "underlying_snapshot_ko",
     "model_used", "created_at",
 )
 
@@ -3085,6 +2967,7 @@ def upsert_holding_briefing(
             c for c in _HOLDINGS_BRIEFING_COLS
             if c not in (
                 "today_focus_ko", "today_action_ko", "upcoming_catalysts_ko",
+                "underlying_snapshot_ko",
             )
         )
         placeholders2 = ", ".join("?" for _ in new_cols)

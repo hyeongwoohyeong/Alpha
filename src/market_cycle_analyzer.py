@@ -976,6 +976,473 @@ def locate_current_market(conn, asset: str = "QQQ") -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 9-B. 데이터 사다리 — base_asset 의 52주 rolling drawdown 버킷별
+#      target_asset (QQQ/QLD/TQQQ) forward return / MDD / 승률
+#      하드코딩 _DEPLOY_LADDER 대체용. 가장 긴 history(QQQ 1999~)에서 계산.
+# ---------------------------------------------------------------------------
+
+# 데이터 사다리 — 낙폭 버킷 정의 (label, lo, hi). lo < dd <= hi.
+# 0~-2% 만 양수 epsilon(+0.001) 으로 정확히 평탄 구간을 포함한다.
+ENTRY_TIMING_BUCKETS: list[tuple[str, float, float]] = [
+    ("0~-2%", -0.02, 0.001),
+    ("-2~-5%", -0.05, -0.02),
+    ("-5~-10%", -0.10, -0.05),
+    ("-10~-15%", -0.15, -0.10),
+    ("-15~-20%", -0.20, -0.15),
+    ("-20~-25%", -0.25, -0.20),
+    ("-25~-35%", -0.35, -0.25),
+    ("-35%+", -0.99, -0.35),
+]
+
+
+def _bucket_for_dd(dd: float) -> str | None:
+    """drawdown(분수) 가 속한 ENTRY_TIMING_BUCKETS 라벨. 없으면 None."""
+    for lbl, lo, hi in ENTRY_TIMING_BUCKETS:
+        if lo < dd <= hi:
+            return lbl
+    return None
+
+
+def _rolling_52w_drawdown(closes: list[float]) -> list[float]:
+    """closes 의 각 시점에서 252영업일 rolling high 대비 낙폭(분수, 음수~0)."""
+    n = len(closes)
+    out = [0.0] * n
+    for i in range(n):
+        lo = max(0, i - 251)
+        window_high = max(closes[lo:i + 1])
+        if window_high > 0:
+            out[i] = closes[i] / window_high - 1.0
+    return out
+
+
+def calculate_entry_timing_buckets(
+    conn,
+    base_asset: str = "QQQ",
+    target_assets: tuple[str, ...] = ("QQQ", "QLD", "TQQQ"),
+    windows: tuple[int, ...] = (21, 63, 126),
+) -> dict[str, Any]:
+    """base_asset 의 52주 rolling drawdown 버킷별로, 각 target_asset 의
+    forward return / MDD / 승률을 실증 집계.
+
+    base_asset(QQQ) 의 1999년 이후 모든 일자에 대해:
+    1) 그날의 52주 drawdown 을 계산 → 버킷 라벨 결정.
+    2) 같은 날짜에 대해 target_asset 의 forward return / forward MDD 계산
+       (target 의 가용 history 만큼만 자연스럽게 작아진다 — QLD 2006~,
+       TQQQ 2010~).
+    3) (버킷, target, window) 별로 avg / median / win_rate / worst_mdd /
+       sample_count 집계.
+
+    Stage 2 (KR 확장): 같은 테이블·같은 코드 경로로 `base_asset="069500"`
+    + `target_assets=("069500","122630")` 호출이 가능하다. 결과는
+    entry_timing_buckets 의 base_asset 컬럼으로 US (QQQ) 행과 구분된다.
+    KR ladder 의 표본은 069500 상장 (2002 년 10월) 이후로 자연스럽게
+    제한되고, 122630 (KODEX 레버리지) 은 2010년 이후 — 두 자산의 가용
+    history 가 다르다는 점은 sample_count 가 솔직히 노출한다.
+
+    Returns:
+        {
+          "base_asset": "QQQ",
+          "generated_at": isoformat,
+          "windows": (21, 63, 126),
+          "by_bucket": {
+            "<bucket_label>": {
+              "<asset>": {
+                "21d_avg": float | None,
+                "21d_median": float | None,
+                "21d_winrate": float | None,
+                "21d_worst_mdd": float | None,
+                "21d_n": int,
+                ...
+              }, ...
+            }, ...
+          },
+        }
+    예외를 던지지 않는다 — 데이터 부족이면 빈 by_bucket.
+    """
+    out: dict[str, Any] = {
+        "base_asset": base_asset,
+        "generated_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        "windows": list(windows),
+        "by_bucket": {},
+    }
+    try:
+        base_closes, base_dates = _load_series(conn, base_asset)
+    except Exception as e:
+        log.warning("[%s] entry_timing base 로드 실패: %s", base_asset, e)
+        return out
+    n = len(base_closes)
+    if n < 260:
+        return out
+
+    base_dd = _rolling_52w_drawdown(base_closes)
+
+    # target asset 시계열 + date→idx 매핑
+    target_closes: dict[str, list[float]] = {}
+    target_idx: dict[str, dict[str, int]] = {}
+    for t in target_assets:
+        try:
+            closes, dates = _load_series(conn, t)
+        except Exception as e:
+            log.debug("[%s] entry_timing target 로드 실패: %s", t, e)
+            closes, dates = [], []
+        target_closes[t] = closes
+        target_idx[t] = {d: k for k, d in enumerate(dates)}
+
+    # 누적 통계 구조: by_bucket[label][asset][window] = list[float]
+    acc: dict[str, dict[str, dict[int, list[float]]]] = {}
+    mdd_acc: dict[str, dict[str, dict[int, list[float]]]] = {}
+    for lbl, _, _ in ENTRY_TIMING_BUCKETS:
+        acc[lbl] = {t: {w: [] for w in windows} for t in target_assets}
+        mdd_acc[lbl] = {t: {w: [] for w in windows} for t in target_assets}
+
+    for i in range(n):
+        label = _bucket_for_dd(base_dd[i])
+        if label is None:
+            continue
+        d = base_dates[i]
+        for t in target_assets:
+            ai = target_idx[t].get(d)
+            if ai is None:
+                continue
+            tc = target_closes[t]
+            for w in windows:
+                fr = _forward_return(tc, ai, w)
+                if fr is not None:
+                    acc[label][t][w].append(fr)
+                m = _forward_mdd(tc, ai, w)
+                if m is not None:
+                    mdd_acc[label][t][w].append(m)
+
+    # 집계
+    by_bucket: dict[str, dict[str, Any]] = {}
+    for lbl, _, _ in ENTRY_TIMING_BUCKETS:
+        bucket_out: dict[str, Any] = {}
+        for t in target_assets:
+            asset_out: dict[str, Any] = {}
+            for w in windows:
+                vals = acc[lbl][t][w]
+                mdds = mdd_acc[lbl][t][w]
+                n_w = len(vals)
+                if n_w == 0:
+                    asset_out[f"{w}d_avg"] = None
+                    asset_out[f"{w}d_median"] = None
+                    asset_out[f"{w}d_winrate"] = None
+                    asset_out[f"{w}d_worst_mdd"] = None
+                    asset_out[f"{w}d_n"] = 0
+                    continue
+                avg = sum(vals) / n_w
+                med = statistics.median(vals)
+                wins = sum(1 for v in vals if v > 0)
+                wr = wins / n_w
+                worst = min(mdds) if mdds else None
+                asset_out[f"{w}d_avg"] = round(avg, 4)
+                asset_out[f"{w}d_median"] = round(med, 4)
+                asset_out[f"{w}d_winrate"] = round(wr, 4)
+                asset_out[f"{w}d_worst_mdd"] = (round(worst, 4)
+                                                if worst is not None else None)
+                asset_out[f"{w}d_n"] = n_w
+            bucket_out[t] = asset_out
+        by_bucket[lbl] = bucket_out
+
+    out["by_bucket"] = by_bucket
+    return out
+
+
+def persist_entry_timing_buckets(
+    conn, result: dict[str, Any]
+) -> int:
+    """calculate_entry_timing_buckets 결과를 entry_timing_buckets 테이블에 저장.
+    저장된 (bucket × asset × window) 행 수를 반환. 절대 예외 던지지 않음.
+    """
+    saved = 0
+    try:
+        from . import database as _db
+    except Exception as e:
+        log.warning("database import 실패: %s", e)
+        return 0
+    base = result.get("base_asset") or "QQQ"
+    windows = result.get("windows") or [21, 63, 126]
+    by_bucket = result.get("by_bucket") or {}
+    for lbl, asset_map in by_bucket.items():
+        for asset, stats in (asset_map or {}).items():
+            for w in windows:
+                n_key = f"{w}d_n"
+                # n_key 가 없으면 (=구버전) 또는 0이면 그래도 행은 만들어 둔다
+                n_val = stats.get(n_key, 0) or 0
+                try:
+                    _db.upsert_entry_timing_bucket(conn, {
+                        "base_asset": base,
+                        "bucket_label": lbl,
+                        "target_asset": asset,
+                        "window_days": int(w),
+                        "avg_return": stats.get(f"{w}d_avg"),
+                        "median_return": stats.get(f"{w}d_median"),
+                        "win_rate": stats.get(f"{w}d_winrate"),
+                        "worst_mdd": stats.get(f"{w}d_worst_mdd"),
+                        "sample_count": int(n_val),
+                    })
+                    saved += 1
+                except Exception as e:
+                    log.debug("entry_timing 저장 실패 (%s/%s/%s): %s",
+                              lbl, asset, w, e)
+    return saved
+
+
+# ---------------------------------------------------------------------------
+# 9-C. 오늘의 진입 추천 — 하드코딩 _DEPLOY_LADDER 대체
+# ---------------------------------------------------------------------------
+
+# 임계 (interpretation thresholds — 데이터 해석용, *진입 레벨 하드코딩 아님*)
+#
+#  - MIN_SAMPLE_FOR_PICK = 50:  best_asset 추천에 필요한 최소 표본.
+#    50 미만이면 후보 자격 자체 미달. (TQQQ 의 깊은 낙폭 버킷에서 50을 약간
+#    밑돌 수 있어 _MIN_SAMPLE_HARD_FLOOR 로 보조)
+#  - MIN_SAMPLE_HARD_FLOOR = 30: 30 미만은 절대 추천 후보 아님 — 표본 부족.
+#  - LOW_RETURN_THRESHOLD = 0.08 (8%): 모든 자산의 3M 평균이 8% 미만이면
+#    "추격 무가치" 판정. (3개월에 8% 미만은 risk-free 대비 알파 미미.)
+#  - HIGH_WINRATE_THRESHOLD = 0.80 (80%): 데이터상 "황금 진입 구간"의 기준.
+#    실증에서 -5~-10% 구간 QLD/TQQQ 의 winrate ~80% 가 임계로 관측됨.
+#  - TQQQ_PEAK_WINRATE = 0.75, TQQQ_PEAK_AVG = 0.20 (20%):
+#    -10~-15% 구간에서 TQQQ winrate 81%·avg +23.8% 가 데이터상 정점.
+#    이 결과를 검출하는 임계 — 데이터의 정점을 정직하게 라벨링한다.
+#  - LOW_WINRATE_CAUTION = 0.55 (55%): -20% 이하에서 winrate 가 55% 미만이면
+#    "신중 분할 — 적중률 데이터적으로 낮음". -20~-25% 의 TQQQ winrate 48%
+#    가 그 예 — 깊은 낙폭이라고 무작정 공격은 데이터가 지지하지 않는다.
+_MIN_SAMPLE_FOR_PICK = 50
+_MIN_SAMPLE_HARD_FLOOR = 30
+_LOW_RETURN_THRESHOLD = 0.08
+_HIGH_WINRATE_THRESHOLD = 0.80
+_TQQQ_PEAK_WINRATE = 0.75
+_TQQQ_PEAK_AVG = 0.20
+_LOW_WINRATE_CAUTION = 0.55
+
+
+def _current_dd_for(closes: list[float]) -> float:
+    """closes 마지막 시점의 52주 drawdown(분수)."""
+    n = len(closes)
+    if n < 2:
+        return 0.0
+    lo = max(0, n - 252)
+    window_high = max(closes[lo:n])
+    if window_high <= 0:
+        return 0.0
+    return closes[-1] / window_high - 1.0
+
+
+def _score_candidate(avg: float | None, win: float | None,
+                     n: int) -> float | None:
+    """risk-adjusted score — avg × winrate (둘 다 있어야 점수). n 부족 시 None."""
+    if avg is None or win is None:
+        return None
+    if n < _MIN_SAMPLE_HARD_FLOOR:
+        return None
+    # 둘 다 정직하게 곱한다 — 평균 수익률 ×  적중률 (둘 다 높을수록 좋다)
+    # winrate 가 너무 낮으면 음수 effect 가 amplify 되도록 한다.
+    return avg * win
+
+
+def recommend_current_entry(
+    conn, base_asset: str = "QQQ",
+) -> dict[str, Any]:
+    """오늘의 진입 추천 — 데이터 사다리 기반.
+
+    1) base_asset 의 오늘 52주 drawdown 계산.
+    2) drawdown 이 속한 버킷의 entry_timing_buckets (3M 우선) 조회.
+    3) 표본·avg·winrate 기준으로 best_asset 선정.
+    4) 한국어 rationale + verdict 라벨 생성.
+
+    `base_asset` 은 'QQQ' (US) 또는 '069500' (KR — KODEX 200) 을 지원한다.
+    DB 의 entry_timing_buckets 가 그 base_asset 으로 채워져 있으면 자동으로
+    같은 형식의 결과를 반환한다. KR 의 target candidate 은 069500 / 122630
+    (KODEX 레버리지) — TQQQ-급 정점 검출 로직은 데이터 풍부도 차이로
+    US 만큼 잘 안 작동할 수 있으나 동일 verdict 라벨링을 적용한다.
+
+    Returns:
+        {
+          "base_asset": str,
+          "current_drawdown_pct": float | None,  # 분수(음수)
+          "current_bucket": str | None,
+          "best_asset": str|None,
+          "rationale_ko": str,
+          "evidence": [ {asset, avg_3m, win_3m, n_3m}, ... ],
+          "verdict": str,
+          "available": bool,
+        }
+    예외를 절대 위로 던지지 않는다.
+    """
+    out: dict[str, Any] = {
+        "base_asset": base_asset,
+        "current_drawdown_pct": None,
+        "current_bucket": None,
+        "best_asset": None,
+        "rationale_ko": "데이터 누적 중 — 추천 불가.",
+        "evidence": [],
+        "verdict": "데이터 누적 중",
+        "available": False,
+    }
+    try:
+        closes, _dates = _load_series(conn, base_asset)
+    except Exception as e:
+        log.debug("recommend_current_entry 로드 실패: %s", e)
+        return out
+    if len(closes) < 260:
+        return out
+
+    dd = _current_dd_for(closes)
+    out["current_drawdown_pct"] = round(dd, 4)
+    bucket = _bucket_for_dd(dd)
+    out["current_bucket"] = bucket
+    if bucket is None:
+        out["rationale_ko"] = (
+            f"{base_asset} 오늘 낙폭({dd*100:+.1f}%)이 사다리 버킷 외부 — "
+            "추천 불가.")
+        return out
+
+    # DB 에서 해당 버킷의 stats 조회 (3M=63d 우선, 1M=21d/6M=126d 보조)
+    try:
+        from . import database as _db
+        rows = _db.fetch_entry_timing_buckets(conn, base_asset=base_asset)
+    except Exception as e:
+        log.debug("entry_timing_buckets 조회 실패: %s", e)
+        rows = []
+
+    # bucket × asset × window → row 매핑
+    by_asset: dict[str, dict[int, dict[str, Any]]] = {}
+    for r in rows:
+        rd = dict(r) if hasattr(r, "keys") else r
+        if rd.get("bucket_label") != bucket:
+            continue
+        a = rd.get("target_asset")
+        w = int(rd.get("window_days") or 0)
+        if not a or not w:
+            continue
+        by_asset.setdefault(a, {})[w] = rd
+
+    if not by_asset:
+        out["rationale_ko"] = (
+            f"{base_asset} 현재 버킷 '{bucket}' 의 데이터 사다리 통계가 "
+            "아직 DB 에 없습니다 — 데이터 누적 중.")
+        return out
+
+    out["available"] = True
+
+    # base_asset 에 따라 candidate 자산 정의.
+    # - US (QQQ) : QQQ → QLD → TQQQ
+    # - KR (069500) : KODEX 200 → KODEX 레버리지 (TQQQ-급 3X 한국 ETF 부재)
+    if base_asset == "069500":
+        asset_priority = ("069500", "122630")
+        leverage_asset = "122630"  # KR 2X 레버리지 (TQQQ 위치)
+        mid_lev_asset: str | None = None  # KR 엔 QLD-급 별도 자산 없음
+    else:
+        asset_priority = ("QQQ", "QLD", "TQQQ")
+        leverage_asset = "TQQQ"
+        mid_lev_asset = "QLD"
+
+    candidates: list[dict[str, Any]] = []
+    for asset in asset_priority:
+        w3 = by_asset.get(asset, {}).get(63)
+        if not w3:
+            continue
+        avg = w3.get("avg_return")
+        win = w3.get("win_rate")
+        n = w3.get("sample_count") or 0
+        candidates.append({
+            "asset": asset,
+            "avg_3m": avg,
+            "win_3m": win,
+            "n_3m": int(n),
+            "worst_mdd_3m": w3.get("worst_mdd"),
+            "score": _score_candidate(avg, win, int(n)),
+        })
+
+    out["evidence"] = [{
+        "asset": c["asset"],
+        "avg": c["avg_3m"],
+        "win": c["win_3m"],
+        "n": c["n_3m"],
+    } for c in candidates]
+
+    # best_asset 선정 — score 가장 높은 후보 (n 조건은 score 내부에서 처리)
+    scored = [c for c in candidates if c["score"] is not None]
+    best: dict[str, Any] | None = None
+    if scored:
+        # 1순위: 표본 ≥ MIN_SAMPLE_FOR_PICK 내에서 score 최대
+        prime = [c for c in scored if c["n_3m"] >= _MIN_SAMPLE_FOR_PICK]
+        pool = prime if prime else scored
+        best = max(pool, key=lambda c: (c["score"] or 0.0))
+    if best:
+        out["best_asset"] = best["asset"]
+
+    # 버킷 단위 verdict — 데이터의 패턴을 해석해 라벨링
+    # (interpretation thresholds — see module-level docstring above)
+    all_avgs = [c["avg_3m"] for c in candidates if c["avg_3m"] is not None]
+    all_wins = [c["win_3m"] for c in candidates if c["win_3m"] is not None]
+    lev = next((c for c in candidates
+                if c["asset"] == leverage_asset), None)
+    mid = next((c for c in candidates
+                if mid_lev_asset is not None and c["asset"] == mid_lev_asset), None)
+
+    verdict = "중립 — 데이터 평이"
+    # 1) 깊은 낙폭 — winrate 가 낮으면 신중
+    if bucket in ("-20~-25%", "-25~-35%", "-35%+"):
+        low_wr_count = sum(1 for w in all_wins if w < _LOW_WINRATE_CAUTION)
+        if all_wins and low_wr_count >= 1:
+            verdict = "신중 분할 — 적중률 데이터적으로 낮음"
+        elif lev and lev["avg_3m"] is not None and lev["avg_3m"] >= 0.15 \
+                and lev["win_3m"] and lev["win_3m"] >= _LOW_WINRATE_CAUTION:
+            verdict = "공격 배치 가능 — 표본 적으나 데이터 우호적"
+        else:
+            verdict = "신중 분할 — 깊은 낙폭, 표본 부족"
+    # 2) 레버리지 정점 — 데이터상 정점 (US 의 TQQQ-peak 검출 일반화)
+    elif lev and lev["avg_3m"] is not None and lev["win_3m"] is not None \
+            and lev["avg_3m"] >= _TQQQ_PEAK_AVG \
+            and lev["win_3m"] >= _TQQQ_PEAK_WINRATE \
+            and lev["n_3m"] >= _MIN_SAMPLE_HARD_FLOOR:
+        verdict = f"{leverage_asset} 진입 적기 (데이터상 정점)"
+    # 3) 황금 진입 구간 — (US 한정) QLD/TQQQ winrate ≥ 80%
+    #    KR 은 mid_lev_asset 가 None 이라 이 분기 자동 skip.
+    elif mid and lev and mid["win_3m"] and lev["win_3m"] \
+            and mid["win_3m"] >= _HIGH_WINRATE_THRESHOLD \
+            and lev["win_3m"] >= _HIGH_WINRATE_THRESHOLD:
+        verdict = "황금 진입 구간 — 기준자산+중간레버 동시 진입 데이터 우월"
+    # 4) 고점권 — 모든 자산 avg < 8%
+    elif all_avgs and all(a < _LOW_RETURN_THRESHOLD for a in all_avgs):
+        verdict = "고점권 — 추격 매수 데이터적 가치 낮음"
+
+    out["verdict"] = verdict
+
+    # rationale_ko — 정직하게 숫자를 인용
+    parts: list[str] = []
+    parts.append(
+        f"{base_asset} 오늘 52주 고점 대비 {dd*100:+.1f}% → '{bucket}' 버킷.")
+    if best:
+        a = best["asset"]
+        avg = best["avg_3m"] or 0.0
+        win = best["win_3m"] or 0.0
+        n = best["n_3m"]
+        conf = ("표본 충분" if n >= 100 else "표본 보통" if n >= 50
+                else "표본 부족")
+        parts.append(
+            f"데이터상 best: {a} (3M 평균 {avg*100:+.1f}%, "
+            f"적중률 {win*100:.0f}%, 표본 {n}건, {conf})")
+        # 비교용: 다른 자산 한 줄
+        others = [c for c in candidates if c["asset"] != a]
+        oth_txt = " / ".join(
+            f"{c['asset']} {(c['avg_3m'] or 0)*100:+.1f}% "
+            f"·승률 {(c['win_3m'] or 0)*100:.0f}% ·n={c['n_3m']}"
+            for c in others if c["avg_3m"] is not None
+        )
+        if oth_txt:
+            parts.append(f"비교 — {oth_txt}.")
+    else:
+        parts.append(
+            "표본 또는 데이터 부족으로 best 자산을 선정하지 못했습니다.")
+    parts.append(f"판단: {verdict}.")
+    out["rationale_ko"] = " ".join(parts)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 10. 종합 + DB 저장
 # ---------------------------------------------------------------------------
 

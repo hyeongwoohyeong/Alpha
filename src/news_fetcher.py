@@ -104,6 +104,7 @@ def _kw_score(text: str) -> tuple[float, list[str]]:
 # ---------------------------------------------------------------------------
 
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+GOOGLE_NEWS_RSS_KR = "https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
 
 
 def _safe_feedparser():
@@ -177,11 +178,16 @@ def _entry_to_news(entry: Any, ticker: str | None, category: str | None) -> dict
     }
 
 
-def _google_news(query: str, limit: int = 5) -> list[dict[str, Any]]:
+def _google_news(query: str, limit: int = 5, locale: str = "US") -> list[dict[str, Any]]:
+    """Google News RSS 검색.
+
+    locale 'KR' 이면 한국어 RSS URL 패턴을 사용한다. 그 외는 영문 RSS.
+    """
     fp = _safe_feedparser()
     if fp is None:
         return []
-    url = GOOGLE_NEWS_RSS.format(query=urllib.parse.quote(query))
+    template = GOOGLE_NEWS_RSS_KR if str(locale).upper() == "KR" else GOOGLE_NEWS_RSS
+    url = template.format(query=urllib.parse.quote(query))
     try:
         feed = fp.parse(url)
     except Exception as e:
@@ -248,7 +254,7 @@ def fetch_ticker_news(ticker: str, name_en: str | None = None, limit: int = 5) -
     if name_en:
         query_parts.append(f'"{name_en}"')
     query = " OR ".join(query_parts) + " stock"
-    items = _google_news(query, limit=limit)
+    items = _google_news(query, limit=limit, locale="US")
     for it in items:
         it["ticker"] = ticker
         it["category"] = "ticker"
@@ -257,12 +263,50 @@ def fetch_ticker_news(ticker: str, name_en: str | None = None, limit: int = 5) -
     return _yf_news(ticker, limit=limit)
 
 
+def fetch_kr_ticker_news(
+    ticker: str, name_ko: str | None = None, limit: int = 5
+) -> list[dict[str, Any]]:
+    """KR 단일 종목의 최신 한국어 뉴스 (Google News RSS 한국어).
+
+    URL 패턴: https://news.google.com/rss/search?q="{name_ko}"+OR+"{ticker}"&hl=ko&gl=KR&ceid=KR:ko
+    실패하면 빈 리스트를 반환한다 — fetch_ticker_news 와 동일한 graceful 패턴.
+    yfinance fallback 은 KR 티커에 대해 의미 있는 결과를 거의 주지 않아 생략한다.
+    """
+    query_parts: list[str] = []
+    if name_ko:
+        query_parts.append(f'"{name_ko}"')
+    if ticker:
+        query_parts.append(f'"{ticker}"')
+    if not query_parts:
+        return []
+    query = " OR ".join(query_parts)
+    items = _google_news(query, limit=limit, locale="KR")
+    for it in items:
+        it["ticker"] = ticker
+        it["category"] = "ticker"
+    return items
+
+
+def fetch_news_for_ticker(
+    ticker: str, name: str | None = None, *,
+    market: str = "US", limit: int = 5,
+) -> list[dict[str, Any]]:
+    """market 디스패처 — 'US' 면 fetch_ticker_news, 'KR' 이면 fetch_kr_ticker_news.
+
+    market 인자는 대소문자 무시. 그 외 값은 US 로 처리.
+    """
+    m = str(market or "US").strip().upper()
+    if m == "KR":
+        return fetch_kr_ticker_news(ticker, name, limit=limit)
+    return fetch_ticker_news(ticker, name, limit=limit)
+
+
 def fetch_theme_news(theme: str, limit: int = 5) -> list[dict[str, Any]]:
     """테마별 macro/산업 뉴스."""
     queries = THEME_QUERIES.get(theme) or [theme.replace("_", " ")]
     out: list[dict[str, Any]] = []
     for q in queries:
-        items = _google_news(q, limit=limit)
+        items = _google_news(q, limit=limit, locale="US")
         for it in items:
             it["category"] = f"theme:{theme}"
         out.extend(items)

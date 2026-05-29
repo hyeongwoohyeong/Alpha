@@ -25,6 +25,7 @@ log = get_logger("profit_protection")
 NEEDS_CHECK = "확인 필요"
 
 # Profit Protection Score sub-score 가중치 (합 = 1.0)
+# ※ 손으로 정한 휴리스틱 — data-fit 아님. 점수는 ordinal 순위로만 신뢰.
 SUBSCORE_WEIGHTS: dict[str, float] = {
     "unrealized_gain_score": 0.20,
     "valuation_stretch_score": 0.20,

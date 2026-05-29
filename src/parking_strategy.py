@@ -119,6 +119,8 @@ DEFENSIVE_DISCRETIONARY_INDUSTRIES: frozenset[str] = frozenset({
 })
 
 # Parking Stock Score sub-score 가중치 (합 = 1.0)
+# ※ 이 가중치는 *손으로 정한 휴리스틱*이다. 과거 데이터에 fit 한 게 아님.
+# 결과 점수는 ordinal 순위로만 신뢰하고, 절대값 의미는 부여하지 말 것.
 SUBSCORE_WEIGHTS: dict[str, float] = {
     "earnings_stability_score": 0.20,
     "brand_moat_score": 0.15,

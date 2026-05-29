@@ -93,17 +93,36 @@ def _select_zone(drawdown: float | None) -> dict[str, Any]:
 
 
 def generate_deployment_plan(drawdown: float | None,
-                             credit_stress: str | None) -> dict[str, Any]:
-    """낙폭 + 신용 스트레스 → 단계별 투입 계획.
+                             credit_stress: str | None,
+                             cycle_recommendation: dict | None = None) -> dict[str, Any]:
+    """낙폭 + 신용 스트레스 + 실증 데이터 사다리 → 단계별 투입 계획.
 
     drawdown: QQQ 52주 고점 대비 낙폭 (음수, 예 -0.12). None 가능.
     credit_stress: 'normal'|'elevated'|'severe'|'unknown'
+    cycle_recommendation: market_cycle_analyzer.recommend_current_entry 결과.
+        있으면 권장 수단(recommended_instrument)을 실증 데이터의 best_asset 로
+        대체하고 근거를 commentary 에 인용. None 이면 zone 의 하드코드 instrument.
     Returns dict: qqq_drawdown_from_high, deployment_zone, recommended_instrument,
     suggested_action, credit_stress_status, liquidity_status, required_checks,
     commentary_ko.
     """
     zone = _select_zone(drawdown)
     cs = credit_stress or "unknown"
+
+    # ── 실증 데이터 사다리 우선 (없을 때만 zone 의 하드코드 instrument) ──
+    rec_instrument: str | None = None
+    rec_note: str = ""
+    if isinstance(cycle_recommendation, dict) and cycle_recommendation.get("available"):
+        ba = cycle_recommendation.get("best_asset")
+        if ba and isinstance(ba, str):
+            rec_instrument = ba
+            ev = cycle_recommendation.get("evidence") or []
+            best_ev = next((e for e in ev if e.get("asset") == ba), None)
+            if best_ev:
+                rec_note = (
+                    f" (데이터 사다리: 현재 버킷 평균 {best_ev.get('avg', 0)*100:+.1f}%, "
+                    f"적중률 {best_ev.get('win', 0)*100:.0f}%, 표본 {best_ev.get('n', 0)}건)"
+                )
 
     required_checks: list[str] = [
         "QQQ 200일선 대비 위치 및 추세 재확인",
@@ -137,6 +156,8 @@ def generate_deployment_plan(drawdown: float | None,
         )
         required_checks.insert(0, "HY/IG 스프레드 데이터 확보 (FRED API 키 등록 권장)")
 
+    final_instrument = rec_instrument or zone["instrument"]
+
     if drawdown is None:
         commentary = (
             "QQQ 낙폭 데이터를 수집하지 못해 투입 단계를 판단할 수 없습니다 — 확인 필요. "
@@ -145,14 +166,15 @@ def generate_deployment_plan(drawdown: float | None,
     else:
         commentary = (
             f"나스닥(QQQ)은 52주 고점 대비 {drawdown * 100:+.1f}% 입니다. "
-            f"현재 '{zone['zone']}'에 해당하며, 권장 수단은 {zone['instrument']} 입니다. "
+            f"현재 '{zone['zone']}'에 해당하며, 권장 수단은 {final_instrument} 입니다"
+            f"{rec_note}. "
             f"{zone['action']} {speed_note}"
         )
 
     return {
         "qqq_drawdown_from_high": drawdown,
         "deployment_zone": zone["zone"],
-        "recommended_instrument": zone["instrument"],
+        "recommended_instrument": final_instrument,
         "suggested_action": zone["action"],
         "credit_stress_status": cs,
         "liquidity_status": liquidity_status,

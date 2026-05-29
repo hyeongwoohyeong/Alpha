@@ -316,14 +316,16 @@ def _rget(row: Any, key: str) -> Any:
     return row[key] if key in keys else None
 
 
-# Overheat 밴드 경계 — 밴드를 넘으면 '국면 신호 변화' 로 간주
-_OVERHEAT_BANDS = [
-    (0, 35, "안정"),
-    (35, 50, "중립"),
-    (50, 65, "주의"),
-    (65, 80, "과열"),
-    (80, 101, "극단 과열"),
-]
+# Overheat 밴드 — 단일 진실원천(backtest_engine.OVERHEAT_BANDS)에서 import.
+# 옛 로컬 사본(35/50/65/80)이 backtest_engine(30/50/70/85)과 어긋나 동일
+# 점수에 다른 라벨이 붙는 버그가 있었음 — 일원화.
+try:
+    from .backtest_engine import OVERHEAT_BANDS as _OVERHEAT_BANDS
+except Exception:
+    _OVERHEAT_BANDS = [
+        (0, 30, "Calm"), (30, 50, "Normal"), (50, 70, "Stretched"),
+        (70, 85, "Hot"), (85, 101, "Extreme"),
+    ]
 
 
 def _overheat_band(score: float | None) -> str | None:

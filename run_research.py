@@ -707,7 +707,16 @@ def step_market_regime(conn, run_id: str, date_iso: str) -> dict:
         dd = calculate_nasdaq_drawdown_from_high(qqq_hist)
         if dd is None:
             dd = regime.get("qqq_drawdown_from_high")
-        plan = generate_deployment_plan(dd, regime.get("credit_stress_status"))
+        # 실증 데이터 사다리 — entry_timing_buckets 가 있으면 권장 수단을 데이터로.
+        # 데이터가 없으면 cycle_rec=None 으로 graceful fallback (zone 의 하드코드).
+        cycle_rec = None
+        try:
+            from src.market_cycle_analyzer import recommend_current_entry
+            cycle_rec = recommend_current_entry(conn, "QQQ")
+        except Exception as e:
+            log.debug("[Regime] recommend_current_entry 실패 — fallback: %s", e)
+        plan = generate_deployment_plan(
+            dd, regime.get("credit_stress_status"), cycle_recommendation=cycle_rec)
 
         # DB 저장 — market_regime
         db.upsert_market_regime(conn, date_iso, {
@@ -908,6 +917,100 @@ def step_backtest(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_kr_market_data(conn, run_id: str, date_iso: str) -> dict:
+    """KR 시장 일봉 캐싱 (Stage 2).
+
+    - `data_cache.collect_kr_tickers()` 가 kr_universe.csv + KR_ETF_TICKERS 를 합쳐
+      대상 ticker 목록을 만든다 (이미 .KS 접미사 제거된 DB 컨벤션).
+    - 월초(date_iso 가 -01 로 끝남) 에는 `refresh_full_kr_history` 로 전체 재다운로드
+      해 split/배당/리밸런싱 재조정을 반영. 그 외엔 `append_new_kr_market_data`
+      증분.
+    - KR_HISTORY_ENABLED=False 면 즉시 skip. 어떤 실패도 graceful — 파이프라인
+      절대 죽이지 않는다.
+
+    Returns: {"ok": bool, "mode": "full"|"incremental"|"skipped", ...}
+    """
+    log.info("[KR Market] KR 시장 일봉 캐싱 시작...")
+    cfg = load_config()
+    if not cfg.kr_history_enabled:
+        log.info("[KR Market] KR_HISTORY_ENABLED=False — skip")
+        return {"ok": True, "mode": "skipped"}
+    try:
+        from src.data_cache import (
+            append_new_kr_market_data,
+            refresh_full_kr_history,
+            collect_kr_tickers,
+        )
+        tickers = collect_kr_tickers()
+        is_month_start = date_iso.endswith("-01")
+        if is_month_start:
+            res = refresh_full_kr_history(conn, tickers)
+            log.info("[KR Market] FULL refresh — refreshed=%d rows=%d failed=%d",
+                     res.get("refreshed", 0), res.get("rows", 0),
+                     len(res.get("failed") or []))
+            return {"ok": True, "mode": "full", **res,
+                    "n_tickers": len(tickers)}
+        res = append_new_kr_market_data(conn, tickers)
+        log.info("[KR Market] 증분 append — updated=%d rows=%d failed=%d",
+                 res.get("updated", 0), res.get("rows", 0),
+                 len(res.get("failed") or []))
+        return {"ok": True, "mode": "incremental", **res,
+                "n_tickers": len(tickers)}
+    except Exception as e:
+        log.warning("[KR Market] KR 일봉 캐싱 실패 — graceful skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+def step_kospi_regime(conn, run_id: str, date_iso: str) -> dict:
+    """KOSPI Overheat Score + KR 시장 국면 평가 (Stage 2).
+
+    `step_kr_market_data` 이후 호출되어야 한다 — KOSPI 200 (069500) 일봉이
+    `market_price_history` 에 있어야 기술적 sub-score 산출 가능.
+    KR_HISTORY_ENABLED=False 면 skip. 데이터 부족 시 차분히 "데이터 누적 중" dict
+    저장.
+    """
+    log.info("[KR Regime] KOSPI Overheat Score 평가 시작...")
+    cfg = load_config()
+    if not cfg.kr_history_enabled:
+        log.info("[KR Regime] KR_HISTORY_ENABLED=False — skip")
+        return {"ok": True, "mode": "skipped"}
+    try:
+        from src.kr_market_regime import calculate_kospi_overheat_score
+        regime = calculate_kospi_overheat_score(conn)
+
+        # DB 저장 — kospi_market_regime
+        try:
+            sub = regime.get("sub_scores") or {}
+            db.upsert_kospi_market_regime(conn, date_iso, {
+                "kospi_overheat_score": regime.get("overheat_score"),
+                "current_regime": regime.get("regime"),
+                "kospi_valuation_score": sub.get("kospi_valuation_score"),
+                "kospi_sentiment_score": sub.get("kospi_sentiment_score"),
+                "kospi_concentration_score": sub.get("kospi_concentration_score"),
+                "kospi_liquidity_score": sub.get("kospi_liquidity_score"),
+                "kospi_earnings_revision_score":
+                    sub.get("kospi_earnings_revision_score"),
+                "kospi_technical_score": sub.get("kospi_technical_score"),
+                "commentary_ko": regime.get("commentary_ko"),
+                "sample_caveats_json": regime.get("sample_caveats"),
+            })
+        except Exception as e:
+            log.warning("[KR Regime] kospi_market_regime upsert 실패: %s", e)
+
+        log.info("[KR Regime] regime=%s overheat=%s missing=%d",
+                 regime.get("regime"), regime.get("overheat_score"),
+                 len(regime.get("missing_subscores") or []))
+        return {
+            "ok": True,
+            "regime": regime.get("regime"),
+            "overheat": regime.get("overheat_score"),
+            "band": regime.get("band"),
+        }
+    except Exception as e:
+        log.warning("[KR Regime] KOSPI regime 평가 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_market_cycle(conn, run_id: str, date_iso: str) -> dict:
     """Stage A — Market Cycle Research Engine.
 
@@ -960,6 +1063,102 @@ def step_market_cycle(conn, run_id: str, date_iso: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def step_entry_timing(conn, run_id: str, date_iso: str) -> dict:
+    """데이터 사다리 — 낙폭 버킷별 (QQQ/QLD/TQQQ) forward return 집계.
+
+    Stage A 의 step_market_cycle 이 장기 history 를 보장한 뒤 호출되어야 한다.
+
+    - FULL 재계산 (calculate_entry_timing_buckets + persist) 은 월초 또는
+      entry_timing_buckets 테이블이 비어있을 때만 — 일간 변화가 거의 없으므로.
+    - 오늘의 진입 추천(recommend_current_entry) 은 매일 호출되지만, 이 함수가
+      직접 저장하지는 않는다 (DB 저장은 step_backtest_solution 의 build_*
+      가 만든 headline/items 에 녹아든다).
+
+    Returns: {"ok": bool, "mode": "full"|"locate_only", "saved": int|None,
+              "best_asset": str|None, "verdict": str|None}
+    """
+    log.info("[Entry Timing] 데이터 사다리 — 낙폭 버킷별 forward return...")
+    try:
+        from src.market_cycle_analyzer import (
+            calculate_entry_timing_buckets,
+            persist_entry_timing_buckets,
+            recommend_current_entry,
+        )
+
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS c FROM entry_timing_buckets"
+            ).fetchone()
+            empty = (row["c"] if hasattr(row, "keys") else row[0]) == 0
+        except Exception:
+            empty = True
+        is_month_start = date_iso.endswith("-01")
+
+        saved = None
+        mode = "locate_only"
+        if is_month_start or empty:
+            result = calculate_entry_timing_buckets(conn, base_asset="QQQ")
+            saved = persist_entry_timing_buckets(conn, result)
+            mode = "full"
+            log.info("[Entry Timing] FULL 재계산 완료 — saved=%s", saved)
+
+        # 가벼운 일간 추천 — 항상 호출 (lookup 만 함)
+        rec = recommend_current_entry(conn, "QQQ")
+        log.info("[Entry Timing] 오늘 추천: bucket=%s best=%s verdict=%s",
+                 rec.get("current_bucket"), rec.get("best_asset"),
+                 rec.get("verdict"))
+
+        # ── KR 사다리 (Stage 2) — base_asset=069500, targets=(069500, 122630) ──
+        # 인버스 2X(252670) 는 forward-return 의 방향성이 반대라 ladder 의
+        # 의미가 다르다 — Stage 2 에선 제외.
+        cfg = load_config()
+        kr_saved = None
+        kr_rec: dict | None = None
+        if cfg.kr_history_enabled:
+            try:
+                # KR ladder 도 동일하게 비어있거나 월초면 FULL 재계산
+                try:
+                    row_kr = conn.execute(
+                        "SELECT COUNT(*) AS c FROM entry_timing_buckets "
+                        "WHERE base_asset='069500'"
+                    ).fetchone()
+                    kr_empty = (row_kr["c"] if hasattr(row_kr, "keys")
+                                else row_kr[0]) == 0
+                except Exception:
+                    kr_empty = True
+
+                if is_month_start or kr_empty:
+                    kr_result = calculate_entry_timing_buckets(
+                        conn, base_asset="069500",
+                        target_assets=("069500", "122630"),
+                    )
+                    kr_saved = persist_entry_timing_buckets(conn, kr_result)
+                    log.info("[Entry Timing KR] FULL 재계산 완료 — saved=%s",
+                             kr_saved)
+                kr_rec = recommend_current_entry(conn, "069500")
+                log.info(
+                    "[Entry Timing KR] 오늘 추천: bucket=%s best=%s verdict=%s",
+                    kr_rec.get("current_bucket"), kr_rec.get("best_asset"),
+                    kr_rec.get("verdict"),
+                )
+            except Exception as e:
+                log.warning("[Entry Timing KR] 사다리 계산 실패 — skip: %s", e)
+
+        return {
+            "ok": True, "mode": mode, "saved": saved,
+            "best_asset": rec.get("best_asset"),
+            "verdict": rec.get("verdict"),
+            "bucket": rec.get("current_bucket"),
+            "kr_saved": kr_saved,
+            "kr_best_asset": (kr_rec or {}).get("best_asset"),
+            "kr_verdict": (kr_rec or {}).get("verdict"),
+            "kr_bucket": (kr_rec or {}).get("current_bucket"),
+        }
+    except Exception as e:
+        log.warning("[Entry Timing] 데이터 사다리 계산 실패 — skip: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
 def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
     """백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
     '오늘 무엇을 할지' 의 구체적 처방을 만들어 backtest_solution 에 저장.
@@ -975,7 +1174,9 @@ def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
     try:
         from src.backtest_engine import generate_backtest_summary
         from src.backtest_solution import build_backtest_solution
-        from src.market_cycle_analyzer import locate_current_market
+        from src.market_cycle_analyzer import (
+            locate_current_market, recommend_current_entry,
+        )
 
         regime = db.fetch_latest_market_regime(conn)
         crash = db.fetch_latest_crash_deployment_plan(conn)
@@ -993,7 +1194,34 @@ def step_backtest_solution(conn, run_id: str, date_iso: str) -> dict:
             log.warning("[Backtest Solution] 시장 사이클 위치 조회 실패: %s", e)
             cycle = None
 
-        sol = build_backtest_solution(regime, crash, bt_summary, cycle=cycle)
+        # 데이터 사다리 — 오늘의 진입 추천 (entry_timing_buckets 가 있어야 의미)
+        try:
+            cycle_rec = recommend_current_entry(conn, "QQQ")
+        except Exception as e:
+            log.warning("[Backtest Solution] 데이터 사다리 추천 실패: %s", e)
+            cycle_rec = None
+
+        # portfolio.json 의 holdings — Item C(익절 대응) materiality 게이트.
+        # 파일 부재/파싱 실패 시 None — Item C 는 자동으로 비활성된다.
+        holdings: list[dict] | None = None
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            p = _Path("data/portfolio.json")
+            if p.exists():
+                pdata = _json.loads(p.read_text(encoding="utf-8"))
+                h = pdata.get("holdings") if isinstance(pdata, dict) else None
+                if isinstance(h, list):
+                    holdings = h
+        except Exception as e:
+            log.debug("[Backtest Solution] portfolio.json 로드 실패: %s", e)
+            holdings = None
+
+        sol = build_backtest_solution(
+            regime, crash, bt_summary, cycle=cycle,
+            cycle_recommendation=cycle_rec,
+            portfolio_holdings=holdings,
+        )
         db.upsert_backtest_solution(conn, date_iso, {
             "headline": sol.get("headline"),
             "data_mode": sol.get("data_mode"),
@@ -1262,6 +1490,7 @@ def step_holdings_briefing(conn, run_id: str, date_iso: str) -> dict:
                 "today_focus_ko": brief.get("today_focus_ko"),
                 "today_action_ko": brief.get("today_action_ko"),
                 "upcoming_catalysts_ko": brief.get("upcoming_catalysts_ko"),
+                "underlying_snapshot_ko": brief.get("underlying_snapshot_ko"),
                 "model_used": brief.get("model_used"),
             })
             result["generated"] += 1
@@ -1482,6 +1711,35 @@ def run_research(
         except Exception as e:
             log.warning("시장 사이클 분석 실패: %s", e)
             summary["market_cycle"] = None
+
+        # KR 시장 확장 (Stage 2)
+        # 1) step_market_cycle 후, step_entry_timing 전에 KR 일봉을 채워야
+        #    KR ladder (base_asset=069500) 가 작동한다.
+        # 2) step_kospi_regime 도 KOSPI 200 일봉이 있을 때 가장 의미 있게
+        #    동작한다.
+        try:
+            kr_md_res = step_kr_market_data(conn, run_id, date_iso)
+            summary["kr_market_data"] = kr_md_res
+        except Exception as e:
+            log.warning("KR 시장 데이터 캐싱 실패: %s", e)
+            summary["kr_market_data"] = None
+
+        try:
+            kr_reg_res = step_kospi_regime(conn, run_id, date_iso)
+            summary["kospi_regime"] = kr_reg_res
+        except Exception as e:
+            log.warning("KOSPI regime 평가 실패: %s", e)
+            summary["kospi_regime"] = None
+
+        # 데이터 사다리 — 낙폭 버킷별 forward return 실증 통계. 하드코딩
+        # _DEPLOY_LADDER 대체용. step_market_cycle 이후라 장기 history 보장.
+        # step_kr_market_data 도 직전에 호출되어 KR ladder 도 동시 갱신.
+        try:
+            et_res = step_entry_timing(conn, run_id, date_iso)
+            summary["entry_timing"] = et_res
+        except Exception as e:
+            log.warning("데이터 사다리 계산 실패: %s", e)
+            summary["entry_timing"] = None
 
         # 백테스트 기반 오늘의 대응 — 백테스트 결과를 퀀트처럼 소화해
         # '오늘 무엇을 할지' 의 처방을 backtest_solution 테이블에 저장.

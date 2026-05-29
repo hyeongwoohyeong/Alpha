@@ -948,10 +948,25 @@ def reconcile_with_action_tag(
         alpha_result["alpha_rating_en"] = "Need Thesis Check"
         alpha_result["alpha_rating_ko"] = "Risk Control 낮음 — Thesis 점검 필요"
 
+    # 가격 부담 강등 — 알파 추구 미션에 맞춰 *시장이 과열일 때만* 발동한다.
+    # 정상 시장에서 신고점 부근 알파를 자동 강등하던 옛 로직은 미션에 반함.
     if price is not None and price < 50 and rating_en in (
         "Exceptional Candidate", "High Conviction Candidate", "Research Now"
     ):
-        alpha_result["alpha_rating_en"] = "Wait for Better Entry"
-        alpha_result["alpha_rating_ko"] = "진입 시점 대기 (가격 부담)"
+        try:
+            from . import database as _db
+            with _db.db_session() as _conn:
+                _row = _db.fetch_latest_market_regime(_conn)
+                _oh = (_row["market_overheat_score"]
+                       if _row is not None and "market_overheat_score" in _row.keys()
+                       else None)
+                _oh = float(_oh) if _oh is not None else None
+        except Exception:
+            _oh = None
+        if _oh is not None and _oh >= 70:
+            alpha_result["alpha_rating_en"] = "Wait for Better Entry"
+            alpha_result["alpha_rating_ko"] = (
+                f"진입 시점 대기 (시장 과열 {_oh:.0f} + 가격 부담)"
+            )
 
     return alpha_result
