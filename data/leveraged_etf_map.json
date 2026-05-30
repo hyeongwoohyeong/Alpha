@@ -1,0 +1,98 @@
+{
+  "_doc": "Underlying Stock → Single-Stock Leveraged ETF 매핑. 2X ETF 가 있다는 건 시장 관심·유동성·변동성·narrative 있다는 신호 (좋은 기업 아님). Leveraged ETF Suitability Score 의 input 데이터.",
+  "_warning": "2X ETF 사용 조건: 본주 Alpha Score ≥75 + Capital Efficiency ≥70 + QLD Better/Similar + DD -15~-30% + thesis 유지 + catalyst 1~6M + Risk-On/Pullback regime + 유동성 OK + 손절 룰 명확 + 포트폴리오 lev 총량 이내. 금지: Overheated/Casino regime + parabolic + valuation stretch + 회계 risk + 손절 룰 없음.",
+  "_position_management": {
+    "profit_take_30_50pct": "일부 익절 검토",
+    "profit_take_80_100pct": "강한 수익 보호",
+    "valuation_stretch": "본주 thesis 살아있어도 익절 우선 (CRDU/CRDO 케이스)",
+    "regime_overheated": "신규 매수 금지 + 기존 보호"
+  },
+  "categories": {
+    "M7": {
+      "AAPL": ["AAPU", "AAPB", "AAPX"],
+      "MSFT": ["MSFU", "MSFL", "MSFX"],
+      "GOOGL": ["GGLL", "GOU", "GOOX"],
+      "AMZN": ["AMZU", "AMZZ"],
+      "META": ["METU", "FBL"],
+      "NVDA": ["NVDU", "NVDL", "NVDX"],
+      "TSLA": ["TSLL", "TSLR", "TSLT"],
+      "NFLX": ["NFXL", "NFLU"]
+    },
+    "AI_Infra_Semi": {
+      "CRDO": ["CRDU"],
+      "ALAB": ["LABX"],
+      "COHR": ["COHX"],
+      "CLS":  ["CSEX"],
+      "CEG":  ["CEGX"],
+      "ON":   ["ONX"],
+      "MPWR": ["MPWX"],
+      "NXPI": ["NXPX"],
+      "LRCX": ["LRCU"],
+      "MCHP": ["MCHU"],
+      "LITE": ["LITX", "LITU"],
+      "DELL": ["DLLL"],
+      "VRT":  ["VRTL"],
+      "APH":  ["APHU"],
+      "AMD":  ["AMUU", "AMDL"],
+      "AVGO": ["AVL", "AVGU"],
+      "ASML": ["ASMU"],
+      "MRVL": ["MRVU", "MVLL"],
+      "MU":   ["MUU", "MULL"],
+      "QCOM": ["QCMU", "QCML"],
+      "INTC": ["LINT", "INTW"],
+      "TSM":  ["TSMX", "TSMU"],
+      "SMCI": ["SMCL"],
+      "AAOI": ["AAOX"],
+      "APLD": ["APLX"],
+      "STX":  ["STXX"],
+      "WDC":  ["WDCX"]
+    },
+    "Software_AI_Cyber": {
+      "PLTR": ["PLTU", "PTIR"],
+      "NOW":  ["NOWL"],
+      "PANW": ["PALU"],
+      "CRWD": ["CRWL"],
+      "SHOP": ["SHPU"],
+      "ADBE": ["ADBU"],
+      "ORCL": ["ORCU"],
+      "SNOW": ["SNOU"],
+      "TTD":  ["TTDU"],
+      "RDDT": ["RDTL"],
+      "IBM":  ["IBX"]
+    },
+    "Crypto_Fintech_HighVol": {
+      "COIN": ["CONX", "CONL"],
+      "MSTR": ["MSTP", "MSTU"],
+      "HOOD": ["HODU", "ROBN"],
+      "SOFI": ["SOFA"],
+      "PYPL": ["PYPU"],
+      "AFRM": ["AFRU"],
+      "MARA": ["MRAL"]
+    },
+    "Robotics_EV_Space_Defense": {
+      "TSLA": ["TSLL", "TSLR", "TSLT"],
+      "RIVN": ["RVNL"],
+      "LCID": ["LCDL"],
+      "ASTS": ["ASUP", "ASTX"],
+      "BA":   ["BOEU"],
+      "LMT":  ["LMTL"]
+    },
+    "Healthcare_Energy_Other": {
+      "LLY":  ["ELIL"],
+      "UNH":  ["UNHU"],
+      "ISRG": ["ISUL"],
+      "XOM":  ["XOMX"],
+      "CPNG": ["CPNX"]
+    }
+  },
+  "_review_required": [
+    "Pony AI / PONX — 본주 ticker (PONY) 확인 필요",
+    "Firefly Aerospace / FLYT — 상장 여부 확인 필요",
+    "Redwire / RDWU, Kratos / KTUP — 본주 RDW, KTOS 매핑",
+    "Joby / JOBX, Archer / ARCX, Ondas / ONDU — 본주 JOBY, ACHR, ONDS",
+    "NuScale / SMUP — 본주 SMR, Eos Energy / EOSU → EOSE, Pan American Silver / PAAU → PAAS",
+    "T1 Energy / TEUP — underlying 확인 필요 (T1 Energy 라는 ticker 없음)",
+    "Galaxy / GLXU, Cipher Mining / CIFU, BTC/ETH 2X (BTCL/ETU) — 본주가 종목 아님",
+    "CoreWeave (CRWU/CWVX) — 본주 CRWV"
+  ]
+}

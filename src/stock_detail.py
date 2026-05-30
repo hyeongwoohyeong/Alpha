@@ -479,7 +479,31 @@ def key_risks_bullets(row: dict[str, Any]) -> list[str]:
     if om is not None and om < 0:
         bits.append("영업이익이 적자 구간으로 cash burn 및 dilution 리스크가 존재합니다.")
     if not bits:
-        bits.append("현 시점의 특이 risk 신호는 약하나 valuation과 catalyst의 정합성 확인이 필요합니다.")
+        # 사용자 요청: 단순 "특이 risk 없음" 같은 hollow fallback 대신
+        # 두 조건 (조정 + 부정적 뉴스) 동반 시점을 명시적으로 짚는 워딩
+        dd = md.get("drawdown_from_52w_high")
+        dd_pct = abs(dd) * 100 if dd is not None else None
+        neg_news = bool(na.get("negative") or na.get("urgent"))
+        if dd_pct is not None and dd_pct >= 10 and neg_news:
+            bits.append(
+                f"52주 고점 대비 {dd_pct:.0f}% 주가 조정과 부정적 뉴스 흐름이 동반되는 구간 — "
+                "thesis 훼손 여부 점검이 필요합니다."
+            )
+        elif neg_news:
+            bits.append(
+                "최근 뉴스 흐름이 부정적으로 형성되는 구간 — "
+                "주가 조정이 동반될 경우 thesis 훼손 여부 점검이 필요합니다."
+            )
+        elif dd_pct is not None and dd_pct >= 15:
+            bits.append(
+                f"52주 고점 대비 {dd_pct:.0f}% 조정 구간 — "
+                "주가 조정이 부정적 뉴스 흐름과 동반될 경우 thesis 훼손 점검이 필요합니다."
+            )
+        else:
+            bits.append(
+                "현 시점 특이 risk 신호는 약하나, "
+                "주가 조정과 부정적 뉴스 흐름이 동반되는 구간에 진입할 경우 thesis 점검이 필요합니다."
+            )
     return bits[:4]
 
 
