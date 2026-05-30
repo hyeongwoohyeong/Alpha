@@ -1,0 +1,375 @@
+{
+  "company": {
+    "name_ko": "현대건설",
+    "name_en": "Hyundai Engineering & Construction",
+    "ticker": "000720.KS",
+    "industry": "건설 (글로벌 EPC)",
+    "market_cap_krw": 17100000000000,
+    "is_listed": true
+  },
+  "ic_memo": {
+    "investment_verdict": "중립 의견",
+    "verdict_oneliner": "원전·중동재건·파이프라인 3축 옵션 value 는 인정 — 다만 현 주가 152,000원 / 2025 EPS 3,319원 = PER 45.8x 로 이미 일부 thesis 가 valuation 에 반영됨. 영업이익률 평균 2% (2024년 -3.9% 영업적자) 의 낮은 quality 와 미청구공사 2.67조 등 운전자본 부담 감안 시, '이벤트 확인형 분할 진입' 권장. 전체 자산의 1~2% 한도 watch position 으로 시작 후, 본계약 가시화 시 단계적 증액. 하이닉스 전량 매도 후 로테이션은 부적절 (확정 실적주 → 옵션주 downgrade).",
+    "investment_thesis": [
+      "AI 데이터센터 전력 수요 → 원전 부활 trend 의 글로벌 EPC 1티어 — UAE 바라카 On Time On Budget 입증 + 국내 34기 시공 track record + Holtec SMR-300 EPC 등 가시 파이프라인 보유. 단, 현재 수주잔고에서 원전은 신한울 3,4호기 1.44조원 1건뿐 — '잠재 $500억' 은 5~10년 누적 시나리오이지 확정 매출 아님",
+      "중동 재건 + 호르무즈 우회 파이프라인은 옵션 value — '미-이란 전쟁 후 80곳 손상' 같은 narrative 는 출처 검증 어려움. 다만 사우디 Vision 2030 / ADCOP / 동서 파이프라인 등 실재 프로젝트는 존재. 발주 가시화 시 한국 EPC 우위(원시공자 프리미엄, 공기 준수) 활용 가능",
+      "Quality compounder 아닌 event-driven cyclical re-rating candidate — 좋은 회사 ≠ 좋은 투자. OPM 2% 수준의 낮은 marginal profitability 가 thesis 의 가장 큰 약점. 수주 mix 변화 (저마진 토목·주택 → 고마진 원전 EPC) 가 실현돼야 multiple/margin 개선 가능"
+    ],
+    "investment_points": [
+      "원전 EPC track record: 국내 34기 + UAE 바라카 4기 On Time On Budget — 후쿠시마 이후 서방 진영 유일한 성공 사례. Holtec Palisades SMR (2026 1Q 사전공사 승인 완료, 상반기 착공 예상) 등 가시 파이프라인 확보",
+      "사업부별 mix 다변화 진행 중: 2025년 매출 31.06조 중 플랜트/뉴에너지 부문 9.93조 (32%) — 2023년 6.57조 (22%) 대비 +51% 성장. 건축/주택(54%) 비중 점진 축소되며 원전·플랜트 비중 확대 추세",
+      "수주잔고 quality 회복: 2025년말 국내 잔액 55.4조 + 해외(이라크 4.5조, 사우디 아미랄 1.2조, UAE 등) — 매출 31조 대비 backlog ratio 충분 (>2.5x). 단 잔고 내 원전 비중은 아직 2% 수준 (1.44조/55.4조)",
+      "재무 안정성: 현금 4.81조원 + 부채비율 174.8% — 대형 EPC 운전자본 부담 견딜 수 있는 balance sheet. 단 매출채권 6.84조 (전년 +28.6%) 증가 추세는 cash conversion 악화 risk",
+      "Catalyst date 명확: ① Palisades SMR 2026 상반기 착공 ② Matador FEED 2026.04 완료 → EPC 본계약 협상 ③ 코즐로두이 본계약 (2026~2027) ④ 중동 재건 발주 (2026 하반기~2027 추정) — 본계약 공시 전 이벤트 단계 추적 필요"
+    ],
+    "risks_and_mitigants": [
+      {
+        "risk": "Bull thesis 의 출처 검증 약함 — '미-이란 전쟁', 'IEA 4/13 분석 80곳 손상' 등 사용자 첨부 PDF (알파투자사업부) 의 핵심 주장은 외부 검증 자료 부재. $250억 복구비, 70% 우방국 피해 등 수치도 자체 추정 가능성",
+        "mitigant": "사용자 PDF 결론을 input 으로만 사용, 모델 가정은 보수적으로 reset. 중동 재건 thesis 는 Bull case 에 일부만 반영 (haircut 50%) / Base case 에는 minimal / Bear case 에는 제거. 발주 공식화 (Aramco/ADNOC IR 또는 정부 공시) 확인 후 thesis 강화"
+      },
+      {
+        "risk": "Valuation 이미 stretch — 현 PER 45.8x 는 건설업 peer (8~12x) 대비 4배 premium. 사용자 PDF '목표가 30만원' 도달은 EPS 3,319원 × PER 90 필요 → 거의 비현실적. 2026 EPS 대폭 개선 (예: 1만원+) 시나리오 시에만 PER 30x → 30만원 가능",
+        "mitigant": "분할 진입 — 1차 watch 1~2%, 2차 본계약 가시화 5%, 3차 수주 공시 10% 한도. 추격매수 금지. 본계약 공시 후엔 '추가 보유 vs 익절' 판단 — 추격매수 자제"
+      },
+      {
+        "risk": "2024년 영업적자 -1.26조원 — 사용자 PDF 가 누락한 핵심 사실. 해외 EPC 단일 프로젝트 손실 추정. 미청구공사 2.67조 (전년 4.68조에서 감소했지만 매출의 8.6%) — 잠재 손상 평가 risk",
+        "mitigant": "분기별 OPM 추적 — 1Q26 OPM 2.9% 개선 신호 확인. 미청구공사 회수/손상 여부 매 분기 점검. 단일 프로젝트 손실 이벤트 시 즉시 thesis 재검토"
+      },
+      {
+        "risk": "수주 지연 risk — 원전·중동 재건·파이프라인 모두 발주처 사정(예산·정치·인허가) 에 좌우. 본계약까지 MOU → FEED → 우선협상 → 본계약 4~5단계 거쳐야 함",
+        "mitigant": "단계별 tracking — Palisades 착공 / Matador FEED 완료 / 코즐로두이 본계약 / 사우디 동서 파이프라인 입찰 등 중간 이벤트 monitor. 단계 정체 시 진입 보류"
+      },
+      {
+        "risk": "국내 주택/PF risk — 매출의 44.6% 가 국내 건축/주택. 고금리 + PF 부실화 환경 지속 시 손실 가능. 미청구공사 + 매출채권 증가 추세는 cash conversion 악화 시그널",
+        "mitigant": "분기별 NWC 변동 모니터링. 신규 주택 수주는 선별적 (사업성 확보된 핵심 지역만) — 회사도 보고서에서 명시. 주택 부문 dependence 추가 감소 추세 확인"
+      },
+      {
+        "risk": "기대 선반영 + Sell-the-news risk — 본계약 공시 시점에 주가가 이미 올라 있을 수 있음. 사용자 PDF 처럼 'Strong Buy' narrative 시장에 퍼지면 단기 over-shoot 후 조정 가능",
+        "mitigant": "공시 전 watch position 으로 entry — 공시 후 추격매수 금지. 공시 후엔 multiple 정상화 (45x → 25x) 가능성 모니터링. 손절 trigger: -15% 또는 thesis 훼손 시 즉시 정리"
+      }
+    ],
+    "financials_narrative": "OPM 평균 2% 수준의 낮은 marginal profitability 가 핵심 약점. 2024년 -1.26조 영업적자 후 2025년 0.65조 회복했으나 quality 검증 더 필요. 사업부별 mix 는 플랜트/뉴에너지 비중 확대 추세 (2023 22% → 2025 32%) 가 긍정. 원전 EPC 본격 인식 시 EBITDA margin 5~7% 까지 개선 가정 가능 (Base case).",
+    "returns_narrative": "현 주가 152,000원 기준 5년 IRR Base 10% / Bull 22% / Bear -5%. Bull 시나리오는 원전 $200억+ 실제 수주 + 중동 재건 일부 발주 가정. Bear 는 원전 지연 + 국내 주택 부진 + 미청구공사 손상 가정. 사용자 PDF '목표가 30만/40-45만' 은 매우 공격적 Bull 가정 시에만 가능 — 이 모델은 보수적 Base case 23만원 산출.",
+    "additional_dd": {
+      "commercial": [
+        "Palisades SMR 사전공사 승인 → 실착공 시점 (2026 상반기 가시화 여부)",
+        "Matador (미국 대형 원전 4기) FEED 계약 완료 후 EPC 본계약 일정 — 발주처(미국 유틸리티) 공시 확인",
+        "사우디 Vision 2030 동서 파이프라인 입찰 결과 — Saudi Aramco 발표 모니터링",
+        "사용자 PDF 의 '미-이란 전쟁 후 80곳 손상' 주장의 외부 출처 확인 — IEA/EIA/Aramco IR 발표 검색",
+        "팀코리아 (한수원 + 현대건설 + 삼성물산) 컨소시엄 내 현대건설 share 확인 — 코즐로두이 사례"
+      ],
+      "financial": [
+        "미청구공사 2.67조 의 회수 가능성 — 발주처별/프로젝트별 ageing 분석",
+        "매출채권 6.84조 (전년 +28.6%) — DSO 변화 추세, 부실 우려 발주처 점검",
+        "2024년 -1.26조 영업적자의 원인 (해외 EPC 손실 추정) — 단일 사건인지 구조적인지 판단",
+        "수주잔고 quality — 저마진 토목/주택 vs 고마진 플랜트 mix",
+        "현대엔지니어링 (자회사) 별도 실적 — 연결 vs 별도 영업이익 gap"
+      ],
+      "legal": [
+        "원전 EPC 수주 시 미국 NRC / 한국 원안위 / EU 인허가 일정",
+        "Westinghouse 와의 IP 분쟁 종결 여부 — 미국 원전 EPC 진출 전제조건",
+        "이라크 / 사우디 / UAE 계약 조건 — 환율·정치 risk 보호 조항",
+        "PF 보증 잔액 및 우발채무 — 금융보증계약 19.9조 노출도"
+      ],
+      "tax": [
+        "해외 EPC 수익 transfer pricing 구조 — 국내 본사 vs 해외 자회사 이익 배분",
+        "원전 EPC 장기 매출 인식 회계 처리 — 진행률법 가정",
+        "PF 손실 인식 시 deferred tax asset 활용도"
+      ],
+      "market": [
+        "건설업 multiple re-rating 가능성 — 글로벌 EPC peer (KBR/Saipem/Technip) PER 12~18x 대비 현 45x premium 정당화 근거",
+        "Exit multiple 가정 — Bull 30x (원전 re-rating), Base 18x (peer 평균), Bear 10x (compression)",
+        "QLD 대비 자본효율 — 현 PER 45x 가정 시 QLD (PER 25~30x, 위험조정 수익 우위) 보다 매력도 열위",
+        "수주 공시 전후 주가 반응 — 과거 신한울 3,4호기 (2024.04) 수주 시 +20% spike 후 조정 사례"
+      ]
+    }
+  },
+  "financials": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "revenue": [
+      29651357,
+      32670268,
+      31062912,
+      30500000,
+      32500000,
+      36000000,
+      41000000,
+      47000000
+    ],
+    "revenue_growth": [
+      null,
+      0.102,
+      -0.049,
+      -0.018,
+      0.066,
+      0.108,
+      0.139,
+      0.146
+    ],
+    "ebitda": [
+      1100000,
+      -700000,
+      1050000,
+      1100000,
+      1450000,
+      1900000,
+      2500000,
+      3200000
+    ],
+    "ebitda_margin": [
+      0.037,
+      -0.021,
+      0.034,
+      0.036,
+      0.045,
+      0.053,
+      0.061,
+      0.068
+    ],
+    "ebitda_growth": [
+      null,
+      null,
+      null,
+      0.048,
+      0.318,
+      0.31,
+      0.316,
+      0.28
+    ],
+    "net_income": [
+      654281,
+      -766221,
+      559068,
+      600000,
+      850000,
+      1200000,
+      1700000,
+      2300000
+    ],
+    "assets": [
+      23714495,
+      27005385,
+      27791708,
+      28500000,
+      29500000,
+      30800000,
+      32500000,
+      34800000
+    ],
+    "liabilities": [
+      13258980,
+      17335972,
+      17678843,
+      17700000,
+      17500000,
+      17200000,
+      17000000,
+      16800000
+    ],
+    "debt_ratio": [
+      0.559,
+      0.642,
+      0.636,
+      0.621,
+      0.593,
+      0.558,
+      0.523,
+      0.483
+    ],
+    "equity": [
+      10455515,
+      9669413,
+      10112865,
+      10800000,
+      12000000,
+      13600000,
+      15500000,
+      18000000
+    ],
+    "ocf": [
+      1500000,
+      -500000,
+      1800000,
+      1500000,
+      2000000,
+      2500000,
+      3200000,
+      4000000
+    ]
+  },
+  "scenarios": {
+    "bull": {
+      "revenue_cagr": 0.1,
+      "ebitda_margin_terminal": 0.075,
+      "exit_ebitda": 3500000,
+      "exit_multiple": 18.0,
+      "irr": 0.22,
+      "moic": 2.7,
+      "narrative": "원전 본계약 $200억+ 실제 수주 + 중동 재건 $50억 + 파이프라인 일부 입찰 성공. EBITDA margin 7.5% 도달, exit 시 EPC re-rating 으로 18x multiple 적용"
+    },
+    "base": {
+      "revenue_cagr": 0.07,
+      "ebitda_margin_terminal": 0.06,
+      "exit_ebitda": 2700000,
+      "exit_multiple": 13.0,
+      "irr": 0.1,
+      "moic": 1.6,
+      "narrative": "원전 일부 수주만 반영 (Palisades + 신한울 5,6호기 + 코즐로두이 1기) + 중동 재건 minimal. EBITDA margin 6% 회복, peer 평균 13x exit"
+    },
+    "bear": {
+      "revenue_cagr": 0.02,
+      "ebitda_margin_terminal": 0.035,
+      "exit_ebitda": 1500000,
+      "exit_multiple": 9.0,
+      "irr": -0.05,
+      "moic": 0.8,
+      "narrative": "원전 수주 지연 + 국내 주택/PF 부진 + 미청구공사 손상. EBITDA margin 3.5% 정체, multiple compression"
+    }
+  },
+  "returns": {
+    "irr_table": {
+      "multiples": [
+        18.0,
+        13.0,
+        9.0
+      ],
+      "bull": [
+        0.22,
+        0.16,
+        0.09
+      ],
+      "base": [
+        0.18,
+        0.1,
+        0.02
+      ],
+      "workout": [
+        0.13,
+        0.05,
+        -0.05
+      ]
+    },
+    "moic_table": {
+      "multiples": [
+        18.0,
+        13.0,
+        9.0
+      ],
+      "bull": [
+        2.7,
+        2.1,
+        1.5
+      ],
+      "base": [
+        2.3,
+        1.6,
+        1.1
+      ],
+      "workout": [
+        1.8,
+        1.3,
+        0.8
+      ]
+    }
+  },
+  "investment_structure": {
+    "instrument": "Public Market (상장주 분할매수)",
+    "investment_krw_mm": 5000,
+    "holding_period_years": 5,
+    "ytm": null,
+    "coupon": null,
+    "narrative": "1차 진입: ₩5M 한도 watch position (전체 자산의 ~3%). 2차: Palisades 착공 또는 Matador FEED 완료 시 ₩10M 까지 증액. 3차: 실제 대형 수주 공시 (코즐로두이/사우디 등) 시 ₩20M 까지. 추격매수 금지 — 공시 후엔 추가 보유/익절 판단. 손절 trigger: 평균 단가 대비 -15% 또는 thesis 훼손."
+  },
+  "judgment": {
+    "good_company": "부분적 — 시공 track record 와 UAE 바라카 입증은 강점이나, OPM 2% 수준의 낮은 marginal profitability + 2024년 영업적자 -1.26조원의 quality risk. Quality compounder 가 아닌 cyclical event-driven re-rating candidate.",
+    "good_investment_now": "현 가격 152,000원 / 2025 EPS 3,319원 = PER 45.8x — 이미 일부 thesis 반영. 건설업 peer 평균 PER 8~12x 대비 4배 premium. '좋은 회사' 가 아니라 '비싸진 옵션' 상태.",
+    "qld_alternative": "QLD (PER 25~30x, 위험조정 수익 우위) 대비 매력도 열위 — 현 valuation 에서 자본효율은 QLD 가 우위. 다만 시나리오 dispersion 은 현대건설이 더 큼 (Bull 22% vs Bear -5%) — option value 가 의미 있는 자산.",
+    "irr_moic_sufficient": "Base case 10% IRR / 1.6x MOIC — 시장지수 (QQQ 연 10~12% 가정) 대비 보통. Bull case 22% / 2.7x 는 매력적이나 다 동시 hit 가정 fragile. Bear case -5% / 0.8x 는 명시적 손실 가능.",
+    "worst_case_loss": "Worst case -20~-30% drawdown 가능. 원전 thesis 부정 + 국내 주택 부진 + 미청구공사 손상 시. 단 절대 손실 가능성 (50%+) 은 낮음 — 자기자본 10조 + 현금 4.8조 보유로 financial distress risk 제한적.",
+    "earnings_visible": "수주 옵션을 선취매하는 종목 — 실적 가시성 낮음. 1Q26 OPM 2.9% 개선 신호는 있으나 본격 EPC 인식은 2027~2028 이후. 하이닉스 같은 '실적 이미 찍히는' 종목과 명확히 구분.",
+    "valuation_band": "비싸다 — 현 PER 45.8x 는 5년 historical band 상단 + peer 대비 4배 premium. 사용자 PDF 목표가 30만원은 EPS 3,319원 × PER 90 필요 — 비현실적. Base case 5년 후 적정 23만원 (EPS 1만+ × PER 22x).",
+    "catalyst_quality": "다양한 mid-term catalyst 보유: Palisades 착공 (2026 상반기), Matador FEED 완료 (2026.04), 코즐로두이 본계약 (2026-27), 중동 재건 발주 (2026하-27상). 단 모든 catalyst 가 실제 EPC 매출 → 이익 전환되기까지 2~3년 lag. 단기 주가 spike 후 sell-the-news 가능성.",
+    "instrument_recommendation": "본주 분할매수 추천 — CB/RCPS 는 비공개기업 도구라 부적합, 2X ETF 도 없음 (국내 단일종목 2X 부재). 공개 상장주 분할 진입이 유일한 합리적 instrument.",
+    "next_action": "1) 1차 watch position ₩5M (자산 ~3%) 진입 가능 — 단 추격매수 금지. 2) Palisades 착공 또는 Matador FEED 완료 시 ₩10M 까지 증액. 3) 실제 대형 수주 공시 시 ₩20M 까지. **하이닉스 전량 매도 후 로테이션은 부적절** — 확정 실적주 → 옵션주 다운그레이드. 현 SK하이닉스 73M 포지션은 ₩2.5M target 도달 시 단계 익절 유지가 더 합리적."
+  },
+  "assumptions": [
+    {
+      "label": "Revenue CAGR (2026-2030, Base)",
+      "value": "+9.5%",
+      "note": "플랜트/뉴에너지 비중 확대 (32% → 40%+), 주택 부문 안정화"
+    },
+    {
+      "label": "Terminal EBITDA Margin (Base)",
+      "value": "6.0%",
+      "note": "현 3.4% → 원전 EPC mix 확대로 점진 개선. Bull 7.5%, Bear 3.5%"
+    },
+    {
+      "label": "원전 EPC 수주 가정 (5년 누적)",
+      "value": "20조원 (Base)",
+      "note": "사용자 PDF $500억=67조 대비 30% 만 반영. Bull 40조, Bear 5조"
+    },
+    {
+      "label": "중동 재건 수주 (5년 누적)",
+      "value": "Base 2조 / Bull 5조 / Bear 0",
+      "note": "사용자 PDF $180억=25조 대비 8~20% 만 반영. 출처 검증 부족 감안 conservative"
+    },
+    {
+      "label": "파이프라인 수주 (5년 누적)",
+      "value": "Base 3조 / Bull 8조 / Bear 0.5조",
+      "note": "사용자 PDF $150억=21조 대비 14~38% 반영"
+    },
+    {
+      "label": "Exit Multiple (EV/EBITDA)",
+      "value": "Base 13x / Bull 18x / Bear 9x",
+      "note": "글로벌 EPC peer (KBR 12x / Saipem 8x / Technip 14x) 참고"
+    },
+    {
+      "label": "현 주가 / 시가총액",
+      "value": "152,000원 / ₩17.1조",
+      "note": "2026.05 사용자 PDF 기준. 상장주식수 약 112.4M 추정"
+    },
+    {
+      "label": "투자기간",
+      "value": "5년",
+      "note": "EPC 수주 → 매출 인식 → 이익 확인까지 lag 감안"
+    },
+    {
+      "label": "할인율 / 요구수익률",
+      "value": "12%",
+      "note": "건설업 베타 1.2 가정, 무위험 4% + 시장 risk premium 6.7%"
+    }
+  ],
+  "sources": [
+    {
+      "title": "현대건설 사업보고서 (제76기, 2026.03.18)",
+      "url": "https://dart.fss.or.kr/"
+    },
+    {
+      "title": "현대건설 분기보고서 (제77기 1Q, 2026.05.15)",
+      "url": "https://dart.fss.or.kr/"
+    },
+    {
+      "title": "사용자 첨부 — 알파투자사업부 투자 아이디어 PDF (2026.05)",
+      "url": null
+    },
+    {
+      "title": "IEA Nuclear Energy Outlook (시장 전망 검증용 — 사용자 PDF 추정 외부 검증)",
+      "url": "https://www.iea.org/"
+    },
+    {
+      "title": "Westinghouse / Holtec / 한수원 IR (Palisades SMR / Matador 단계 확인)",
+      "url": null
+    }
+  ],
+  "generated_at": "2026-05-30 11:44"
+}

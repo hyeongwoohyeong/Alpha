@@ -4679,8 +4679,39 @@ def render_valuation():
                 st.rerun()
 
     # ───── 데이터 가져오기 ─────
+    # 1) session_state["valuation_data"] (in-session 분석 결과)
+    # 2) data/valuations/{회사명}.json (영구 저장된 분석 결과)
     valuation_data = st.session_state.get("valuation_data")
     saved_company = st.session_state.get("valuation_company", "")
+
+    # 회사명 으로 영구 저장 JSON 찾기 (in-session data 없을 때)
+    if not valuation_data and saved_company:
+        try:
+            import json as _json
+            from pathlib import Path as _Path
+            vpath = _Path(PROJECT_ROOT) / "data" / "valuations" / f"{saved_company}.json"
+            if vpath.exists():
+                valuation_data = _json.loads(vpath.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.debug(f"valuation JSON 로드 실패 ({saved_company}): {e}")
+
+    # 사용 가능한 회사 리스트 (data/valuations/*.json 스캔)
+    available_companies = []
+    try:
+        from pathlib import Path as _Path
+        vdir = _Path(PROJECT_ROOT) / "data" / "valuations"
+        if vdir.exists():
+            available_companies = sorted([p.stem for p in vdir.glob("*.json")])
+    except Exception:
+        pass
+    if available_companies:
+        st.markdown(
+            '<div style="font-size:11.5px; color:var(--muted,#94A3B8); margin-bottom:10px;">'
+            f'분석 완료 회사: <b style="color:var(--text,#F8FAFC);">{", ".join(available_companies)}</b> '
+            '— 위 입력란에 회사명 입력 시 자동 로드'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     if not valuation_data:
         # Empty state — empty template 으로 UI 골격 보여줌
