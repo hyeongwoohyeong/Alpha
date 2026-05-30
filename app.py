@@ -3452,6 +3452,47 @@ def render_today_decision(regime: Any, crash: Any):
         unsafe_allow_html=True,
     )
 
+    # ── 4.5) Leveraged Opportunity Watch — 별도 env-block ─────────────
+    # LESS 적용한 universe + 사용자 보유 2X profit protection 종합. 빈 신호여도
+    # regime gate 한 줄은 항상 표시 (사용자가 2X 진입 가능 여부 즉시 확인).
+    try:
+        from src.leveraged_opportunity_watch import (
+            build_leveraged_opportunity_watch, render_watch_html,
+        )
+        rows_for_watch = []
+        try:
+            rows_for_watch = rows or []  # noqa: F824
+        except NameError:
+            pass
+
+        # QLD context — universe 에 QLD 가 없으면 daily_trackers core 에서 가져옴
+        qld_ctx_for_watch: dict | None = None
+        try:
+            for c in (core_cards or []):
+                if (c.get("symbol") or "").upper() == "QLD":
+                    qld_ctx_for_watch = {"market_data": {
+                        "available": True,
+                        "current_price": c.get("price"),
+                        "drawdown_from_52w_high": (c.get("dd_pct") or 0) / 100.0,
+                        "daily_return": (c.get("daily_pct") or 0) / 100.0,
+                    }}
+                    break
+        except Exception:
+            pass
+
+        watch = build_leveraged_opportunity_watch(
+            rows_for_watch, holdings, qld_ctx_for_watch, regime)
+        watch_html = render_watch_html(watch)
+        st.markdown(
+            '<div class="env-block" style="min-height:auto; '
+            'border-left:3px solid #F59E0B; margin-top:14px;">'
+            + watch_html +
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    except Exception as e:
+        log.warning("Leveraged Opportunity Watch 빌드 실패: %s", e)
+
     # ── 5) 백테스트 근거 expander (별도 Streamlit 호출) ─────────────
     with st.expander("이 판단의 백테스트 근거 보기"):
         basis_items = [it for it in sol_items
