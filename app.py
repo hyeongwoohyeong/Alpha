@@ -4664,7 +4664,25 @@ def render_stock_detail():
         )
         return
 
-    detail = build_stock_detail(row)
+    # Phase 5: QLD ctx + regime 컨텍스트 — LESS 계산용
+    _qld_ctx_for_detail: dict | None = None
+    _regime_for_detail = None
+    try:
+        # daily_trackers 의 QLD 데이터 활용 (이미 cached)
+        _trk = _bounded_call(cached_daily_trackers, token, timeout=20) or {}
+        for entry in (_trk.get("core") or []):
+            if (entry.get("meta") or {}).get("symbol") == "QLD":
+                _qld_ctx_for_detail = {"market_data": entry.get("data") or {}}
+                break
+    except Exception:
+        pass
+    try:
+        with db.db_session() as _cn:
+            _regime_for_detail = db.fetch_latest_market_regime(_cn)
+    except Exception:
+        pass
+
+    detail = build_stock_detail(row, qld_ctx=_qld_ctx_for_detail, regime=_regime_for_detail)
 
     # 헤더 블록 (종목명 / 투자 판단 / 종목 분류)
     st.markdown(
@@ -4695,6 +4713,93 @@ def render_stock_detail():
 
     # ================== Alpha Score (통합 투자 매력도) ==================
     render_alpha_score_section(detail.get("alpha_score"))
+
+    # ============ Phase 5 — Leveraged ETF Suitability + Use Case ============
+    _lev_info = detail.get("leveraged_etf_info") or {}
+    _tax_info = detail.get("taxonomy_info") or {}
+    if _lev_info.get("available"):
+        _less = _lev_info.get("less_score")
+        _less_str = f"{_less:.0f}" if _less is not None else "—"
+        _verdict = _lev_info.get("less_verdict") or "—"
+        _use_case = _lev_info.get("suggested_use_case") or "—"
+        _body_vs_2x = _lev_info.get("body_vs_2x") or "—"
+        _pp = _lev_info.get("profit_protection_trigger") or "—"
+        _qld_view = _lev_info.get("qld_view") or "—"
+        _lev_tickers = _lev_info.get("leveraged_etf_tickers") or []
+        _lev_str = ", ".join(_lev_tickers) if _lev_tickers else "(없음)"
+
+        # 카테고리 + bottleneck layer
+        _cats = _tax_info.get("categories") or []
+        _bottle = _tax_info.get("bottleneck_layer")
+        _cat_str = " · ".join(_cats) if _cats else "—"
+        _bottle_str = f"  [{_bottle}]" if _bottle else ""
+
+        # block flag 적용 여부 표시
+        _blocks = [b for b in (_lev_info.get("block_flags") or []) if b.get("triggered") is True]
+        _block_html = ""
+        if _blocks:
+            _block_lines = "".join(
+                f'<li style="color:#EF4444;">{b["rule"].split(". ", 1)[-1]}</li>' for b in _blocks
+            )
+            _block_html = (
+                '<div style="margin-top:8px; padding:8px 10px; background:rgba(239,68,68,0.06); '
+                'border-left:3px solid #EF4444; border-radius:4px;">'
+                '<div style="font-size:11px; color:#EF4444; font-weight:700; margin-bottom:4px;">'
+                '🚫 신규 진입 차단 신호</div>'
+                f'<ul style="margin:0; padding-left:18px; font-size:12px; line-height:1.6;">{_block_lines}</ul>'
+                '</div>'
+            )
+
+        _verdict_color = (
+            "#22C55E" if (_less or 0) >= 80 else
+            "#F59E0B" if (_less or 0) >= 60 else
+            "#94A3B8" if (_less or 0) >= 40 else
+            "#EF4444"
+        )
+
+        st.markdown(
+            '<div class="card" style="margin-top:14px;">'
+            '<div style="display:flex; justify-content:space-between; align-items:center; '
+            'gap:12px; flex-wrap:wrap; margin-bottom:10px;">'
+            '<div>'
+            '<div style="font-size:11px; color:var(--muted); letter-spacing:.03em;">'
+            'LEVERAGED ETF SUITABILITY · 산업 분류</div>'
+            f'<div style="font-size:15px; color:var(--text); font-weight:600; margin-top:3px;">'
+            f'{_cat_str}{_bottle_str}</div>'
+            '</div>'
+            f'<div style="text-align:right;">'
+            f'<div style="font-size:11px; color:var(--muted);">LESS Score</div>'
+            f'<div style="font-size:24px; font-weight:700; color:{_verdict_color}; line-height:1;">{_less_str}</div>'
+            f'<div style="font-size:11px; color:{_verdict_color}; margin-top:2px;">{_verdict}</div>'
+            '</div>'
+            '</div>'
+            '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; '
+            'font-size:12.5px; line-height:1.65;">'
+            '<div>'
+            '<div style="color:var(--muted); font-size:11px;">2X ETF</div>'
+            f'<div style="color:var(--text); font-weight:500;">{_lev_str}</div>'
+            '</div>'
+            '<div>'
+            '<div style="color:var(--muted); font-size:11px;">QLD 상대 매력도</div>'
+            f'<div style="color:var(--text); font-weight:500;">{_qld_view}</div>'
+            '</div>'
+            '<div>'
+            '<div style="color:var(--muted); font-size:11px;">본주 vs 2X 판단</div>'
+            f'<div style="color:var(--text); font-weight:500;">{_body_vs_2x}</div>'
+            '</div>'
+            '<div>'
+            '<div style="color:var(--muted); font-size:11px;">Suggested Use Case</div>'
+            f'<div style="color:var(--text); font-weight:600;">{_use_case}</div>'
+            '</div>'
+            '</div>'
+            '<div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--line);">'
+            '<div style="font-size:11px; color:var(--muted); margin-bottom:3px;">Profit Protection Trigger</div>'
+            f'<div style="font-size:12.5px; color:var(--text); line-height:1.55;">{_pp}</div>'
+            '</div>'
+            + _block_html +
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     # ============ Capital Efficiency (Phase 2) 보조 점수 ============
     render_capital_efficiency_section(ticker)

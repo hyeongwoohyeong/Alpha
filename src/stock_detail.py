@@ -857,7 +857,153 @@ def risk_grade(row: dict[str, Any]) -> str:
 # Detail 빌더
 # ---------------------------------------------------------------------------
 
-def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Leveraged ETF / Taxonomy 통합 (Phase 5)
+# ---------------------------------------------------------------------------
+
+def _build_taxonomy_info(ticker: str) -> dict[str, Any]:
+    """universe_taxonomy 에서 카테고리·bottleneck layer 추출."""
+    try:
+        from .universe_taxonomy import (
+            get_categories_for, get_bottleneck_layer, UNIVERSE_TAXONOMY,
+        )
+        cats = get_categories_for(ticker)
+        category_labels = []
+        bottleneck_layer = None
+        for c in cats:
+            cat_meta = UNIVERSE_TAXONOMY.get(c, {})
+            label = cat_meta.get("label", c)
+            category_labels.append(label)
+            if not bottleneck_layer:
+                bl = get_bottleneck_layer(ticker, c)
+                if bl:
+                    bottleneck_layer = bl
+        return {
+            "categories": category_labels,
+            "bottleneck_layer": bottleneck_layer,
+            "n_categories": len(cats),
+        }
+    except Exception:
+        return {"categories": [], "bottleneck_layer": None, "n_categories": 0}
+
+
+def _suggested_use_case(
+    less_score: float | None,
+    alpha_score: float | None,
+    drawdown: float | None,
+    leveraged_etf_tickers: list[str],
+) -> str:
+    """사용자 spec 의 Suggested Use Case 분기.
+
+    옵션: 본주 장기 / 본주 스윙 / 2X ETF 전술 / Watchlist / Avoid
+    """
+    # 2X ETF 가 아예 없으면 본주만 선택지
+    if not leveraged_etf_tickers:
+        if (alpha_score or 0) >= 75 and (drawdown is not None and abs(drawdown) >= 0.10):
+            return "본주 스윙"
+        if (alpha_score or 0) >= 70:
+            return "본주 장기"
+        return "Watchlist"
+    # 2X ETF 가용 — LESS 점수로 분기
+    if less_score is None:
+        return "Watchlist"
+    if less_score >= 80:
+        return "2X ETF 전술 진입 검토"
+    if less_score >= 65 and (alpha_score or 0) >= 70:
+        return "본주 스윙 — 2X 는 소액 단계"
+    if less_score >= 60:
+        return "본주 우선 (장기 또는 스윙)"
+    if less_score >= 40:
+        return "Watchlist"
+    return "Avoid"
+
+
+def _profit_protection_trigger(
+    alpha_score: float | None,
+    drawdown: float | None,
+    m6_return: float | None,
+    forward_pe: float | None,
+) -> str:
+    """현 시점에서 적용할 Profit Protection 룰 텍스트."""
+    triggers = []
+    if (m6_return or 0) > 0.6:
+        triggers.append("6M +60% 이상 급등 — 추격 매수 금지, 일부 익절 검토")
+    if forward_pe is not None and forward_pe > 60:
+        triggers.append(f"PE {forward_pe:.0f}x — valuation stretch, 신규 매수 자제")
+    if drawdown is not None and drawdown >= -0.03:
+        triggers.append("신고가권 — 추격 위험. 조정 대기 권장")
+    if (alpha_score or 0) >= 75 and (drawdown is not None and -0.30 <= drawdown <= -0.15):
+        triggers.append("Sweet spot DD + 본주 quality — 단계 진입 검토")
+    if not triggers:
+        triggers.append("현재 명시적 Profit Protection 트리거 없음 — 보유 지속 가능 구간")
+    return " · ".join(triggers)
+
+
+def build_leveraged_etf_info(
+    row: dict[str, Any],
+    qld_ctx: dict | None = None,
+    regime: Any = None,
+) -> dict[str, Any]:
+    """LESS 계산 + 2X ETF 매핑 + Suggested Use Case + Profit Protection 트리거.
+
+    qld_ctx / regime 이 None 이어도 LESS 동작 (sub-score fallback).
+    """
+    ticker = (row.get("ticker") or "").upper()
+    try:
+        from .universe_taxonomy import get_leveraged_etf_tickers
+        from .leveraged_etf_score import score_leveraged_etf
+        lev_tickers = get_leveraged_etf_tickers(ticker)
+        less_result = score_leveraged_etf(row, qld_ctx, regime, None)
+    except Exception as e:
+        return {
+            "available": False,
+            "error": f"LESS 계산 실패: {e}",
+            "leveraged_etf_tickers": [],
+        }
+
+    sc = row.get("scores") or {}
+    md = row.get("market_data") or {}
+    alpha_score = sc.get("final_score")
+    dd = md.get("drawdown_from_52w_high")
+    m6 = md.get("6m_return")
+    pe = md.get("forward_pe") or md.get("trailing_pe")
+
+    use_case = _suggested_use_case(less_result.get("score"), alpha_score, dd, lev_tickers)
+    pp_trigger = _profit_protection_trigger(alpha_score, dd, m6, pe)
+
+    # 본주 vs 2X 판단
+    body_vs_2x = "본주만 가능 (2X ETF 없음)"
+    if lev_tickers:
+        less_score = less_result.get("score") or 0
+        if less_score >= 80:
+            body_vs_2x = "2X ETF 전술 진입 가능 (조건 충족)"
+        elif less_score >= 60:
+            body_vs_2x = "본주가 더 안전 — 2X 는 소액 한정"
+        else:
+            body_vs_2x = "본주 우선, 2X 부적합"
+
+    return {
+        "available": True,
+        "has_leveraged_etf": bool(lev_tickers),
+        "leveraged_etf_tickers": lev_tickers,
+        "less_score": less_result.get("score"),
+        "less_verdict": less_result.get("verdict"),
+        "less_summary": less_result.get("summary_ko"),
+        "less_sub_scores": less_result.get("sub_scores"),
+        "qld_view": less_result.get("qld_view"),
+        "suggested_use_case": use_case,
+        "body_vs_2x": body_vs_2x,
+        "profit_protection_trigger": pp_trigger,
+        "entry_checks": less_result.get("entry_checks") or [],
+        "block_flags": less_result.get("block_flags") or [],
+    }
+
+
+def build_stock_detail(
+    row: dict[str, Any],
+    qld_ctx: dict | None = None,
+    regime: Any = None,
+) -> dict[str, Any]:
     from .earnings_quality import build_earnings_quality, build_strategic_lens
     from .alpha_score import calculate_alpha_score, reconcile_with_action_tag
     from .bottleneck import build_bottleneck_thesis
@@ -930,6 +1076,9 @@ def build_stock_detail(row: dict[str, Any]) -> dict[str, Any]:
         "strategic_lens": build_strategic_lens(row["ticker"]),
         "bottleneck_thesis": bn_thesis,
         "alpha_score": alpha_result,
+        # Phase 5 — Leveraged ETF + Taxonomy 통합
+        "leveraged_etf_info": build_leveraged_etf_info(row, qld_ctx, regime),
+        "taxonomy_info": _build_taxonomy_info(row["ticker"]),
         # 하위 호환 (UI에서 더 이상 사용하지 않지만 다른 코드가 참조 가능)
         "scenarios": scenarios(row),
         "lens_views": lens_views(row),
