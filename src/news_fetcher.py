@@ -182,6 +182,12 @@ def _google_news(query: str, limit: int = 5, locale: str = "US") -> list[dict[st
     """Google News RSS 검색.
 
     locale 'KR' 이면 한국어 RSS URL 패턴을 사용한다. 그 외는 영문 RSS.
+
+    **타임아웃 필수** — feedparser.parse(url) 는 내부 urllib 에 timeout 이 없어
+    Google News 가 응답 늦으면 무한 hang. 42 종목 × 병렬 10 worker 중 하나만
+    hang 해도 build_rows 가 영영 안 끝나서 Streamlit Cloud 가 "loading..." 상태
+    로 며칠씩 멈춤. requests 로 명시 timeout 걸어 fetch 후 그 본문만 feedparser
+    에 넘긴다.
     """
     fp = _safe_feedparser()
     if fp is None:
@@ -189,9 +195,17 @@ def _google_news(query: str, limit: int = 5, locale: str = "US") -> list[dict[st
     template = GOOGLE_NEWS_RSS_KR if str(locale).upper() == "KR" else GOOGLE_NEWS_RSS
     url = template.format(query=urllib.parse.quote(query))
     try:
-        feed = fp.parse(url)
+        import requests  # type: ignore
+        resp = requests.get(
+            url, timeout=8,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; Alpha-Engine/1.0)"},
+        )
+        if resp.status_code != 200:
+            log.debug("RSS HTTP %s for %s", resp.status_code, query[:80])
+            return []
+        feed = fp.parse(resp.content)
     except Exception as e:
-        log.warning("RSS 파싱 실패 (%s): %s", query, e)
+        log.warning("RSS fetch 실패 (%s): %s", query[:80], e)
         return []
     entries = getattr(feed, "entries", []) or []
     out: list[dict[str, Any]] = []

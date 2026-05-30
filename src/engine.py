@@ -69,13 +69,24 @@ def build_rows(
                 ): r["ticker"]
                 for r in eligible
             }
-            for fut in as_completed(futures):
-                t = futures[fut]
-                try:
-                    news_map[t] = fut.result()
-                except Exception as e:
-                    log.warning("[%s] 뉴스 수집 실패: %s", t, e)
-                    news_map[t] = []
+            # 전체 안전망 — 어떤 future 가 정체돼도 60s 안에 빠져나옴.
+            # 개별 future 에도 .result(timeout=15) 로 hang 차단 (RSS 는 _google_news
+            # 가 이미 requests timeout=8 걸어두지만 belt+suspenders).
+            try:
+                completed_iter = as_completed(futures, timeout=60)
+                for fut in completed_iter:
+                    t = futures[fut]
+                    try:
+                        news_map[t] = fut.result(timeout=15)
+                    except Exception as e:
+                        log.warning("[%s] 뉴스 수집 실패: %s", t, e)
+                        news_map[t] = []
+            except Exception as e:
+                # as_completed timeout — 일부 미완료. 미완료는 빈 뉴스로 처리.
+                log.warning("뉴스 병렬 수집 전체 timeout — 미완료 종목 skip: %s", e)
+                for fut, t in futures.items():
+                    if t not in news_map:
+                        news_map[t] = []
 
     rows: list[dict[str, Any]] = []
     for i, row in enumerate(uni, start=1):
