@@ -3318,74 +3318,37 @@ def render_today_decision(regime: Any, crash: Any):
             f'{sol_cycle_position}</div>'
         )
 
-    # ── 3) 오늘 할 일 — 통합·우선순위 목록 ──────────────────────────
-    merged: list = []
-    # 3-a) 백테스트 처방 항목 (시장 지시 — 낙폭/과열/익절 대응)
-    for it in sol_items:
-        title = (it.get("title") or "").strip()
-        action = (it.get("action") or "").strip()
-        if action and title and title not in action:
-            text = f"{title} — {action}"
-        elif action:
-            text = action
-        else:
-            text = title
-        if not text:
-            continue
-        merged.append({
-            "priority": it.get("priority"),
-            "text": text,
-            "basis": (it.get("basis") or "").strip(),
-        })
-    # 3-b) plan actions 중 백테스트가 이미 다룬 토픽이 아닌 것만
-    for a in (plan.get("actions") or []):
-        title = (a.get("title") or "").strip()
-        if not title:
-            continue
-        if any(kw in title for kw in _DECISION_DUP_KEYWORDS):
-            continue
-        detail = (a.get("detail") or "").strip()
-        text = f"{title} — {detail}" if detail else title
-        merged.append({
-            "priority": a.get("priority"),
-            "text": text,
-            "basis": "",
-        })
-
-    # 우선순위 정렬 (high→medium→low) 후 6행 cap
-    _prio_order = {"high": 0, "medium": 1, "low": 2}
-    merged.sort(key=lambda m: _prio_order.get(m.get("priority"), 2))
-    merged = merged[:6]
-
-    if merged:
-        action_rows = ""
-        for m in merged:
-            color, plabel = _ACTION_PRIORITY.get(
-                m.get("priority"), _ACTION_PRIORITY["low"])
-            action_rows += (
-                '<div style="display:flex; gap:11px; padding:11px 0; '
-                'border-top:1px solid var(--line);">'
-                f'<div style="flex:0 0 5px; border-radius:3px; '
-                f'background:{color};"></div>'
-                '<div style="flex:1 1 auto;">'
-                '<div style="font-size:14px; font-weight:700; '
-                'color:var(--text); line-height:1.5;">'
-                f'<span style="color:{color}; font-size:11px; '
-                f'font-weight:700; letter-spacing:.04em; '
-                f'margin-right:8px;">{plabel}</span>'
-                f'{m["text"]}</div>'
-                '</div></div>'
-            )
-        action_block = (
-            '<div style="font-size:12px; color:var(--muted); '
-            'margin:16px 0 0; letter-spacing:.03em;">오늘 할 일</div>'
-            f'<div style="margin-top:2px;">{action_rows}</div>'
+    # ── 3) 3-Layer 내러티브: 포트폴리오 점검 → 시장 upside → 리밸런싱 ──
+    # 사용자 요청: 포트폴리오 우선, 시장 두 번째, 리밸런싱은 신호 있을 때만 (소음 제거)
+    try:
+        from src.today_decision import (
+            build_portfolio_check, build_upside_candidates, build_rebalance_actions,
+            render_layer_a_html, render_layer_b_html, render_layer_c_html,
         )
-    else:
+        # 데이터 수집 — rows 는 module-level global (line ~1725 에서 cached_build_rows 결과)
+        rows_for_upside = []
+        try:
+            rows_for_upside = rows or []  # noqa: F824 — module global
+        except NameError:
+            rows_for_upside = []
+
+        layer_a_items = build_portfolio_check(holdings, diag)
+        layer_b_items = build_upside_candidates(rows_for_upside, regime)
+        layer_c_items = build_rebalance_actions(
+            holdings, diag, layer_b_items, regime)
+
+        action_block = (
+            render_layer_a_html(layer_a_items)
+            + render_layer_b_html(layer_b_items)
+            + render_layer_c_html(layer_c_items)   # 비면 빈 문자열 → 섹션 생략
+        )
+    except Exception as e:
+        log.warning("3-layer 내러티브 빌드 실패: %s — 기존 액션 목록으로 폴백", e)
+        # 폴백 — 옛 merged 목록 (소음 가능성 있어도 최소한 빈 화면 방지)
         action_block = (
             '<div style="font-size:13px; color:var(--muted); '
-            'margin:16px 0 0; line-height:1.6;">오늘은 즉시 대응할 시장 '
-            '신호가 없습니다 — 현 구조 유지.</div>'
+            'margin:16px 0 0; line-height:1.6;">오늘의 판단 데이터 수집 중. '
+            '잠시 후 새로고침 해주세요.</div>'
         )
 
     # ── 4) 전날 대비 변동 — 있을 때만 ───────────────────────────────
