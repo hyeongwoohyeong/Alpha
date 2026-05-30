@@ -1,0 +1,76 @@
+{
+  "_doc": "대시보드 wealth_dashboard.json 빌더의 정적 입력. 부동산/부채/실현손익/월별스냅샷 — 자주 안 바뀌는 항목들. 변경 시 직접 편집 후 scripts/build_wealth_dashboard.py 재실행.",
+  "balance_sheet": {
+    "as_of": "2026-05-30",
+    "real_estate_krw": 97600000,
+    "deposit_krw": 20000000,
+    "cash_outside_krw": 611151,
+    "btc_krw": 0,
+    "debt_krw": 88291878,
+    "_note": "debt_krw 는 신한 U드림 마통 잔액 기준. 토스 + 연금 외부 cash 합산은 cash_outside_krw."
+  },
+  "realized_pnl": {
+    "kpi": {
+      "ytdNet": 31772316,
+      "ytdGain": 31766630,
+      "ytdInc": 5686,
+      "mtd": 31772316,
+      "estTax": 4972442
+    },
+    "monthly": [
+      {"month": "2026-01", "gain": 2428026, "income": 0, "cost": 0, "net": 2428026, "cumulative": 2428026},
+      {"month": "2026-02", "gain": -6691, "income": 493, "cost": 76, "net": -6274, "cumulative": 2421752},
+      {"month": "2026-03", "gain": 97650, "income": 7691, "cost": 1184, "net": 104157, "cumulative": 2525909},
+      {"month": "2026-04", "gain": 0, "income": 10226, "cost": 1574, "net": 8652, "cumulative": 2534561},
+      {"month": "2026-05", "gain": 31766630, "income": 5686, "cost": 875, "net": 31772316, "cumulative": 34306877, "_note": "realized_pnl.monthly.income은 배당/이자만 — 급여/상여는 별도(monthly_snapshots/cashflow)"},
+      {"month": "2026-06", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-07", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-08", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-09", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-10", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-11", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
+      {"month": "2026-12", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877}
+    ],
+    "recent_ledger": [
+      {"date": "2026-05-27", "type": "매매차익", "name": "TIGER 반도체TOP10 레버리지", "ticker": "TIGER_SEMI_2X", "qty": null, "krwPnL": 12309903, "fee": 0, "tax": 0, "netPnL": 12309903, "category": "국내주식", "memo": "5/27 대량 매도 +20.3%"},
+      {"date": "2026-05-27", "type": "매매차익", "name": "TSLL", "ticker": "TSLL", "qty": null, "krwPnL": 467471, "fee": 0, "tax": 0, "netPnL": 467471, "category": "해외주식 양도세", "memo": "5/27 매도 +10.7%"},
+      {"date": "2026-05-26", "type": "매매차익", "name": "SCHD", "ticker": "SCHD", "qty": null, "krwPnL": 126381, "fee": 0, "tax": 0, "netPnL": 126381, "category": "해외주식 양도세", "memo": "5/26 매도 +5.4%"},
+      {"date": "2026-05-26", "type": "매매차익", "name": "JEPQ", "ticker": "JEPQ", "qty": null, "krwPnL": 114312, "fee": 0, "tax": 0, "netPnL": 114312, "category": "해외주식 양도세", "memo": "5/26 매도 +4.2%"},
+      {"date": "2026-05-22", "type": "매매차익", "name": "ProShares Ultra QQQ (QLD)", "ticker": "QLD", "qty": null, "krwPnL": 493881, "fee": 0, "tax": 0, "netPnL": 493881, "category": "해외주식 양도세", "memo": "5/22 매도 +41.6%"}
+    ]
+  },
+  "monthly_snapshots": [
+    {"month": "2026-04", "totalAsset": 214050432, "totalDebt": 88291878, "netWorth": 125758554, "income": 0, "capGain": 0, "other": 0, "deltaNW": 0, "_note": "4월말 NW는 5월 흐름으로부터 역산. totalAsset/Debt 정확치 아님 — 4월말 데이터 입력 시 갱신"},
+    {"month": "2026-05", "totalAsset": 267571844, "totalDebt": 88291878, "netWorth": 179279966, "income": 17877860, "capGain": 31766630, "other": -3000000, "deltaNW": 53521412, "_income_breakdown": {"salary": 4840450, "bonus": 13037410}}
+  ],
+  "cashflow": {
+    "deltaNW": 53521412,
+    "deltaPct": 0.426,
+    "income": 17877860,
+    "capGain": 31766630,
+    "other": -3000000,
+    "debtChg": 2315450,
+    "asofMonth": "2026-05",
+    "_income_breakdown": {"salary": 4840450, "bonus_samjeong": 13037410},
+    "_other_breakdown": {"travel_living": -3000000}
+  },
+  "monthly_bridges": {
+    "_doc": "월별 Net Worth Bridge 입력. 매달 말일 즈음 새 월 추가. 'opening_nw'는 전월 ending_nw, 'ending_nw'는 자산현황 기준. 그 외는 흐름 항목.",
+    "2026-05": {
+      "opening_nw": 125758554,
+      "ending_nw": 179279966,
+      "opening_label": "기초 순자산 (4월말, 역산)",
+      "flows": [
+        {"name": "월 급여", "value": 4840450},
+        {"name": "상여 (삼정회계)", "value": 13037410},
+        {"name": "실현 손익 (5월 매매)", "value": 31766630},
+        {"name": "평가 손익 (현재 보유)", "value": 9186686},
+        {"name": "배당/이자수익", "value": 5686},
+        {"name": "부동산/보증금 변동", "value": 0},
+        {"name": "부채 증감 효과", "value": -2315450},
+        {"name": "소비 (여행 + 생활비)", "value": -3000000}
+      ],
+      "_note": "4월말 기초 NW는 역산. 평소 월 소비 ₩200만원, 5월은 여행 포함 ₩300만원."
+    }
+  }
+}

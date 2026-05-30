@@ -1578,12 +1578,30 @@ def render_back_button(key_suffix: str = ""):
             go_back()
 
 
+def _portfolio_mtime_token() -> int:
+    """data/portfolio.json mtime 을 정수로 — 파일 변경 시 cached_* 자동 invalidate.
+
+    portfolio.json 이 git push 로 갱신되면 mtime 이 바뀌어 token 이 달라지고
+    @st.cache_data 가 새 key 로 인식해서 재계산을 트리거.
+    """
+    try:
+        from pathlib import Path
+        p = Path(__file__).resolve().parent / "data" / "portfolio.json"
+        if p.exists():
+            return int(p.stat().st_mtime)
+    except Exception:
+        pass
+    return 0
+
+
 def get_refresh_token() -> int:
-    return st.session_state.get("refresh_token", 0)
+    base = st.session_state.get("refresh_token", 0)
+    # portfolio.json mtime 을 더해서 파일 갱신 시 자동 invalidate
+    return base + _portfolio_mtime_token()
 
 
 def trigger_refresh():
-    st.session_state["refresh_token"] = get_refresh_token() + 1
+    st.session_state["refresh_token"] = st.session_state.get("refresh_token", 0) + 1
     st.cache_data.clear()
 
 
@@ -4444,6 +4462,15 @@ def render_today_brief():
                         "</div>",
                         unsafe_allow_html=True,
                     )
+
+    # ════ BTC 전용 추적 카드 ═══════════════════════════════════════════
+    try:
+        from src.btc_tracker import build_btc_snapshot, render_btc_card_html
+        btc_snap = build_btc_snapshot(proxies)
+        st.markdown('<div class="section-title">비트코인 추적</div>', unsafe_allow_html=True)
+        st.markdown(render_btc_card_html(btc_snap), unsafe_allow_html=True)
+    except Exception as e:
+        log.warning("BTC card render 실패: %s", e)
 
     # 전날 글로벌 브리핑 — 어젯밤 글로벌 이벤트 리캡 (4 카테고리)
     briefing = brief.get("overnight_briefing") or []
