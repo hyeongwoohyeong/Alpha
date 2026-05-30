@@ -2,12 +2,15 @@
   "_doc": "대시보드 wealth_dashboard.json 빌더의 정적 입력. 부동산/부채/실현손익/월별스냅샷 — 자주 안 바뀌는 항목들. 변경 시 직접 편집 후 scripts/build_wealth_dashboard.py 재실행.",
   "balance_sheet": {
     "as_of": "2026-05-30",
-    "real_estate_krw": 97600000,
+    "real_estate_krw": 0,
+    "apartment_paid_krw": 97600000,
+    "apartment_target_krw": 400000000,
+    "apartment_deadline": "2028-07",
     "deposit_krw": 20000000,
     "cash_outside_krw": 611151,
     "btc_krw": 0,
     "debt_krw": 88291878,
-    "_note": "debt_krw 는 신한 U드림 마통 잔액 기준. 토스 + 연금 외부 cash 합산은 cash_outside_krw."
+    "_note": "apartment_paid_krw = 분양 계약금 (이미 납입). target = 최종 ₩4억. deadline 2028.7 까지 추가 ₩3.024억 마련 필요. debt_krw 는 신한 U드림 마통 잔액."
   },
   "realized_pnl": {
     "_doc": "주식·ETF 실현손익 (코인 별도 — coin_realized_pnl 참조)",

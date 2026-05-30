@@ -343,15 +343,20 @@ def main() -> None:
 
     # Balance sheet
     bs = inputs["balance_sheet"]
-    real_estate = bs["real_estate_krw"]
+    real_estate = bs.get("real_estate_krw", 0)
+    apartment_paid = bs.get("apartment_paid_krw", 0)  # 분양 계약금 납입분 (자산)
+    apartment_target = bs.get("apartment_target_krw", 0)  # 분양 총액 (목표)
+    apartment_deadline = bs.get("apartment_deadline", "")
     deposit = bs["deposit_krw"]
     cash_outside = bs["cash_outside_krw"]
     btc = bs["btc_krw"]
     debt = bs["debt_krw"]
+    # 부동산 카테고리는 실제 부동산 + 분양 계약금 (asset 으로 잡힘)
+    real_estate_total = real_estate + apartment_paid
 
     cash_total = cash_outside + toss_cash
 
-    total_asset = stocks_etf + pension_total + cash_total + real_estate + deposit + btc
+    total_asset = stocks_etf + pension_total + cash_total + real_estate_total + deposit + btc
     net_worth = total_asset - debt
 
     # Leverage / 위험자산
@@ -380,7 +385,7 @@ def main() -> None:
     }
     sub_kpi = {
         "현금성 자산": cash_total,
-        "부동산+보증금": real_estate + deposit,
+        "부동산+보증금": real_estate_total + deposit,
         "비트코인": btc,
         "주식/ETF (통합)": stocks_etf,
         "퇴직연금/예금": pension_total,
@@ -396,7 +401,7 @@ def main() -> None:
     # Holdings 변환
     consolidated = build_holdings_consolidated(holdings, total_asset, net_worth, investment)
     top5 = build_top5(consolidated, net_worth)
-    asset_group = build_asset_group(stocks_etf, pension_total, cash_total, real_estate, deposit, btc, total_asset)
+    asset_group = build_asset_group(stocks_etf, pension_total, cash_total, real_estate_total, deposit, btc, total_asset)
     inv_group = build_inv_group(holdings, investment)
     risk_monitor = build_risk_monitor(ctx)
 
@@ -445,6 +450,14 @@ def main() -> None:
         "bridge": bridge,           # latest month (legacy)
         "bridges": bridges,         # 월별 navigation 용
         "monthlyAll": monthly_all,
+        "apartment": {
+            "paid_krw": apartment_paid,
+            "target_krw": apartment_target,
+            "net_worth_krw": net_worth,
+            "remaining_krw": max(apartment_target - net_worth, 0),
+            "progress_pct": (net_worth / apartment_target * 100) if apartment_target else 0,
+            "deadline": apartment_deadline,
+        },
         "_meta": {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "builder": "scripts/build_wealth_dashboard.py",
