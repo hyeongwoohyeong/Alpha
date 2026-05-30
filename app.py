@@ -5806,7 +5806,10 @@ def _fetch_discovery_data():
 
 
 def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
-    """Discovery / Promotion 후보 카드 — 종목명 + 큐 + 사유 + 핵심 지표 + 추천."""
+    """Discovery / Promotion 후보 카드 — 종목명 + 큐 + 사유 + 핵심 지표 + 추천.
+
+    Phase 6: taxonomy (사용자 카테고리·bottleneck layer) + LESS (2X ETF 가능성) chip 추가.
+    """
     ticker = (c.get("ticker") or "?").upper()
     # name 이 ticker 와 같거나 비어있으면 wide universe 매핑에서 보강
     raw_name = c.get("name")
@@ -5828,10 +5831,81 @@ def _render_discovery_card(c: dict, idx: int, *, key_prefix: str = "disc"):
     if disc_score is not None:
         score_chips += f'<span class="chip chip-needs-check">Disc {disc_score:.0f}</span>'
 
+    # Phase 6 — Taxonomy chip (사용자 관심 카테고리 자동 매칭)
+    taxonomy_chip = ""
+    bottleneck_chip = ""
+    try:
+        from src.universe_taxonomy import (
+            get_categories_for, get_bottleneck_layer, UNIVERSE_TAXONOMY,
+            has_leveraged_etf,
+        )
+        cats = get_categories_for(ticker)
+        if cats:
+            # 첫 카테고리의 label 표시 (M7 + Robotics 같이 겹치는 경우 첫 번째만)
+            first_cat = cats[0]
+            cat_label = UNIVERSE_TAXONOMY.get(first_cat, {}).get("label", first_cat)
+            # 짧게 (긴 라벨 줄이기)
+            cat_short = cat_label.split(" / ")[0] if " / " in cat_label else cat_label
+            taxonomy_chip = f'<span class="chip chip-strengthen">{cat_short}</span>'
+            # bottleneck layer (있을 때만)
+            for cat in cats:
+                bl = get_bottleneck_layer(ticker, cat)
+                if bl:
+                    bottleneck_chip = f'<span class="chip chip-needs-check" style="font-size:10.5px;">{bl}</span>'
+                    break
+    except Exception:
+        pass
+
+    # Phase 6 — LESS score chip (2X ETF 가능 종목만)
+    less_chip = ""
+    try:
+        if has_leveraged_etf(ticker):
+            # rows 글로벌에서 해당 ticker row 찾아 LESS 계산
+            row = None
+            try:
+                row = next((r for r in (rows or []) if (r.get("ticker") or "").upper() == ticker), None)  # noqa: F824
+            except Exception:
+                row = None
+            if row and (row.get("market_data") or {}).get("available"):
+                # QLD context + regime 가져오기 (재시도 없이 None 가능)
+                qld_ctx = None
+                try:
+                    _trk = st.session_state.get("_daily_trackers_cache") or {}
+                    for e in (_trk.get("core") or []):
+                        if (e.get("meta") or {}).get("symbol") == "QLD":
+                            qld_ctx = {"market_data": e.get("data") or {}}
+                            break
+                except Exception:
+                    pass
+                regime_for_less = None
+                try:
+                    with db.db_session() as _cn:
+                        regime_for_less = db.fetch_latest_market_regime(_cn)
+                except Exception:
+                    pass
+                try:
+                    from src.leveraged_etf_score import score_leveraged_etf
+                    _less = score_leveraged_etf(row, qld_ctx, regime_for_less, None)
+                    _ls = _less.get("score")
+                    if _ls is not None:
+                        _color_cls = (
+                            "chip-strengthen" if _ls >= 80 else
+                            "chip-needs-check" if _ls >= 60 else
+                            "chip-noise"
+                        )
+                        less_chip = f'<span class="chip {_color_cls}">LESS {_ls:.0f}</span>'
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     badges_html = (
         '<div style="display:flex; flex-direction:column; gap:6px; '
         'align-items:flex-end; flex-shrink:0;">'
         f'<span class="chip chip-needs-check">{queue}</span>'
+        f'{taxonomy_chip}'
+        f'{bottleneck_chip}'
+        f'{less_chip}'
         f'{score_chips}'
         "</div>"
     )
