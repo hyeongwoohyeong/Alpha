@@ -1427,6 +1427,16 @@ def cached_market_context(_token: int) -> tuple[dict[str, Any], str]:
     return fetch_market_context()
 
 
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 6)
+def cached_daily_trackers(_token: int) -> dict[str, Any]:
+    """Core (TQQQ/QQQ/SPY/BTC/KODEX200) + Parking (MCD/COST/WMT/KO/PEP/V/MA/JNJ).
+
+    매일 추적해야 하는 자산군 — engine universe 와 분리 (alpha 와 parking 은 다른 카테고리).
+    """
+    from src.daily_tracking import fetch_all_trackers
+    return fetch_all_trackers()
+
+
 @st.cache_data(show_spinner=False, ttl=60 * 60)
 def cached_annual_financials(_token: int, ticker: str) -> list[dict[str, Any]]:
     return fetch_annual_financials(ticker)
@@ -3318,33 +3328,63 @@ def render_today_decision(regime: Any, crash: Any):
             f'{sol_cycle_position}</div>'
         )
 
-    # ── 3) 3-Layer 내러티브: 포트폴리오 점검 → 시장 upside → 리밸런싱 ──
-    # 사용자 요청: 포트폴리오 우선, 시장 두 번째, 리밸런싱은 신호 있을 때만 (소음 제거)
+    # ── 3) 3-Layer 내러티브: 포트폴리오 점검 → 시장 추적·발굴 → 리밸런싱 ──
+    # 사용자 요청: 포트폴리오 우선, 시장 두 번째 (Core트래커+고확신알파+파킹 3-sub),
+    # 리밸런싱은 신호 있을 때만 (소음 제거). Alpha gate: score≥80 + DD≤-10%.
     try:
         from src.today_decision import (
-            build_portfolio_check, build_upside_candidates, build_rebalance_actions,
+            build_portfolio_check, build_rebalance_actions,
             render_layer_a_html, render_layer_b_html, render_layer_c_html,
         )
-        # 데이터 수집 — rows 는 module-level global (line ~1725 에서 cached_build_rows 결과)
-        rows_for_upside = []
+        from src.daily_tracking import (
+            build_core_tracker_cards, build_alpha_candidates_strict,
+            build_parking_cards,
+        )
+        # rows: module-level global (cached_build_rows 결과)
+        rows_for_alpha = []
         try:
-            rows_for_upside = rows or []  # noqa: F824 — module global
+            rows_for_alpha = rows or []  # noqa: F824
         except NameError:
-            rows_for_upside = []
+            rows_for_alpha = []
 
+        # tracker_data fetch
+        tracker_data = {}
+        try:
+            tracker_data = _bounded_call(
+                cached_daily_trackers, token, timeout=45) or {}
+        except Exception as e:
+            log.warning("daily_trackers fetch 실패: %s", e)
+
+        # market_overheat 추출 (parking sweet spot 판정용)
+        overheat = None
+        try:
+            if regime is not None:
+                overheat_raw = _regime_row_get(regime, "market_overheat_score")
+                if overheat_raw is not None:
+                    overheat = float(overheat_raw)
+        except Exception:
+            overheat = None
+
+        # Layer A
         layer_a_items = build_portfolio_check(holdings, diag)
-        layer_b_items = build_upside_candidates(rows_for_upside, regime)
+
+        # Layer B — 3 sub
+        with db.db_session() as _conn_for_verdict:
+            core_cards = build_core_tracker_cards(tracker_data, conn=_conn_for_verdict)
+        alpha_candidates = build_alpha_candidates_strict(rows_for_alpha)
+        parking_cards = build_parking_cards(tracker_data, overheat)
+
+        # Layer C — STRICT alpha 만 funding pair 후보로 사용
         layer_c_items = build_rebalance_actions(
-            holdings, diag, layer_b_items, regime)
+            holdings, diag, alpha_candidates, regime)
 
         action_block = (
             render_layer_a_html(layer_a_items)
-            + render_layer_b_html(layer_b_items)
+            + render_layer_b_html(core_cards, alpha_candidates, parking_cards)
             + render_layer_c_html(layer_c_items)   # 비면 빈 문자열 → 섹션 생략
         )
     except Exception as e:
         log.warning("3-layer 내러티브 빌드 실패: %s — 기존 액션 목록으로 폴백", e)
-        # 폴백 — 옛 merged 목록 (소음 가능성 있어도 최소한 빈 화면 방지)
         action_block = (
             '<div style="font-size:13px; color:var(--muted); '
             'margin:16px 0 0; line-height:1.6;">오늘의 판단 데이터 수집 중. '

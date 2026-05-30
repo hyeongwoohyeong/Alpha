@@ -41,7 +41,9 @@ _LEVERAGE_DANGER_PCT = 50.0         # > 50% → 위험
 _PROFIT_TAKE_PCT = 30.0             # +30% 이상 → 익절 후보
 _LOSS_CUT_PCT = -15.0               # -15% 이하 → 손실 컷 후보
 
-# Upside discovery
+# Upside discovery — DEPRECATED for direct use
+# Layer B 는 이제 daily_tracking.build_alpha_candidates_strict (score≥80+DD≤-10%) 사용
+# 아래는 backward compat 용 (engine 다른 곳에서 호출하면 안전하게 작동)
 _UPSIDE_TAGS = {"Research Now", "Quality Dislocation"}
 _UPSIDE_MAX_ROWS = 5
 
@@ -282,17 +284,25 @@ def build_rebalance_actions(
             "basis": f"{ret:+.1f}% 손실 누적 — 추세 reversal 없으면 정리",
         })
 
-    # 4) Funding 페어 — 익절·손절 후보가 있고 upside 후보도 있으면 swap 제안
+    # 4) Funding 페어 — 익절·손절 후보가 있고 STRICT alpha (score≥80+DD≤-10%) 후보 있을 때만
     has_disposal = any(a["priority"] in {"high", "medium"} for a in actions)
     if has_disposal and upside:
+        # upside 인자가 list[dict] with 'score' key (build_alpha_candidates_strict 결과) 면
+        # score≥80 필터 통과한 것만 들어와있음 — 그대로 사용
+        # 백워드 호환: upside 에 score 없으면 (구버전 호출) 첫 항목 skip 안 함
         top_upside = upside[0]
-        dd = top_upside.get("drawdown")
-        dd_str = f"DD {dd * 100:+.1f}%" if dd is not None else ""
-        actions.append({
-            "priority": "low",
-            "action": f"매도 자금 → {top_upside['name']} ({top_upside['ticker']}) 분할 진입 검토",
-            "basis": f"{top_upside['tag']} · {dd_str}".strip(" ·"),
-        })
+        score = top_upside.get("score")
+        # score 가 있고 80 미달이면 funding pair 추천 안 함 (low conviction 추적 X)
+        if score is None or score >= 80.0:
+            dd = top_upside.get("drawdown")
+            dd_str = f"DD {dd * 100:+.1f}%" if dd is not None else ""
+            sc_str = f"score {score:.0f}" if score is not None else ""
+            bits = [b for b in [top_upside.get("tag", ""), sc_str, dd_str] if b]
+            actions.append({
+                "priority": "low",
+                "action": f"매도 자금 → {top_upside['name']} ({top_upside['ticker']}) 분할 진입 검토",
+                "basis": " · ".join(bits),
+            })
 
     # 5) 시장 국면 기반 베타 조절 — 사용자 투자 스타일 (전술적 성장)
     if regime is not None:
@@ -378,49 +388,180 @@ def render_layer_a_html(items: list[dict]) -> str:
     )
 
 
-def render_layer_b_html(upside: list[dict]) -> str:
-    """Layer B — 시장 저평가·upside HTML 블록."""
-    if not upside:
-        body = (
-            '<div style="font-size:13px; color:var(--muted); line-height:1.6;">'
-            '엔진 유니버스에 즉시 발굴된 저평가 후보 없음 — Watchlist/Wait '
-            '상태 종목들 모니터링 지속'
-            '</div>'
-        )
-    else:
-        rows = ""
-        for c in upside:
-            dd = c.get("drawdown")
-            dd_str = f"{dd * 100:+.1f}%" if dd is not None else "—"
-            sc = c.get("score")
-            sc_str = f"{sc:.0f}" if sc is not None else "—"
-            rows += (
-                '<div style="display:flex; justify-content:space-between; '
-                'gap:10px; padding:7px 0; border-top:1px solid var(--line);">'
-                '<div style="flex:1 1 auto; min-width:0;">'
-                '<div style="font-size:13.5px; color:var(--text); '
-                f'font-weight:600;">{c["name"]} '
-                '<span style="color:var(--muted); font-weight:400; '
-                f'font-size:12px;">{c["ticker"]}</span></div>'
-                '<div style="font-size:12px; color:var(--muted); '
-                f'margin-top:1px;">{c.get("theme", "")}</div>'
-                '</div>'
-                '<div style="flex:0 0 auto; text-align:right;">'
-                '<div style="font-size:11px; color:#3B82F6; '
-                f'font-weight:700;">{c["tag"]}</div>'
-                '<div style="font-size:11px; color:var(--muted); '
-                f'margin-top:2px;">DD {dd_str} · score {sc_str}</div>'
-                '</div>'
-                '</div>'
-            )
-        body = f'<div style="margin-top:2px;">{rows}</div>'
+def render_core_tracker_row(card: dict) -> str:
+    """Core tracker 한 줄 — 항상 노출."""
+    price = card.get("price")
+    dd = card.get("dd_pct")
+    dr = card.get("daily_pct")
+    color = card.get("color", "#94A3B8")
+    verdict = card.get("verdict", "—")
+    detail = card.get("detail", "")
+
+    def pct_html(v: float | None, kind: str = "default") -> str:
+        if v is None:
+            return '<span style="color:#64748B;">—</span>'
+        if kind == "daily":
+            cls = "color:#22C55E;" if v >= 0 else "color:#EF4444;"
+        else:
+            cls = "color:#EF4444;" if v < -5 else "color:#94A3B8;"
+        sign = "+" if v > 0 else ""
+        return f'<span style="{cls}">{sign}{v:.2f}%</span>'
+
+    price_str = ""
+    if price is not None:
+        if card.get("symbol") in ("BTC-USD",):
+            price_str = f"${price:,.0f}"
+        elif card.get("kind") == "index_kr":
+            price_str = f"₩{price:,.0f}"
+        else:
+            price_str = f"${price:,.2f}"
+
     return (
+        '<div style="display:flex; justify-content:space-between; gap:10px; '
+        'padding:8px 0; border-top:1px solid var(--line);">'
+        '<div style="flex:1 1 auto; min-width:0;">'
+        '<div style="font-size:13.5px; color:var(--text); font-weight:600;">'
+        f'{card["name"]} '
+        f'<span style="color:var(--muted); font-weight:400; font-size:11px;">{card["subtitle"]}</span>'
+        '</div>'
+        '<div style="font-size:11px; color:var(--muted); margin-top:1px;">'
+        f'{price_str}  ·  일일 {pct_html(dr, "daily")}  ·  DD {pct_html(dd)}'
+        '</div>'
+        '</div>'
+        '<div style="flex:0 0 auto; text-align:right;">'
+        f'<div style="font-size:12px; color:{color}; font-weight:700;">{verdict}</div>'
+        + (f'<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">{detail}</div>' if detail else '')
+        + '</div>'
+        '</div>'
+    )
+
+
+def render_alpha_candidate_row(c: dict) -> str:
+    """Alpha 후보 한 줄 — score≥80+DD≤-10% 통과한 것만."""
+    dd = c.get("drawdown")
+    dd_str = f"{dd * 100:+.1f}%" if dd is not None else "—"
+    sc = c.get("score")
+    sc_str = f"{sc:.0f}" if sc is not None else "—"
+    return (
+        '<div style="display:flex; justify-content:space-between; gap:10px; '
+        'padding:8px 0; border-top:1px solid var(--line);">'
+        '<div style="flex:1 1 auto; min-width:0;">'
+        '<div style="font-size:13.5px; color:var(--text); font-weight:600;">'
+        f'{c["name"]} '
+        f'<span style="color:var(--muted); font-weight:400; font-size:12px;">{c["ticker"]}</span>'
+        '</div>'
+        '<div style="font-size:12px; color:var(--muted); margin-top:1px;">'
+        f'{c.get("theme", "")} · {c.get("tag", "")}</div>'
+        '</div>'
+        '<div style="flex:0 0 auto; text-align:right;">'
+        '<div style="font-size:11px; color:#15803D; font-weight:700;">'
+        f'score {sc_str} 🔥</div>'
+        '<div style="font-size:11px; color:#EF4444; margin-top:2px;">'
+        f'DD {dd_str}</div>'
+        '</div>'
+        '</div>'
+    )
+
+
+def render_parking_row(p: dict) -> str:
+    """Parking 후보 한 줄."""
+    dd = p.get("dd_pct")
+    dd_str = f"{dd:+.1f}%" if dd is not None else "—"
+    color = p.get("color", "#94A3B8")
+    price = p.get("price")
+    price_str = f"${price:,.2f}" if price is not None else ""
+    return (
+        '<div style="display:flex; justify-content:space-between; gap:10px; '
+        'padding:8px 0; border-top:1px solid var(--line);">'
+        '<div style="flex:1 1 auto; min-width:0;">'
+        '<div style="font-size:13.5px; color:var(--text); font-weight:600;">'
+        f'{p["name"]} '
+        f'<span style="color:var(--muted); font-weight:400; font-size:12px;">{p["symbol"]}</span>'
+        '</div>'
+        '<div style="font-size:11px; color:var(--muted); margin-top:1px;">'
+        f'{p.get("sector", "")} · {price_str} · DD {dd_str}</div>'
+        '</div>'
+        '<div style="flex:0 0 auto; text-align:right;">'
+        f'<div style="font-size:11px; color:{color}; font-weight:700;">{p["verdict"]}</div>'
+        + (f'<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">{p.get("detail", "")}</div>'
+           if p.get("detail") else '')
+        + '</div>'
+        '</div>'
+    )
+
+
+def render_layer_b_html(
+    core_cards: list[dict],
+    alpha_candidates: list[dict],
+    parking_cards: list[dict],
+) -> str:
+    """Layer B — 3-sub 구조: Core Trackers / Alpha Conviction / Parking.
+
+    - Core: 항상 표시 (data 없어도 자리)
+    - Alpha: 임계 통과 없으면 "인내 모드" 명시 (소음 X, 정직)
+    - Parking: 후보 있을 때만 (없으면 sub 자체 생략)
+    """
+    out_parts = []
+
+    # ── 헤더 ───────────────────────────────────────
+    out_parts.append(
         '<div style="font-size:12px; color:var(--muted); '
         'margin:18px 0 4px; letter-spacing:.03em;">'
         '<span style="color:var(--text-mid); font-weight:700;">2.</span> '
-        '시장에서 저평가·upside 보이는 자산</div>'
-        + body
+        '시장에서 추적·발굴</div>'
     )
+
+    # ── 2-A) Core Daily Trackers ──────────────────
+    out_parts.append(
+        '<div style="font-size:11px; color:var(--muted); '
+        'margin:8px 0 0px; letter-spacing:.02em;">▸ Core Trackers (매일 추적)</div>'
+    )
+    if core_cards:
+        out_parts.append('<div style="margin-top:0;">')
+        for c in core_cards:
+            out_parts.append(render_core_tracker_row(c))
+        out_parts.append('</div>')
+    else:
+        out_parts.append(
+            '<div style="font-size:12px; color:var(--muted); padding:8px 0;">'
+            '데이터 수집 중'
+            '</div>'
+        )
+
+    # ── 2-B) High-Conviction Alpha ────────────────
+    out_parts.append(
+        '<div style="font-size:11px; color:var(--muted); '
+        'margin:14px 0 0px; letter-spacing:.02em;">'
+        '▸ 고확신 알파 <span style="font-size:10px;">(score ≥ 80 & DD ≤ -10%)</span></div>'
+    )
+    if alpha_candidates:
+        out_parts.append('<div style="margin-top:0;">')
+        for c in alpha_candidates:
+            out_parts.append(render_alpha_candidate_row(c))
+        out_parts.append('</div>')
+    else:
+        out_parts.append(
+            '<div style="font-size:12.5px; color:var(--muted); padding:8px 0; '
+            'border-top:1px solid var(--line); line-height:1.55;">'
+            '임계 80점 통과 종목 없음 — '
+            '<span style="color:#94A3B8;">인내 모드: 신호 강도 부족 시 진입 보류가 정답.</span>'
+            '</div>'
+        )
+
+    # ── 2-C) Parking Candidates ───────────────────
+    # 후보 있을 때만 sub 노출
+    if parking_cards:
+        out_parts.append(
+            '<div style="font-size:11px; color:var(--muted); '
+            'margin:14px 0 0px; letter-spacing:.02em;">'
+            '▸ 안전 파킹 후보 <span style="font-size:10px;">(MCD·COST·WMT 류 — 시장 과열·현금 비축 국면)</span></div>'
+        )
+        out_parts.append('<div style="margin-top:0;">')
+        for p in parking_cards:
+            out_parts.append(render_parking_row(p))
+        out_parts.append('</div>')
+
+    return ''.join(out_parts)
 
 
 def render_layer_c_html(actions: list[dict]) -> str:
