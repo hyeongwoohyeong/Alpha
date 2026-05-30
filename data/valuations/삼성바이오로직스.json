@@ -8,7 +8,7 @@
     "is_listed": true
   },
   "ic_memo": {
-    "investment_verdict": "부정 의견",
+    "investment_verdict": "중립 의견",
     "verdict_oneliner": "사업 quality 1티어 인정 — 글로벌 CDMO CAPA 1위 (2026E 964kL, Lonza 400 + WuXi 650 압도) + BIOSECURE Act 구조적 수혜. 하지만 현 valuation P/E 53.4x / EV-EBITDA 31.8x = peer (Lonza/WuXi/Catalent) 평균 대비 P/E +33% / EV-EBITDA +86% premium 으로 thesis 이미 다 가격에 반영. 추가로 가동률 75.4% (2024) → 70.9% (2025E) 하락은 CAPA 과잉 확장의 cycle peak 신호. **현 시점 신규 진입 부적절** — 5년 후에도 multiple compression 가능성 더 큼.",
     "investment_thesis": [
       "글로벌 바이오의약품 CDMO CAPA 1위 — 2026E 964kL (vs Lonza 400, WuXi 650, Fujifilm 300). Late-stage 대형 ASP 우위 + Plant 5 신설로 capacity moat 확장. 사업 자체는 1티어 quality compounder",
@@ -361,7 +361,7 @@
       "url": "https://dart.fss.or.kr/"
     }
   ],
-  "generated_at": "2026-05-30 16:00",
+  "generated_at": "2026-05-30 16:06",
   "income_statement": {
     "years": [
       2023,
@@ -1026,5 +1026,25 @@
       0.125
     ],
     "narrative": "**CAPEX intensity 27~30% 매우 무거움** — Plant 5 ('25 가동) + Plant 6 ('27 가동) 동시 진행 중. CDMO 산업 평균 (15~20%) 보다 +50% 높은 수준. Plant 5/6 가동 시 매출 +50% 까지 가능하지만 그 사이 D&A 가 EBITDA 압박 (감가상각 +30%). **가동률 75% 이하로 유지되면 CAPEX over-build 신호 — multiple compression 가속 가능**. 2028~2030 CAPEX intensity 16% 이하로 normalize 가정 — Plant 6 가동 후 추가 CAPA 확장 보류 시나리오."
+  },
+  "score_breakdown": {
+    "quality": {
+      "score": 18,
+      "rationale": "글로벌 CDMO CAPA 1위 (2026E 964kL) + EBITDA margin 45%+ + 진입장벽 매우 높음 — 사업 quality 1티어 명백. 사용자 첨부 데이터에서도 확인"
+    },
+    "valuation": {
+      "score": 5,
+      "rationale": "P/E 53.4x / EV-EBITDA 31.8x — peer 평균 (P/E 40.3, EV/EBITDA 17.1) 대비 +33% / +86% premium. 매우 비쌈. Mean reversion 만 일어나도 -30~50%"
+    },
+    "catalyst": {
+      "score": 8,
+      "rationale": "BIOSECURE Act / Plant 5 가동 / late-stage 확대 — 이미 시장이 알고 가격에 반영. Surprise factor 부족. 새 mRNA/CGT 진출 같은 surprise 와야 multiple expansion"
+    },
+    "risk_reward": {
+      "score": 6,
+      "rationale": "Bull IRR 12% vs Bear -15% — downside dominate. 가동률 하락 (75.4% → 70.9%) + CAPEX 27~30% 무거움 + multiple compression risk. risk/reward 비대칭 명백 부정"
+    },
+    "total": 37,
+    "band": "중립 (34~66)"
   }
 }

@@ -104,6 +104,7 @@ def render_ic_memo_html(data: dict[str, Any]) -> str:
     fin = data.get("financials", {}) or {}
     ret = data.get("returns", {}) or {}
     structure = data.get("investment_structure", {}) or {}
+    score_bd = data.get("score_breakdown", {}) or {}
 
     name_ko = company.get("name_ko") or company.get("ticker") or "—"
     ticker = company.get("ticker", "")
@@ -113,9 +114,9 @@ def render_ic_memo_html(data: dict[str, Any]) -> str:
 
     verdict = memo.get("investment_verdict", "—")
     verdict_color = (
-        "#22C55E" if "긍정" in verdict
+        "#22C55E" if "매수" in verdict or "긍정" in verdict
         else "#EF4444" if "부정" in verdict
-        else "#94A3B8"
+        else "#F59E0B"  # 중립 — amber
     )
     verdict_oneliner = memo.get("verdict_oneliner", "")
 
@@ -135,7 +136,10 @@ def render_ic_memo_html(data: dict[str, Any]) -> str:
         f'<div style="text-align:right;">'
         f'<div style="font-size:11px; color:var(--muted,#94A3B8);">투자 결론</div>'
         f'<div style="font-size:22px; font-weight:700; color:{verdict_color}; line-height:1;">{verdict}</div>'
-        '</div>'
+        + (f'<div style="font-size:13px; color:{verdict_color}; margin-top:4px; font-weight:600;">'
+           f'{score_bd.get("total")}점 / 100 <span style="color:var(--muted,#94A3B8); font-weight:400;">({score_bd.get("band", "")})</span></div>'
+           if score_bd.get("total") is not None else '')
+        + '</div>'
         '</div>'
     )
     if verdict_oneliner:
@@ -144,6 +148,10 @@ def render_ic_memo_html(data: dict[str, Any]) -> str:
             f'font-size:13px; color:var(--text,#F8FAFC); line-height:1.6;">{verdict_oneliner}</div>'
         )
     parts.append('</div>')
+
+    # 점수 분해 (있을 때만)
+    if score_bd.get("total") is not None:
+        parts.append(_render_score_breakdown(score_bd, verdict_color))
 
     # 투자 논지
     parts.append(_section_header("투자 논지"))
@@ -202,6 +210,42 @@ def render_ic_memo_html(data: dict[str, Any]) -> str:
     parts.append(_render_dd_section(dd))
 
     return "".join(parts)
+
+
+def _render_score_breakdown(sb: dict, color: str) -> str:
+    """4축 스코어 분해 — Quality/Valuation/Catalyst/Risk-Reward 각 25점."""
+    axes = [
+        ("quality", "Quality"),
+        ("valuation", "Valuation"),
+        ("catalyst", "Catalyst"),
+        ("risk_reward", "Risk / Reward"),
+    ]
+    rows = []
+    for key, label in axes:
+        a = sb.get(key) or {}
+        sc = a.get("score", 0) or 0
+        pct = (sc / 25.0) * 100
+        rat = a.get("rationale", "")
+        rows.append(
+            '<div style="display:flex; gap:12px; align-items:flex-start; '
+            'padding:9px 0; border-top:1px solid rgba(148,163,184,0.12);">'
+            f'<div style="flex:0 0 130px;">'
+            f'<div style="font-size:11px; color:var(--muted,#94A3B8); letter-spacing:.03em;">{label}</div>'
+            f'<div style="font-size:16px; color:var(--text,#F8FAFC); font-weight:700; margin-top:2px;">'
+            f'{sc}<span style="font-size:11px; color:var(--muted,#94A3B8); font-weight:400;"> / 25</span></div>'
+            f'<div style="margin-top:4px; background:rgba(148,163,184,0.10); height:5px; border-radius:3px; overflow:hidden;">'
+            f'<div style="width:{pct:.0f}%; height:100%; background:{color};"></div>'
+            '</div></div>'
+            f'<div style="flex:1; font-size:12.5px; color:var(--text,#F8FAFC); line-height:1.55; padding-top:2px;">{rat}</div>'
+            '</div>'
+        )
+    return (
+        '<div style="font-size:13px; color:var(--text,#F8FAFC); font-weight:700; '
+        'letter-spacing:.02em; margin:22px 0 4px; padding-bottom:4px; '
+        'border-bottom:1px solid rgba(148,163,184,0.15);">'
+        f'[스코어 분해 — 총 {sb.get("total")} / 100]</div>'
+        + "".join(rows)
+    )
 
 
 def _section_header(title: str) -> str:

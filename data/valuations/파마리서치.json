@@ -8,7 +8,7 @@
     "is_listed": true
   },
   "ic_memo": {
-    "investment_verdict": "긍정 의견",
+    "investment_verdict": "매수 의견",
     "verdict_oneliner": "리쥬란 = 한국 메디컬 에스테틱 brand power 1티어 + 의사 lock-in 반복 매출 구조 + EBITDA margin 45%+ 의 quality compounder. 사용자 첨부 PDF (JKL CB 구조) 의 긍정 의견 유지하되, 우리는 **공개시장 본주 분할매수** 로 reframe. 5년 IRR Base 17~22% / MOIC 2.0~2.8x 추정. 재고 회전 200일 / 중국 인허가 timing 이 critical pivot.",
     "investment_thesis": [
       "리쥬란은 스킨부스터 시장 내 압도적 브랜드 파워 + global structural shift candidate — 사용자 PDF 의 핵심 thesis 유지. 추가 관점: K-beauty 는 단순 cycle 이 아니라 글로벌 brand 형성 단계. Galderma/AbbVie Botox 대비 ASP 우위 (한국 시장 가격 약 1/3) + 의사 시술 결과 차별성 = global ASP 인상 여력",
@@ -366,7 +366,7 @@
       "url": null
     }
   ],
-  "generated_at": "2026-05-30 16:00",
+  "generated_at": "2026-05-30 16:06",
   "income_statement": {
     "years": [
       2023,
@@ -997,5 +997,25 @@
       0.0916
     ],
     "narrative": "CAPEX intensity 9~12% — 의료기기/제약 평균 (6~10%) 보다 약간 높음. 글로벌 인허가 대비 신규 제조 라인 + R&D 시설 투자 단계. 중국 NMPA 승인 시 추가 CAPA 확장 가능 — 인허가 timing 에 따라 growth CAPEX 가속 가능. 현재 CAPEX < OCF 로 self-funding 가능 — 외부 자본조달 없이 organic growth 지속 가능."
+  },
+  "score_breakdown": {
+    "quality": {
+      "score": 22,
+      "rationale": "EBITDA margin 45%+ / 의사 lock-in 반복 매출 / brand power / SaaS-like sticky business / essential luxury 카테고리 — 글로벌 의료미용 1티어 candidate"
+    },
+    "valuation": {
+      "score": 16,
+      "rationale": "PER 15-20x 추정 — 한국 의료미용 peer (PER 20-35x) 대비 할인, 코스닥 평균 대비 약간 premium. 적정 valuation band 내 위치"
+    },
+    "catalyst": {
+      "score": 17,
+      "rationale": "중국 NMPA 인허가 (2027~28), 일본 시장 진입, 남미 제도권 편입 — 3중 catalyst. 각자 매출 +10~30% 기여 가능"
+    },
+    "risk_reward": {
+      "score": 17,
+      "rationale": "Bull IRR 28% vs Bear 3% — upside dominate. 재무구조 안정 (부채비율 31%, 자본 7,239억) + 40% 마진으로 downside floor"
+    },
+    "total": 72,
+    "band": "매수 (67~100)"
   }
 }

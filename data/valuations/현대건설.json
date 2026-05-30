@@ -371,7 +371,7 @@
       "url": null
     }
   ],
-  "generated_at": "2026-05-30 16:00",
+  "generated_at": "2026-05-30 16:06",
   "income_statement": {
     "years": [
       2023,
@@ -1036,5 +1036,25 @@
       0.0138
     ],
     "narrative": "건설업 특성상 CAPEX intensity 매우 낮음 (매출의 1.2~1.5%) — asset-light 비즈니스. 원전 EPC 진출 시 인력·장비 투자 일부 증가 가능하나 중공업/제조업 대비 무거운 CAPEX 부담 없음. 이게 EPC 모델의 장점 — 매출 성장이 ROIC 빠르게 끌어올림. 다만 운전자본 (매출채권 + 미청구공사) 이 CAPEX 대체로 무거움 — 진행률법 인식 + 보증금 lock-up 으로 cash conversion lag 발생."
+  },
+  "score_breakdown": {
+    "quality": {
+      "score": 12,
+      "rationale": "OPM 평균 2% + 2024년 영업적자 -1.26조 = low quality. Asset-light 인 EPC 모델은 좋지만 매출 변동성 + cyclical 특성. Quality compounder 아님"
+    },
+    "valuation": {
+      "score": 8,
+      "rationale": "PER 45.8x — 건설업 peer (PER 8~12x) 대비 4배 premium. 이미 thesis 일부 반영. 사용자 PDF 목표가 30만원은 PER 90x 필요 = 비현실"
+    },
+    "catalyst": {
+      "score": 18,
+      "rationale": "다양한 mid-term: Palisades SMR 착공 (2026 상반기), Matador FEED (2026.04), 코즐로두이 본계약, 중동 재건 발주. 카탈리스트 다양성은 강점"
+    },
+    "risk_reward": {
+      "score": 12,
+      "rationale": "Bull IRR 22% vs Bear -5% — 비대칭이 그닥 매력적이지 않음. Option value 인정하되 fragile thesis (3축 동시 hit 가정). 재무 안정성 (net cash) 으로 절대 손실 risk 제한"
+    },
+    "total": 50,
+    "band": "중립 (34~66)"
   }
 }
