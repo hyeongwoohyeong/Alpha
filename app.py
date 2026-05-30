@@ -1706,17 +1706,34 @@ nav = st.session_state["nav_key"]
 
 token = get_refresh_token()
 load_error: str | None = None
+
+
+def _bounded_call(fn, *args, timeout: float = 90.0, **kwargs):
+    """fn 을 별 thread 에서 호출하고 timeout 안에 끝나지 않으면 TimeoutError.
+
+    Streamlit Cloud 에서 yfinance/Yahoo 가 hang 하면 앱이 영원히 spinner 만
+    돌아 깨어나지 않던 버그를 차단한다. 실패해도 앱은 빈 데이터로 렌더된다.
+    """
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _TO
+    with ThreadPoolExecutor(max_workers=1) as _pool:
+        _fut = _pool.submit(fn, *args, **kwargs)
+        return _fut.result(timeout=timeout)
+
+
 with st.spinner("데이터 준비 중..."):
     try:
-        rows = cached_build_rows(token, fetch_news=True)
-        proxies, market_summary = cached_market_context(token)
+        rows = _bounded_call(cached_build_rows, token, fetch_news=True, timeout=90)
     except Exception as e:
         rows = []
-        proxies, market_summary = {}, "금일 시장 데이터 수집에 실패했습니다."
-        load_error = str(e)
+        load_error = f"유니버스 수집 timeout/실패 — 빈 데이터로 렌더: {e}"
+    try:
+        proxies, market_summary = _bounded_call(cached_market_context, token, timeout=45)
+    except Exception as e:
+        proxies, market_summary = {}, "금일 시장 데이터 수집 실패 (timeout)."
+        load_error = (load_error + " | " if load_error else "") + str(e)
 
 if load_error:
-    st.error(f"데이터 로딩 실패: {load_error}")
+    st.warning(f"⚠ 데이터 수집 일부 실패 — 사용 가능한 부분만 표시. ({load_error})")
 
 
 def _maybe_snapshot():
