@@ -1643,7 +1643,6 @@ def render_tag(tag: str) -> str:
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
     ("regime", "Portfolio review"),
-    ("valuation", "Valuation"),
     ("validation", "Validation Lab"),
     ("journal", "Decision Journal"),
     ("discovery", "Discovery"),
@@ -8378,8 +8377,6 @@ if nav == "brief":
     render_today_brief()
 elif nav == "regime":
     render_portfolio_regime()
-elif nav == "valuation":
-    render_valuation()
 elif nav == "validation":
     render_validation_lab()
 elif nav == "journal":
