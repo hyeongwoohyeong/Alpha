@@ -3378,6 +3378,13 @@ def render_today_decision(regime: Any, crash: Any):
         layer_c_items = build_rebalance_actions(
             holdings, diag, alpha_candidates, regime)
 
+        # 동적 헤드라인 — 3-Layer 종합 (이전의 sol/plan 헤드라인 override)
+        from src.today_decision import synthesize_headline
+        synthesized = synthesize_headline(
+            layer_a_items, alpha_candidates, layer_c_items, core_cards)
+        if synthesized and synthesized != "데이터 수집 중":
+            headline = synthesized
+
         action_block = (
             render_layer_a_html(layer_a_items)
             + render_layer_b_html(core_cards, alpha_candidates, parking_cards)
@@ -4466,14 +4473,8 @@ def render_today_brief():
                         unsafe_allow_html=True,
                     )
 
-    # ════ BTC 전용 추적 카드 ═══════════════════════════════════════════
-    try:
-        from src.btc_tracker import build_btc_snapshot, render_btc_card_html
-        btc_snap = build_btc_snapshot(proxies)
-        st.markdown('<div class="section-title">비트코인 추적</div>', unsafe_allow_html=True)
-        st.markdown(render_btc_card_html(btc_snap), unsafe_allow_html=True)
-    except Exception as e:
-        log.warning("BTC card render 실패: %s", e)
+    # BTC 추적은 '오늘의 판단 → 시장에서 추적·발굴 → Core Trackers' 안에 통합됨
+    # (이전 별도 카드는 중복이라 제거)
 
     # 전날 글로벌 브리핑 — 어젯밤 글로벌 이벤트 리캡 (4 카테고리)
     briefing = brief.get("overnight_briefing") or []

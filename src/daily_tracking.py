@@ -22,14 +22,15 @@ log = get_logger("daily_tracking")
 # ---------------------------------------------------------------------------
 
 CORE_TRACKERS: list[dict[str, str]] = [
-    {"symbol": "TQQQ",     "name": "TQQQ",       "subtitle": "나스닥100 3X — 베타 공격형",  "kind": "leverage_us"},
-    {"symbol": "QQQ",      "name": "QQQ",        "subtitle": "나스닥100",                    "kind": "index_us"},
-    {"symbol": "SPY",      "name": "SPY",        "subtitle": "S&P500",                       "kind": "index_us"},
-    {"symbol": "SOXX",     "name": "SOXX",       "subtitle": "PHLX 반도체 — 사용자 핵심 섹터", "kind": "sector_us"},
-    {"symbol": "SMH",      "name": "SMH",        "subtitle": "반도체 Top-25",                "kind": "sector_us"},
-    {"symbol": "BTC-USD",  "name": "비트코인",    "subtitle": "BTC-USD",                      "kind": "crypto"},
-    {"symbol": "069500.KS","name": "KODEX 200",  "subtitle": "코스피 200",                   "kind": "index_kr"},
-    {"symbol": "000660.KS","name": "SK하이닉스",  "subtitle": "사용자 핵심 보유의 underlying",  "kind": "underlying_kr"},
+    # 베타 위계 순: 본주 → 1X → 2X → 3X → 섹터 → underlying → 크립토
+    {"symbol": "SPY",      "name": "SPY",        "subtitle": "S&P500",                          "kind": "index_us"},
+    {"symbol": "QQQ",      "name": "QQQ",        "subtitle": "나스닥100",                       "kind": "index_us"},
+    {"symbol": "QLD",      "name": "QLD",        "subtitle": "나스닥100 2X",                    "kind": "leverage_us"},
+    {"symbol": "TQQQ",     "name": "TQQQ",       "subtitle": "나스닥100 3X",                    "kind": "leverage_us"},
+    {"symbol": "SOXX",     "name": "SOXX",       "subtitle": "PHLX 반도체 — 사용자 핵심 섹터",  "kind": "sector_us"},
+    {"symbol": "SMH",      "name": "SMH",        "subtitle": "반도체 Top-25",                   "kind": "sector_us"},
+    {"symbol": "000660.KS","name": "SK하이닉스",  "subtitle": "사용자 핵심 보유의 underlying",   "kind": "underlying_kr"},
+    {"symbol": "BTC-USD",  "name": "비트코인",    "subtitle": "BTC-USD",                         "kind": "crypto"},
 ]
 
 PARKING_UNIVERSE: list[dict[str, str]] = [
@@ -115,8 +116,8 @@ def core_tracker_verdict(meta: dict, data: dict, conn=None) -> dict[str, Any]:
         except Exception:
             pass
 
-    # QQQ-family + SPY — use data ladder
-    if sym in ("QQQ", "TQQQ", "SPY") and conn is not None:
+    # QQQ-family (SPY/QQQ/QLD/TQQQ) + 반도체 ETF — QQQ 데이터 사다리 활용
+    if sym in ("SPY", "QQQ", "QLD", "TQQQ", "SOXX", "SMH") and conn is not None:
         try:
             from .market_cycle_analyzer import recommend_current_entry
             rec = recommend_current_entry(conn, base_asset="QQQ")
@@ -126,19 +127,12 @@ def core_tracker_verdict(meta: dict, data: dict, conn=None) -> dict[str, Any]:
             # TQQQ 의 경우 best_asset 이 TQQQ 면 강하게 highlight
             if sym == "TQQQ" and best == "TQQQ" and "진입 적기" in verdict:
                 return {"verdict": "TQQQ 진입 적기", "color": "#15803D", "detail": detail}
+            # QLD 의 경우 best_asset 이 QLD 또는 TQQQ 면 highlight
+            if sym == "QLD" and best in ("QLD", "TQQQ") and "진입" in verdict:
+                return {"verdict": "QLD 진입 적기", "color": "#15803D", "detail": detail}
             return {"verdict": verdict, "color": _verdict_color(verdict), "detail": detail}
         except Exception as e:
             log.debug("recommend_current_entry 실패 (%s): %s", sym, e)
-
-    # KODEX 200 — KR ladder
-    if sym == "069500.KS" and conn is not None:
-        try:
-            from .market_cycle_analyzer import recommend_current_entry
-            rec = recommend_current_entry(conn, base_asset="069500")
-            verdict = (rec.get("verdict") or "").strip() or "확인 필요"
-            return {"verdict": verdict, "color": _verdict_color(verdict), "detail": rec.get("current_bucket") or ""}
-        except Exception:
-            pass
 
     # Generic DD fallback
     if dd is None:

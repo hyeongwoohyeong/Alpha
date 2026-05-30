@@ -387,6 +387,89 @@ def build_rebalance_actions(
 # HTML 렌더링 헬퍼
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Headline synthesizer — Layer A + B + C 를 종합한 한 줄 결론
+# ---------------------------------------------------------------------------
+
+def synthesize_headline(
+    layer_a_items: list[dict],
+    alpha_candidates: list[dict],
+    layer_c_actions: list[dict],
+    core_cards: list[dict] | None = None,
+) -> str:
+    """3-Layer 결과를 종합해서 헤드라인 생성.
+
+    하드코딩된 "나스닥 고점권" 류 제거. 데이터 기반 합성:
+    - Layer A 의 가장 critical 한 risk (warn)
+    - Layer B 의 알파 후보 유무
+    - Layer C 의 액션 유무
+    - Core 트래커의 verdict (TQQQ 진입 적기 등 강한 신호)
+
+    Returns: 한 줄 헤드라인 (max ~60자)
+    """
+    bits: list[str] = []
+
+    # 1) Layer A — warn severity 가 있으면 최우선 (포트폴리오 risk)
+    warns = [it for it in (layer_a_items or []) if it.get("severity") == "warn"]
+    if warns:
+        # 반도체 집중이 있으면 그게 가장 본질적
+        semi_item = next((it for it in warns if "반도체" in it.get("label", "")), None)
+        top_item = next((it for it in warns if "단일 종목" in it.get("label", "")), None)
+        if semi_item:
+            # "반도체 69%" 식 압축
+            detail = semi_item["detail"]
+            # 첫 % 추출
+            import re
+            m = re.search(r"(\d+%)", detail)
+            pct = m.group(1) if m else ""
+            bits.append(f"반도체 {pct} 베팅 유지" if pct else "반도체 집중 베팅")
+        elif top_item:
+            bits.append("단일 종목 집중")
+
+    # 2) Layer B — Core 트래커 강한 매수 신호 + alpha 후보
+    strong_buy_core = None
+    if core_cards:
+        for c in core_cards:
+            v = c.get("verdict", "")
+            if "진입 적기" in v or "공격 진입" in v:
+                strong_buy_core = c
+                break
+    if strong_buy_core:
+        v = strong_buy_core['verdict']
+        n = strong_buy_core['name']
+        # verdict 에 이미 name 들어있으면 verdict 만 (중복 제거)
+        bits.append(v if n in v else f"{n} {v}")
+    elif alpha_candidates:
+        bits.append(f"고확신 알파 {len(alpha_candidates)}건")
+
+    # 3) Layer C — 액션 합성 (가장 중요한 1건)
+    high_actions = [a for a in (layer_c_actions or []) if a.get("priority") == "high"]
+    if high_actions:
+        # 액션 자체를 짧게 — '<주체> <동사>' 형태로 압축
+        act = high_actions[0].get("action", "")
+        # 'KODEX SK하이닉스레버리지 비중 축소 검토' → '하이닉스 비중 축소'
+        short = act
+        if "비중 축소" in act:
+            short = "비중 축소 검토"
+        elif "익절" in act or "수익실현" in act:
+            short = "단계 익절 검토"
+        elif "손절" in act or "비중 정리" in act:
+            short = "손실 정리 검토"
+        elif "분할 진입" in act:
+            short = "분할 진입 검토"
+        bits.append(short)
+    elif not layer_c_actions:
+        # 액션 0건 = 구조 유지
+        if alpha_candidates:
+            bits.append("진입 타이밍 점검")
+        else:
+            bits.append("인내 모드 — 구조 유지")
+
+    if not bits:
+        return "데이터 수집 중"
+    return " · ".join(bits)
+
+
 _SEVERITY_COLOR = {
     "warn": "#EF4444",
     "info": "#3B82F6",
