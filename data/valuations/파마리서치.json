@@ -1,0 +1,1001 @@
+{
+  "company": {
+    "name_ko": "파마리서치",
+    "name_en": "PharmaResearch Co., Ltd.",
+    "ticker": "214450.KQ",
+    "industry": "메디컬 에스테틱 / 바이오 (스킨부스터 리쥬란)",
+    "market_cap_krw": 2500000000000,
+    "is_listed": true
+  },
+  "ic_memo": {
+    "investment_verdict": "긍정 의견",
+    "verdict_oneliner": "리쥬란 = 한국 메디컬 에스테틱 brand power 1티어 + 의사 lock-in 반복 매출 구조 + EBITDA margin 45%+ 의 quality compounder. 사용자 첨부 PDF (JKL CB 구조) 의 긍정 의견 유지하되, 우리는 **공개시장 본주 분할매수** 로 reframe. 5년 IRR Base 17~22% / MOIC 2.0~2.8x 추정. 재고 회전 200일 / 중국 인허가 timing 이 critical pivot.",
+    "investment_thesis": [
+      "리쥬란은 스킨부스터 시장 내 압도적 브랜드 파워 + global structural shift candidate — 사용자 PDF 의 핵심 thesis 유지. 추가 관점: K-beauty 는 단순 cycle 이 아니라 글로벌 brand 형성 단계. Galderma/AbbVie Botox 대비 ASP 우위 (한국 시장 가격 약 1/3) + 의사 시술 결과 차별성 = global ASP 인상 여력",
+      "의사 lock-in 반복 매출 = SaaS 같은 sticky business — 의사 수익구조에서 객단가 + 재방문율 동시 기여하는 제품은 희소. 시술 횟수 × 투여량(cc) × 객단가 3축 driver 가 동시에 작동. Galderma/Restylane 의 fillers 비즈니스 모델과 유사한 compounder profile",
+      "메디컬 에스테틱 = essential luxury 카테고리 — 경제 둔화 resilient. Botox 매출 데이터 (2008/2020 위기 시 -5~-10% 만 빠짐) 가 증명한 'discretionary 보이지만 sticky' 카테고리. 의료미용 시술은 한 번 시작하면 yearly 반복 → 매출 base 형성 강함",
+      "Worst Case 하방 안정성 — 사용자 PDF 의 CB 상환 구조 thesis 는 PE 관점이지만, 공개시장에서도 동일 logic: 재무구조 (부채비율 31%, 현금 보유 충분) + 40%+ EBITDA margin = downside 가 제한적. 본주 분할매수도 -20~-30% drawdown 시 추가 매수 floor 확보"
+    ],
+    "investment_points": [
+      "의사 네트워크 기반 반복 수요: 시술 횟수 증가 + 1회 투여량(cc) 증가 + 객단가 상승 = 3축 driver 동시. 사용자 PDF 의 핵심 매출 driver 그대로",
+      "글로벌 인허가 확장이 quantum leap trigger: 중국 인허가 ('27~'28 예상) → 매출 +30~50% 추정. 일본 ('26 진입), 남미 (그레이마켓 → 제도권) 추가 upside. 인허가 자체가 명확한 catalyst 이벤트",
+      "K-beauty global structural shift: Galderma/AbbVie Botox/Restylane 대비 ASP 30~50% 우위 + 시술 결과 차별성 → 글로벌 시장에서 'premium 한국 brand' 포지셔닝. 단순 K-beauty 화장품 아닌 메디컬 에스테틱 카테고리에서 1티어",
+      "EBITDA margin 40~46% — 글로벌 의료미용 peer (Allergan/AbbVie 정형외과·미용 부문 35~40%) 보다 우위. 한국 제조원가 + brand premium 이 동시 작동. 매출 3배 (261억→1092억, 2023→2030) 가정도 margin sustain 시나리오 합리",
+      "재무 안정성: 자산 1.04조 + 부채 0.32조 (부채비율 31%) + OCF 1,832억 (2025) — 자본조달 부담 없이 organic growth 가능. 사용자 PDF 의 CB 상환 시나리오 가능성 = 재무 quality 입증"
+    ],
+    "risks_and_mitigants": [
+      {
+        "risk": "ECM (Extracellular Matrix) 등 신성분 출시에 따른 SoW 감소 — 사용자 PDF 의 핵심 risk. 추가 관점: 신성분은 매년 출시되는 카테고리라 brand 우위 sustain 가능성도 있지만 monitor 필수",
+        "mitigant": "ECM 과 리쥬란은 효과가 상이한 보완재로 영향 단기적 추정. 단 매분기 의사 시술 mix 변화 monitor — 의사 인터뷰 / 시술 매출 data 추적. ECM 채택률이 리쥬란 매출 점유 잠식하면 thesis 재검토"
+      },
+      {
+        "risk": "특허권 침해 소송 risk — First Mover 라 reverse 소송도 가능 (경쟁사가 리쥬란 특허 무효 시도). 한국·중국·일본 각각 다른 특허 시스템",
+        "mitigant": "First Mover + 주요 성분 특허 출원자 — 한국 기준 우위. 다만 중국 진입 후엔 현지 제네릭/카피 risk 추가. 인허가와 동시에 IP 방어 전략 확인 필요"
+      },
+      {
+        "risk": "규제산업 risk — 중국 NMPA, 남미 ANVISA/COFEPRIS 등 인허가 지연 가능. 사용자 PDF 가 '제도권 편입 긍정 신호' 라고 했지만 timing 미정",
+        "mitigant": "중국 인허가는 진행 중 — 사용자 PDF 시점 ('26.05) 기준 1~2년 timing 가능성. 발표 catalyst (NMPA 승인 공시) 기준 분할 매수. 인허가 지연 시 thesis 약화 — 모니터링 필수"
+      },
+      {
+        "risk": "재고자산 회전기일 약 200일 — 사용자 PDF 가 강조한 critical issue. 인증 확보 대기 물량 (정상) vs Slow-moving (재고손상 risk)",
+        "mitigant": "분기별 재고 회전 추세 + 손상 평가 충당금 추세 monitor. 200일 → 250일+ 로 늘어나거나 손상 충당금 증가하면 thesis 재검토. 현재는 글로벌 인허가 대기 물량 추정 = 정상"
+      },
+      {
+        "risk": "Valuation Stretch risk — 현재 PER 추정 15~20x (2025 EPS 기준). K-beauty / 의료미용 peer (PER 20~35x) 대비 할인이지만 한국 우량 코스닥주 평균 (PER 12~15x) 대비 premium. 매출 성장 둔화 시 multiple compression",
+        "mitigant": "분기별 매출 성장률 + ASP 추세 점검. YoY 매출 성장 +15% 이하로 감속 시 정찰. Exit multiple 11x EBITDA (2025 시장 multiple) 보수적 가정"
+      },
+      {
+        "risk": "환율 위험 — 수출 비중 확대 시 KRW 강세 시 매출 감소. 중국·일본·남미 통화 변동성 (특히 남미 정치 risk 가 통화 충격으로 전이)",
+        "mitigant": "수출 비중 (현재 추정 30~40%) 모니터링 + 통화 hedge 정책 확인. 남미 매출은 USD 결제 우선 + 환위험 분산"
+      },
+      {
+        "risk": "사용자 portfolio 의 sector concentration — KoAct 바이오헬스케어액티브 ETF 통해 이미 간접 노출. 직접 종목 추가 시 헬스케어 sector 비중 과다 가능성",
+        "mitigant": "현재 KoAct 보유 액 (₩? — 사용자 portfolio.json 확인 필요) 와 합산 후 sector 비중 < 15% 유지. 직접 노출 시 KoAct 일부 축소 옵션 검토"
+      }
+    ],
+    "financials_narrative": "40%+ EBITDA Margin 의 quality compounder 프로필 — 매출 2배 (261→536억, 2023→2025) + EBITDA 2.2배 (104→230억) 동시 달성. 2026F 이후 매출 CAGR 12~18% + margin sustain 가정. 자산 1.04조 + 부채 0.32조 (부채비율 31%) 안정적 BS. 사용자 PDF 의 가정을 그대로 채택 — 모델 검증 통과.",
+    "returns_narrative": "사용자 PDF: 12x Exit Bull 26%/3.2x, Base 17%/2.2x, 상환 3%/1.2x — PE/CB 구조. 우리 공개시장 관점: 본주 분할매수 기준 5년 IRR Base 17~22% / MOIC 2.0~2.8x 추정. CB 보다 leverage 높지만 분할 매수 + 분할 익절 룰로 risk 관리. Bull 시나리오 (중국 인허가 + 일본 진입 동시 hit) 시 IRR 28%+ 가능.",
+    "additional_dd": {
+      "commercial": [
+        "리쥬란이 병의원 기준 객단가 + 환자 재방문율 개선 기여도 — 의사 인터뷰 또는 시술 매출 data 추적",
+        "ECM 등 신성분 출시 후 SoW 변화 (분기별 의사 시술 mix)",
+        "중국 NMPA 인허가 timing — 진행 단계 (서류 제출 / 임상 / 승인) 공시 확인",
+        "일본 시장 진입 전략 — 의사 학회 / KOL marketing 전개도",
+        "남미 그레이마켓 vs 제도권 비중 — 인허가 후 ASP 인상 여력"
+      ],
+      "financial": [
+        "재고자산 회전기일 200일의 구체적 분해 — 인증 대기 물량 vs Slow-moving 비중. 재고 손상 평가 충당금 추세",
+        "수출 비중 추세 + 통화별 분포 (USD/CNY/JPY)",
+        "OCF/CAPEX/FCF 추세 — 현금 누적 vs 배당 정책 vs M&A 자금 활용",
+        "특허권 / 라이센스 자산 가치 재평가 — 비공개 IP 자산 valuation",
+        "관계회사 (자회사 포함) 재무 분리 — 연결 vs 별도 영업이익 gap"
+      ],
+      "legal": [
+        "주요 성분 (PN, PDRN) 특허 만료 시점 — 한국/중국/일본 각각",
+        "중국 NMPA 인허가 진행 단계 공시 확인",
+        "남미 ANVISA/COFEPRIS 인허가 path",
+        "의사 처방·시술 관련 의료법 / 의료기기법 분류"
+      ],
+      "tax": [
+        "수출 비중 확대 시 transfer pricing 구조 (한국 본사 vs 해외 자회사 이익 배분)",
+        "특허 라이센스 수입 R&D 세액공제 활용도",
+        "코스닥 우선주 배당 정책 (있는 경우)"
+      ],
+      "market": [
+        "Allergan/AbbVie Botox·Restylane 매출 trend 와 상관관계 — global 의료미용 cycle 검증",
+        "K-beauty 글로벌 brand index — Aritaum/Innisfree 등 광범위 카테고리 vs 메디컬 에스테틱 차별성",
+        "Exit multiple 11x EBITDA 의 peer 검증 — Galderma (IPO 24x), Restylane (parent AbbVie blended 12x), 동성제약/휴메딕스 (~15-20x)",
+        "QLD 대비 자본효율 — 현 PER 15-20x 가정 + 매출 CAGR 12-18% → 위험조정 수익 면에서 QLD (PER 25-30x, 위험 좀 더 높음) 와 비교 어떻게?"
+      ]
+    }
+  },
+  "financials": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "revenue": [
+      261011,
+      350115,
+      536289,
+      635777,
+      717775,
+      807783,
+      927710,
+      1092428
+    ],
+    "revenue_growth": [
+      null,
+      0.341,
+      0.532,
+      0.185,
+      0.129,
+      0.125,
+      0.149,
+      0.178
+    ],
+    "ebitda": [
+      104253,
+      139696,
+      230211,
+      285783,
+      324415,
+      362987,
+      420510,
+      502638
+    ],
+    "ebitda_margin": [
+      0.399,
+      0.399,
+      0.429,
+      0.45,
+      0.452,
+      0.449,
+      0.453,
+      0.46
+    ],
+    "ebitda_growth": [
+      null,
+      0.34,
+      0.648,
+      0.241,
+      0.135,
+      0.119,
+      0.158,
+      0.195
+    ],
+    "net_income": [
+      80239,
+      88943,
+      168255,
+      205768,
+      229897,
+      254435,
+      297371,
+      359663
+    ],
+    "assets": [
+      535281,
+      855701,
+      1043888,
+      1385831,
+      1603757,
+      1841342,
+      2114078,
+      2448917
+    ],
+    "liabilities": [
+      73087,
+      286260,
+      320010,
+      475184,
+      484440,
+      491081,
+      493902,
+      502285
+    ],
+    "debt_ratio": [
+      0.137,
+      0.335,
+      0.307,
+      0.343,
+      0.302,
+      0.267,
+      0.234,
+      0.205
+    ],
+    "equity": [
+      462195,
+      569441,
+      723878,
+      910647,
+      1119318,
+      1350261,
+      1620176,
+      1946632
+    ],
+    "ocf": [
+      64945,
+      138122,
+      183162,
+      178143,
+      280037,
+      235792,
+      339216,
+      321928
+    ]
+  },
+  "scenarios": {
+    "bull": {
+      "revenue_cagr": 0.18,
+      "ebitda_margin_terminal": 0.48,
+      "exit_ebitda": 550000,
+      "exit_multiple": 14.0,
+      "irr": 0.28,
+      "moic": 3.1,
+      "narrative": "중국 NMPA 인허가 ('27 승인) + 일본 본격 진입 + 남미 제도권 편입 동시 hit. ASP +20% 동시 매출 quantum leap. EBITDA margin 48% 도달. Exit 시 K-beauty global premium 14x multiple"
+    },
+    "base": {
+      "revenue_cagr": 0.13,
+      "ebitda_margin_terminal": 0.46,
+      "exit_ebitda": 450000,
+      "exit_multiple": 11.0,
+      "irr": 0.17,
+      "moic": 2.2,
+      "narrative": "국내 매출 안정 성장 + 중국 인허가는 '28 이후 + 일본 점진 — 사용자 PDF Base case 와 동일. EBITDA margin 46%, peer 평균 11x exit"
+    },
+    "bear": {
+      "revenue_cagr": 0.06,
+      "ebitda_margin_terminal": 0.4,
+      "exit_ebitda": 280000,
+      "exit_multiple": 8.0,
+      "irr": 0.03,
+      "moic": 1.2,
+      "narrative": "ECM 신성분 SoW 잠식 + 중국 인허가 지연 + 재고 200일 → 250일+ 악화 시. EBITDA margin 40% 정체, multiple compression. 사용자 PDF '상환' case 와 유사"
+    }
+  },
+  "returns": {
+    "irr_table": {
+      "multiples": [
+        14.0,
+        11.0,
+        8.0
+      ],
+      "bull": [
+        0.28,
+        0.23,
+        0.16
+      ],
+      "base": [
+        0.22,
+        0.17,
+        0.11
+      ],
+      "workout": [
+        0.1,
+        0.06,
+        0.0
+      ]
+    },
+    "moic_table": {
+      "multiples": [
+        14.0,
+        11.0,
+        8.0
+      ],
+      "bull": [
+        3.1,
+        2.6,
+        1.9
+      ],
+      "base": [
+        2.6,
+        2.2,
+        1.6
+      ],
+      "workout": [
+        1.5,
+        1.3,
+        1.0
+      ]
+    }
+  },
+  "investment_structure": {
+    "instrument": "Public Market (상장주 분할매수)",
+    "investment_krw_mm": 8000,
+    "holding_period_years": 5,
+    "ytm": null,
+    "coupon": null,
+    "narrative": "사용자 첨부 IC Memo 는 CB 구조 (5년 만기, YTM 5%, Coupon 1%) — PE/면접 과제용. 공개시장 투자에서는 **본주 분할매수 + 분할 익절** 가 더 적합. 1차 진입: ₩8M (자산 ~5%) — 현 valuation 적정. 2차: 중국 NMPA 임상 / 승인 신청 공시 → ₩15M 까지 증액. 3차: NMPA 승인 공시 → ₩25M 까지 (단 PER 30x 이상 도달 시 분할 매수 중단). 익절 룰: +30% 도달 시 1/3 익절, +50% 시 또 1/3, +80% 시 잔여 1/3. 사용자 quant 표준 적용."
+  },
+  "judgment": {
+    "good_company": "예 — 40%+ EBITDA margin / 의사 lock-in / brand power / SaaS 같은 sticky business / 메디컬 에스테틱 essential luxury 카테고리. Quality compounder profile 확실. 단 인허가 risk 와 신성분 SoW risk 모니터링 필수.",
+    "good_investment_now": "현 시점 적정 — PER 추정 15~20x (2025 EPS 기준) 는 한국 의료미용 peer (PER 20~35x) 대비 할인. 단 valuation premium 정당화는 매출 CAGR 12%+ + margin 45%+ sustain 가정. 인허가 catalyst 가 multiple expansion trigger 가 될 수 있음.",
+    "qld_alternative": "QLD (PER 25~30x, 위험조정 수익 우위) 와 비교 시 — 위험조정 수익은 비슷. QLD = 나스닥 베타, 파마리서치 = 한국 의료미용 idiosyncratic alpha. **포트폴리오 diversification 관점에서 동시 보유 가능**. 자본효율은 시나리오 변동성 큼 (Bull 28% vs Bear 3%)",
+    "irr_moic_sufficient": "Base case IRR 17% / MOIC 2.2x — 시장지수 (QQQ 10~12%) 대비 +5~7%p 우위. Bull case IRR 28% / 3.1x 는 매력적. Bear case IRR 3% / 1.2x — 명시적 손실은 적지만 기회비용 큼.",
+    "worst_case_loss": "Worst case 원금 손실 가능성 제한적 — 자산 1.04조 + 부채 0.32조 + 40%+ EBITDA margin = financial distress risk 매우 낮음. 단 multiple compression (현재 PER 15-20x → 8-10x) 시 -30~40% drawdown 가능. CB 상환 가치 (사용자 PDF 1.2x) = 본주에서도 비슷한 floor 형성",
+    "earnings_visible": "실적이 이미 찍히는 quality compounder — 매출 2배 성장 (2023→2025) + EBITDA 2.2배 동시 달성. 이벤트 선취매가 아니라 'sustain + 추가 catalyst' 구조. 인허가 catalyst (중국 NMPA) 는 보너스. 하이닉스 와 같은 카테고리 (실적 기반 momentum)",
+    "valuation_band": "적정 - 약간 비쌈 — 현 PER 15-20x 는 한국 의료미용 peer 대비 할인이지만 코스닥 평균 대비 premium. 매출 CAGR 12-18% 사실대로 sustain 시 PER 20-25x 까지 expansion 가능. 다만 multiple expansion 자체에 베팅하는 건 위험",
+    "catalyst_quality": "다양한 catalyst 보유: 중국 NMPA 승인 (timing 미정, '27-28 추정), 일본 진입 본격화, 남미 제도권 편입. 각 catalyst 가 매출 +10~30% 기여 가능. catalyst 가 실제 매출 / 이익으로 전환되는 시점 lag 6~12개월.",
+    "instrument_recommendation": "본주 분할매수 추천 — 코스닥 상장사라 공개시장 instrument 유일한 선택. CB 는 비상장기업 도구라 부적합. 분할 매수 + 분할 익절 룰로 risk 관리 가능.",
+    "next_action": "1) 1차 watch position ₩8M (자산 ~5%) 즉시 진입 가능 — 현 valuation 적정. 2) 사용자 portfolio.json 의 KoAct 바이오헬스케어 ETF 보유액 확인 후 sector concentration 점검 — 합산 헬스케어 < 15% 유지. 3) 중국 NMPA 진행 공시 / 분기별 매출 성장률 / 재고 회전기일 추세 monitoring. 4) 익절 룰: +30%/+50%/+80% 단계별 1/3 매도. 손절 trigger: 평균 단가 -20% 또는 thesis 훼손 (재고 회전 250일+ 또는 ECM SoW 잠식 명확화)"
+  },
+  "assumptions": [
+    {
+      "label": "Revenue CAGR (2026-2030, Base)",
+      "value": "+13.5%",
+      "note": "사용자 PDF 가정 그대로 — 국내 안정 + 글로벌 점진"
+    },
+    {
+      "label": "Terminal EBITDA Margin (Base)",
+      "value": "46.0%",
+      "note": "사용자 PDF 가정 — scale 효과 + brand premium 동시"
+    },
+    {
+      "label": "중국 NMPA 승인 timing",
+      "value": "2027~2028 추정",
+      "note": "공식 발표 X — 진행 중. 시기에 따라 Bull/Base 시나리오 분기"
+    },
+    {
+      "label": "Exit Multiple (EV/EBITDA, Base)",
+      "value": "11x",
+      "note": "사용자 PDF 시장 multiple 그대로. Bull 14x (K-beauty global premium), Bear 8x (compression)"
+    },
+    {
+      "label": "현 주가 / 시가총액 추정",
+      "value": "₩2.5조 추정",
+      "note": "2025 EPS × PER 15 = ₩2.5조. 실제 주가는 공시 확인 필요 (외부 검증)"
+    },
+    {
+      "label": "투자기간",
+      "value": "5년",
+      "note": "사용자 PDF 동일. 중국 인허가 + 글로벌 확장 cycle 감안"
+    },
+    {
+      "label": "할인율 / 요구수익률",
+      "value": "10%",
+      "note": "코스닥 우량 의료미용 베타 1.0 가정, 무위험 4% + 시장 premium 6%"
+    }
+  ],
+  "sources": [
+    {
+      "title": "사용자 첨부 — IC Memo (JKL Investment 면접 과제, 2026)",
+      "url": null
+    },
+    {
+      "title": "사용자 첨부 — Excel Model (Pro-forma + Assumptions + IRR 등 37 시트)",
+      "url": null
+    },
+    {
+      "title": "파마리서치 DART 사업보고서 (외부 검증 필요)",
+      "url": "https://dart.fss.or.kr/"
+    },
+    {
+      "title": "Galderma / AbbVie (Allergan) IR — 글로벌 의료미용 cycle 검증",
+      "url": null
+    },
+    {
+      "title": "IEA / 의료기기 시장 보고서 (K-beauty global trend)",
+      "url": null
+    }
+  ],
+  "generated_at": "2026-05-30 16:00",
+  "income_statement": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "revenue": [
+      261011,
+      350115,
+      536289,
+      635777,
+      717775,
+      807783,
+      927710,
+      1092428
+    ],
+    "cogs": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "gross_profit": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "gross_margin": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "sga": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "operating_income": [
+      88000,
+      118000,
+      198000,
+      248000,
+      282000,
+      314000,
+      365000,
+      437000
+    ],
+    "operating_margin": [
+      0.337,
+      0.337,
+      0.369,
+      0.39,
+      0.393,
+      0.389,
+      0.394,
+      0.4
+    ],
+    "ebitda": [
+      104253,
+      139696,
+      230211,
+      285783,
+      324415,
+      362987,
+      420510,
+      502638
+    ],
+    "ebitda_margin": [
+      0.399,
+      0.399,
+      0.429,
+      0.45,
+      0.452,
+      0.449,
+      0.453,
+      0.46
+    ],
+    "interest_income": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "interest_expense": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "pretax_income": [
+      null,
+      null,
+      217000,
+      265000,
+      297000,
+      329000,
+      384000,
+      464000
+    ],
+    "tax": [
+      null,
+      null,
+      49000,
+      59000,
+      67000,
+      75000,
+      87000,
+      105000
+    ],
+    "tax_rate": [
+      null,
+      null,
+      0.226,
+      0.223,
+      0.226,
+      0.228,
+      0.227,
+      0.226
+    ],
+    "net_income": [
+      80239,
+      88943,
+      168255,
+      205768,
+      229897,
+      254435,
+      297371,
+      359663
+    ],
+    "eps": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "balance_sheet": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "cash": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "accounts_receivable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "inventory": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "contract_assets": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "other_current_assets": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "ppe_net": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "intangibles": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "other_non_current_assets": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "total_assets": [
+      535281,
+      855701,
+      1043888,
+      1385831,
+      1603757,
+      1841342,
+      2114078,
+      2448917
+    ],
+    "accounts_payable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "short_term_debt": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "current_portion_lt_debt": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "other_current_liabilities": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "long_term_debt": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "other_non_current_liabilities": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "total_liabilities": [
+      73087,
+      286260,
+      320010,
+      475184,
+      484440,
+      491081,
+      493902,
+      502285
+    ],
+    "common_stock": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "retained_earnings": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "total_equity": [
+      462195,
+      569441,
+      723878,
+      910647,
+      1119318,
+      1350261,
+      1620176,
+      1946632
+    ],
+    "net_debt": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "debt_to_equity": [
+      0.158,
+      0.503,
+      0.442,
+      0.522,
+      0.433,
+      0.364,
+      0.305,
+      0.258
+    ]
+  },
+  "cash_flow_statement": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "net_income": [
+      80239,
+      88943,
+      168255,
+      205768,
+      229897,
+      254435,
+      297371,
+      359663
+    ],
+    "depreciation_amortization": [
+      16000,
+      21000,
+      32000,
+      38000,
+      42000,
+      48000,
+      55000,
+      65000
+    ],
+    "working_capital_change": [
+      -50000,
+      14000,
+      -42000,
+      -65000,
+      7000,
+      -68000,
+      4000,
+      -40000
+    ],
+    "other_operating": [
+      18706,
+      14179,
+      24907,
+      -664,
+      1140,
+      1357,
+      -17155,
+      -62735
+    ],
+    "ocf": [
+      64945,
+      138122,
+      183162,
+      178143,
+      280037,
+      235792,
+      339216,
+      321928
+    ],
+    "capex": [
+      -15000,
+      -38000,
+      -55000,
+      -75000,
+      -85000,
+      -85000,
+      -90000,
+      -100000
+    ],
+    "acquisitions": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "icf": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "debt_issuance": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "debt_repayment": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "dividends_buyback": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "fcf": [
+      49945,
+      100122,
+      128162,
+      103143,
+      195037,
+      150792,
+      249216,
+      221928
+    ],
+    "ending_cash": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "debt_schedule": {
+    "as_of": "2025-12-31",
+    "total_debt_krw_mm": null,
+    "weighted_avg_cost": null,
+    "maturity_profile": null,
+    "tranches": [],
+    "narrative": "사용자 첨부 IC Memo 의 CB 구조 (5년 만기, YTM 5%, Coupon 1%) 는 JKL Investment 면접 가정. 실제 파마리서치 차입금 상세는 DART 사업보고서에서 추가 확인 필요 (현재 사용자 첨부 자료엔 미포함). 재무구조: 부채비율 31% (2025) — 안정적. EBITDA margin 43% × 매출 5,363억 = 약 2,300억 영업현금 창출력으로 자본조달 부담 없음."
+  },
+  "capex_schedule": {
+    "years": [
+      2023,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      2029,
+      2030
+    ],
+    "a_years_count": 3,
+    "maintenance_capex": [
+      8000,
+      15000,
+      18000,
+      25000,
+      28000,
+      30000,
+      32000,
+      35000
+    ],
+    "growth_capex": [
+      7000,
+      23000,
+      37000,
+      50000,
+      57000,
+      55000,
+      58000,
+      65000
+    ],
+    "total_capex": [
+      15000,
+      38000,
+      55000,
+      75000,
+      85000,
+      85000,
+      90000,
+      100000
+    ],
+    "depreciation": [
+      16000,
+      21000,
+      32000,
+      38000,
+      42000,
+      48000,
+      55000,
+      65000
+    ],
+    "net_capex": [
+      -1000,
+      17000,
+      23000,
+      37000,
+      43000,
+      37000,
+      35000,
+      35000
+    ],
+    "ppe_net": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "capex_to_revenue": [
+      0.0575,
+      0.1085,
+      0.1026,
+      0.118,
+      0.1184,
+      0.1052,
+      0.097,
+      0.0916
+    ],
+    "narrative": "CAPEX intensity 9~12% — 의료기기/제약 평균 (6~10%) 보다 약간 높음. 글로벌 인허가 대비 신규 제조 라인 + R&D 시설 투자 단계. 중국 NMPA 승인 시 추가 CAPA 확장 가능 — 인허가 timing 에 따라 growth CAPEX 가속 가능. 현재 CAPEX < OCF 로 self-funding 가능 — 외부 자본조달 없이 organic growth 지속 가능."
+  }
+}

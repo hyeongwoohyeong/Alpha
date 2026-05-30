@@ -181,6 +181,18 @@ UNIVERSE_TAXONOMY: dict[str, dict[str, Any]] = {
         ],
     },
 
+    "Valuation_Watchlist": {
+        "label": "Valuation 분석 종목 (주기 트래킹)",
+        "role": "사용자가 Valuation 탭에 등재한 deep-dive 종목 — 알파 엔진이 주기적으로 가격·뉴스·재무 추적. 각 종목은 별도 IC Memo + Pro-forma 모델 보유",
+        "tickers_us": [],
+        "tickers_kr": ["000720.KS", "214450.KQ", "207940.KS"],
+        "scoring_modules": [
+            "alpha_score", "capital_efficiency", "qld_relative_view",
+            "profit_protection", "market_regime_fit",
+        ],
+        "note": "이 카테고리에 등재된 종목은 data/valuations/{회사명}.json 의 deep-dive 분석과 연동. 분기별 재무 갱신 시 valuation_data 도 함께 업데이트.",
+    },
+
     "Korea_Thematic": {
         "label": "한국 테마 / 국내 관심종목",
         "role": "구조적 디스카운트 + 지배구조 risk + 국가 risk 반영. HBM/반도체·로봇·전력·조선·K-food·의료미용 별도 alpha 후보",

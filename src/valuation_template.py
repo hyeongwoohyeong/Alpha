@@ -383,43 +383,301 @@ def _render_dd_section(dd: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def render_model_html(data: dict[str, Any]) -> str:
-    """Financial Model HTML — Excel 대안. 사용자 spec 의 7개 시트 핵심을 한 화면에."""
+    """Financial Model HTML — Excel 대안. 3-statement + Debt + CAPEX schedule 포함."""
     parts: list[str] = []
 
     parts.append(
         '<div style="font-size:13px; color:var(--text,#F8FAFC); font-weight:700; '
-        'margin-bottom:12px;">📊 Financial Model</div>'
+        'margin-bottom:12px;">📊 Financial Model — 3-Statement</div>'
     )
 
     # 1) Summary
     parts.append(_section_header("Summary"))
     parts.append(_render_summary_block(data))
 
-    # 2) Historical + Projection (이미 IC Memo 에 표가 있지만 model 에선 동일 사용)
-    parts.append(_section_header("Historical + Projection"))
-    parts.append(_render_financials_table(data.get("financials", {})))
+    # 2) Income Statement (상세 IS — COGS / SG&A / OPM / EBITDA / 이자 / 세금 / EPS)
+    if data.get("income_statement"):
+        parts.append(_section_header("Income Statement — 상세"))
+        parts.append(_render_income_statement(data["income_statement"]))
+    else:
+        # Fallback: 기존 simplified financials 표
+        parts.append(_section_header("Historical + Projection (Simplified)"))
+        parts.append(_render_financials_table(data.get("financials", {})))
 
-    # 3) Scenarios
+    # 3) Balance Sheet (자산·부채·자본 세부)
+    if data.get("balance_sheet"):
+        parts.append(_section_header("Balance Sheet — 상세"))
+        parts.append(_render_balance_sheet(data["balance_sheet"]))
+
+    # 4) Cash Flow Statement (OCF / ICF / FCF 분해)
+    if data.get("cash_flow_statement"):
+        parts.append(_section_header("Cash Flow Statement — 상세"))
+        parts.append(_render_cash_flow_statement(data["cash_flow_statement"]))
+
+    # 5) Debt Schedule
+    if data.get("debt_schedule"):
+        parts.append(_section_header("Debt Schedule"))
+        parts.append(_render_debt_schedule(data["debt_schedule"]))
+
+    # 6) CAPEX Schedule
+    if data.get("capex_schedule"):
+        parts.append(_section_header("CAPEX Schedule (매출 성장 vs CAPEX intensity)"))
+        parts.append(_render_capex_schedule(data["capex_schedule"]))
+
+    # 7) Scenarios
     parts.append(_section_header("Scenarios (Bull / Base / Bear)"))
     parts.append(_render_scenarios_block(data.get("scenarios", {})))
 
-    # 4) Returns + Sensitivity
+    # 8) Returns + Sensitivity
     parts.append(_section_header("Returns / Sensitivity"))
     parts.append(_render_returns_tables(data.get("returns", {})))
 
-    # 5) Key Assumptions
+    # 9) Key Assumptions
     parts.append(_section_header("Key Assumptions"))
     parts.append(_render_assumptions_block(data))
 
-    # 6) Judgment (사용자 10대 질문)
+    # 10) Judgment
     parts.append(_section_header("판단 체크리스트"))
     parts.append(_render_judgment_block(data.get("judgment", {})))
 
-    # 7) Sources
+    # 11) Sources
     parts.append(_section_header("출처 / Research Note"))
     parts.append(_render_sources_block(data.get("sources", []), data.get("generated_at")))
 
     return "".join(parts)
+
+
+# ───── Income Statement ─────
+def _render_income_statement(IS: dict) -> str:
+    years = IS.get("years") or []
+    if not years:
+        return '<div style="color:var(--muted,#94A3B8); font-size:13px;">데이터 없음</div>'
+    a_cnt = int(IS.get("a_years_count") or 0)
+    th = "".join(
+        f'<th style="text-align:right; padding:5px 8px; font-size:11px; font-weight:600;">'
+        f'<span style="color:var(--muted,#94A3B8);">{y}</span>'
+        f'<span style="color:#64748B; font-size:10px;">{"A" if i < a_cnt else "F"}</span></th>'
+        for i, y in enumerate(years)
+    )
+    rows = [
+        _row_html("매출액", IS.get("revenue"), _fmt_int),
+        _row_html("매출원가", IS.get("cogs"), _fmt_int),
+        _row_html("매출총이익", IS.get("gross_profit"), _fmt_int),
+        _row_html("% Gross margin", IS.get("gross_margin"), _fmt_pct, True),
+        _row_html("판관비", IS.get("sga"), _fmt_int),
+        _row_html("영업이익", IS.get("operating_income"), _fmt_int),
+        _row_html("% OPM", IS.get("operating_margin"), _fmt_pct, True),
+        _row_html("EBITDA", IS.get("ebitda"), _fmt_int),
+        _row_html("% EBITDA margin", IS.get("ebitda_margin"), _fmt_pct, True),
+        _row_html("이자수익", IS.get("interest_income"), _fmt_int, True),
+        _row_html("이자비용", IS.get("interest_expense"), _fmt_int, True),
+        _row_html("세전이익", IS.get("pretax_income"), _fmt_int),
+        _row_html("법인세", IS.get("tax"), _fmt_int, True),
+        _row_html("% 실효세율", IS.get("tax_rate"), _fmt_pct, True),
+        _row_html("당기순이익", IS.get("net_income"), _fmt_int),
+        _row_html("EPS (원)", IS.get("eps"), _fmt_int),
+    ]
+    return _wrap_table("KRW million (EPS 제외 — 원)", th, "".join(rows))
+
+
+# ───── Balance Sheet ─────
+def _render_balance_sheet(BS: dict) -> str:
+    years = BS.get("years") or []
+    if not years:
+        return '<div style="color:var(--muted,#94A3B8); font-size:13px;">데이터 없음</div>'
+    a_cnt = int(BS.get("a_years_count") or 0)
+    th = "".join(
+        f'<th style="text-align:right; padding:5px 8px; font-size:11px; font-weight:600;">'
+        f'<span style="color:var(--muted,#94A3B8);">{y}</span>'
+        f'<span style="color:#64748B; font-size:10px;">{"A" if i < a_cnt else "F"}</span></th>'
+        for i, y in enumerate(years)
+    )
+    rows = [
+        _row_html("[자산]", [], _fmt_int, True),
+        _row_html("  현금성자산", BS.get("cash"), _fmt_int),
+        _row_html("  매출채권", BS.get("accounts_receivable"), _fmt_int),
+        _row_html("  재고자산", BS.get("inventory"), _fmt_int),
+        _row_html("  미청구공사/계약자산", BS.get("contract_assets"), _fmt_int),
+        _row_html("  기타유동자산", BS.get("other_current_assets"), _fmt_int, True),
+        _row_html("  유형자산(PP&E)", BS.get("ppe_net"), _fmt_int),
+        _row_html("  무형자산", BS.get("intangibles"), _fmt_int),
+        _row_html("  기타비유동자산", BS.get("other_non_current_assets"), _fmt_int, True),
+        _row_html("자산총계", BS.get("total_assets"), _fmt_int),
+        _row_html("[부채]", [], _fmt_int, True),
+        _row_html("  매입채무", BS.get("accounts_payable"), _fmt_int),
+        _row_html("  단기차입금", BS.get("short_term_debt"), _fmt_int),
+        _row_html("  유동성장기차입금", BS.get("current_portion_lt_debt"), _fmt_int),
+        _row_html("  기타유동부채", BS.get("other_current_liabilities"), _fmt_int, True),
+        _row_html("  장기차입금/사채", BS.get("long_term_debt"), _fmt_int),
+        _row_html("  기타비유동부채", BS.get("other_non_current_liabilities"), _fmt_int, True),
+        _row_html("부채총계", BS.get("total_liabilities"), _fmt_int),
+        _row_html("[자본]", [], _fmt_int, True),
+        _row_html("  자본금", BS.get("common_stock"), _fmt_int, True),
+        _row_html("  이익잉여금", BS.get("retained_earnings"), _fmt_int),
+        _row_html("자본총계", BS.get("total_equity"), _fmt_int),
+        _row_html("순차입금 (Net Debt)", BS.get("net_debt"), _fmt_int),
+        _row_html("부채비율 (D/E)", BS.get("debt_to_equity"), _fmt_pct, True),
+    ]
+    return _wrap_table("KRW million", th, "".join(rows))
+
+
+# ───── Cash Flow Statement ─────
+def _render_cash_flow_statement(CF: dict) -> str:
+    years = CF.get("years") or []
+    if not years:
+        return '<div style="color:var(--muted,#94A3B8); font-size:13px;">데이터 없음</div>'
+    a_cnt = int(CF.get("a_years_count") or 0)
+    th = "".join(
+        f'<th style="text-align:right; padding:5px 8px; font-size:11px; font-weight:600;">'
+        f'<span style="color:var(--muted,#94A3B8);">{y}</span>'
+        f'<span style="color:#64748B; font-size:10px;">{"A" if i < a_cnt else "F"}</span></th>'
+        for i, y in enumerate(years)
+    )
+    rows = [
+        _row_html("[영업CF]", [], _fmt_int, True),
+        _row_html("  당기순이익", CF.get("net_income"), _fmt_int, True),
+        _row_html("  감가상각", CF.get("depreciation_amortization"), _fmt_int, True),
+        _row_html("  운전자본 변동", CF.get("working_capital_change"), _fmt_int, True),
+        _row_html("  기타", CF.get("other_operating"), _fmt_int, True),
+        _row_html("OCF", CF.get("ocf"), _fmt_int),
+        _row_html("[투자CF]", [], _fmt_int, True),
+        _row_html("  CAPEX", CF.get("capex"), _fmt_int),
+        _row_html("  M&A / 기타", CF.get("acquisitions"), _fmt_int, True),
+        _row_html("ICF", CF.get("icf"), _fmt_int),
+        _row_html("[재무CF]", [], _fmt_int, True),
+        _row_html("  차입 조달", CF.get("debt_issuance"), _fmt_int, True),
+        _row_html("  차입 상환", CF.get("debt_repayment"), _fmt_int, True),
+        _row_html("  배당/자사주", CF.get("dividends_buyback"), _fmt_int, True),
+        _row_html("FCF (OCF − CAPEX)", CF.get("fcf"), _fmt_int),
+        _row_html("기말 현금", CF.get("ending_cash"), _fmt_int),
+    ]
+    return _wrap_table("KRW million", th, "".join(rows))
+
+
+# ───── Debt Schedule ─────
+def _render_debt_schedule(ds: dict) -> str:
+    tranches = ds.get("tranches") or []
+    as_of = ds.get("as_of", "")
+    total = ds.get("total_debt_krw_mm")
+    wac = ds.get("weighted_avg_cost")
+    nm_prof = ds.get("maturity_profile") or {}
+
+    # Summary chips
+    chips = []
+    if as_of:
+        chips.append(("As of", as_of))
+    if total is not None:
+        chips.append(("총 차입금", f"₩{_fmt_int(total)}M"))
+    if wac is not None:
+        chips.append(("Weighted Avg Cost", f"{wac * 100:.2f}%"))
+    if nm_prof.get("within_1y") is not None:
+        chips.append(("1년 이내 만기", f"₩{_fmt_int(nm_prof['within_1y'])}M"))
+    chip_html = "".join(
+        f'<div style="background:rgba(148,163,184,0.06); border-radius:6px; padding:8px 12px;">'
+        f'<div style="font-size:10px; color:var(--muted,#94A3B8); letter-spacing:.03em;">{l}</div>'
+        f'<div style="font-size:14px; color:var(--text,#F8FAFC); font-weight:600; margin-top:2px;">{v}</div>'
+        '</div>'
+        for l, v in chips
+    )
+
+    # Tranches table
+    if not tranches:
+        tbody = '<tr><td colspan="5" style="padding:8px 10px; color:var(--muted,#94A3B8);">차입금 tranche 미입력</td></tr>'
+    else:
+        tbody = "".join(
+            f'<tr>'
+            f'<td style="padding:5px 10px; font-size:12px; color:var(--text,#F8FAFC);">{t.get("name", "")}</td>'
+            f'<td style="text-align:right; padding:5px 10px; font-size:12px; font-variant-numeric:tabular-nums; color:var(--text,#F8FAFC);">{_fmt_int(t.get("amount_krw_mm"))}</td>'
+            f'<td style="text-align:right; padding:5px 10px; font-size:12px; color:var(--muted,#94A3B8);">{_fmt_pct(t.get("rate"), 2) if t.get("rate") is not None else "—"}</td>'
+            f'<td style="text-align:right; padding:5px 10px; font-size:12px; color:var(--muted,#94A3B8);">{t.get("maturity", "—")}</td>'
+            f'<td style="padding:5px 10px; font-size:12px; color:var(--muted,#94A3B8);">{t.get("note", "")}</td>'
+            f'</tr>'
+            for t in tranches
+        )
+
+    narrative = ds.get("narrative", "")
+    narr_html = f'<div style="font-size:12.5px; color:var(--muted,#94A3B8); margin-top:8px; line-height:1.6;">{narrative}</div>' if narrative else ""
+
+    return (
+        f'<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">{chip_html}</div>'
+        '<div style="overflow-x:auto; border:1px solid rgba(148,163,184,0.15); border-radius:6px;">'
+        '<table style="width:100%; border-collapse:collapse;">'
+        '<thead style="background:rgba(148,163,184,0.06);">'
+        '<tr>'
+        '<th style="text-align:left; padding:6px 10px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">Tranche</th>'
+        '<th style="text-align:right; padding:6px 10px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">₩M</th>'
+        '<th style="text-align:right; padding:6px 10px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">금리</th>'
+        '<th style="text-align:right; padding:6px 10px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">만기</th>'
+        '<th style="text-align:left; padding:6px 10px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">비고</th>'
+        '</tr></thead>'
+        f'<tbody>{tbody}</tbody></table></div>'
+        + narr_html
+    )
+
+
+# ───── CAPEX Schedule ─────
+def _render_capex_schedule(cs: dict) -> str:
+    years = cs.get("years") or []
+    if not years:
+        return '<div style="color:var(--muted,#94A3B8); font-size:13px;">CAPEX 데이터 없음</div>'
+    a_cnt = int(cs.get("a_years_count") or 0)
+    th = "".join(
+        f'<th style="text-align:right; padding:5px 8px; font-size:11px; font-weight:600;">'
+        f'<span style="color:var(--muted,#94A3B8);">{y}</span>'
+        f'<span style="color:#64748B; font-size:10px;">{"A" if i < a_cnt else "F"}</span></th>'
+        for i, y in enumerate(years)
+    )
+    rows = [
+        _row_html("Maintenance CAPEX", cs.get("maintenance_capex"), _fmt_int),
+        _row_html("Growth CAPEX", cs.get("growth_capex"), _fmt_int),
+        _row_html("Total CAPEX", cs.get("total_capex"), _fmt_int),
+        _row_html("감가상각비", cs.get("depreciation"), _fmt_int, True),
+        _row_html("Net CAPEX (CAPEX − D&A)", cs.get("net_capex"), _fmt_int, True),
+        _row_html("PP&E 기말잔액", cs.get("ppe_net"), _fmt_int, True),
+        _row_html("CAPEX / 매출액 (%)", cs.get("capex_to_revenue"), _fmt_pct, True),
+    ]
+    narrative = cs.get("narrative", "")
+    table = _wrap_table("KRW million", th, "".join(rows))
+    if narrative:
+        return table + f'<div style="font-size:12.5px; color:var(--muted,#94A3B8); margin-top:8px; line-height:1.6;">{narrative}</div>'
+    return table
+
+
+# ───── 헬퍼: 통합 row HTML ─────
+def _row_html(label: str, values: list | None, fmt_fn, italic: bool = False) -> str:
+    if not values:
+        # Header row (e.g., [자산])
+        return (
+            '<tr>'
+            f'<td style="padding:4px 8px; font-size:12px; '
+            + ('font-style:italic; color:var(--muted,#94A3B8); font-weight:700;' if italic else 'color:var(--text,#F8FAFC); font-weight:700;')
+            + f'">{label}</td>'
+            '</tr>'
+        )
+    cells = "".join(
+        f'<td style="text-align:right; padding:4px 8px; font-size:12px; font-variant-numeric:tabular-nums; '
+        + ('font-style:italic; color:var(--muted,#94A3B8);' if italic else 'color:var(--text,#F8FAFC);')
+        + f'">{fmt_fn(v)}</td>'
+        for v in values
+    )
+    return (
+        '<tr>'
+        f'<td style="padding:4px 8px; font-size:12px; '
+        + ('font-style:italic; color:var(--muted,#94A3B8);' if italic else 'color:var(--text,#F8FAFC);')
+        + f'">{label}</td>'
+        f'{cells}</tr>'
+    )
+
+
+def _wrap_table(corner_label: str, th: str, tbody: str) -> str:
+    return (
+        '<div style="overflow-x:auto; border:1px solid rgba(148,163,184,0.15); border-radius:6px;">'
+        '<table style="width:100%; border-collapse:collapse;">'
+        '<thead style="background:rgba(148,163,184,0.06);">'
+        f'<tr><th style="text-align:left; padding:6px 8px; font-size:11px; color:var(--muted,#94A3B8); font-weight:600;">{corner_label}</th>{th}</tr>'
+        '</thead>'
+        f'<tbody>{tbody}</tbody></table></div>'
+    )
 
 
 def _render_summary_block(data: dict) -> str:
