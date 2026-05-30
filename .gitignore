@@ -34,3 +34,4 @@ data/cron.log
 data/alpha.db-journal
 data/alpha.db-wal
 data/alpha.db-shm
+data/.fuse_hidden*
