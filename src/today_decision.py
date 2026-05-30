@@ -100,15 +100,60 @@ def build_portfolio_check(holdings: list[dict], diag: dict[str, Any]) -> list[di
             "detail": f"{_hold_name(top)} 순자산의 {top_pct:.1f}%",
         })
 
-    # 2) 레버리지 노출
+    # 2) 섹터 집중도 — 반도체 (가장 큰 실질 risk: 레버리지보다 본질적)
+    semi_keywords = ["하이닉스", "반도체", "Semi", "SOXL", "SOXX", "SMH", "AI반도체", "삼성전자"]
+    semi_value = 0.0
+    semi_holdings = []
+    for h in holdings:
+        name = (h.get("name") or "") + " " + (h.get("ticker") or "")
+        if any(kw in name for kw in semi_keywords):
+            v = _hold_value(h)
+            semi_value += v
+            if v >= _MIN_VALUE_KRW:
+                semi_holdings.append(h)
+    if semi_value > 0:
+        total_inv = sum(_hold_value(h) for h in holdings)
+        semi_pct_inv = (semi_value / total_inv * 100.0) if total_inv > 0 else 0.0
+        nw_est = _f(diag.get("net_worth_krw")) or 0
+        if not nw_est:
+            # 추정: 가장 큰 보유 + net_worth_pct 로 역산
+            for h in holdings:
+                pct = _f(h.get("net_worth_pct"))
+                v = _hold_value(h)
+                if pct and v and pct > 0:
+                    nw_est = v / (pct / 100.0)
+                    break
+        semi_pct_nw = (semi_value / nw_est * 100.0) if nw_est > 0 else 0.0
+        if semi_pct_inv >= 40.0 or semi_pct_nw >= 30.0:
+            sev = "warn" if semi_pct_inv >= 60.0 else "info"
+            items.append({
+                "severity": sev,
+                "label": "반도체 섹터 집중",
+                "detail": (f"투자자산의 {semi_pct_inv:.0f}% / 순자산의 {semi_pct_nw:.0f}% — "
+                           f"단일 섹터 베팅 (₩{semi_value / 1e6:.0f}M)"),
+            })
+
+    # 3) 레버리지 노출 — 반도체와 100% 겹치면 노이즈, 다른 섹터 레버리지면 의미 있음
     lev_pct = _f(diag.get("leverage_exposure_pct"))
     if lev_pct is not None and lev_pct >= _LEVERAGE_WARNING_PCT:
-        sev = "warn" if lev_pct >= _LEVERAGE_DANGER_PCT else "info"
-        items.append({
-            "severity": sev,
-            "label": "레버리지 비중",
-            "detail": f"{lev_pct:.0f}% (순자산 대비) — 시장 충격 민감도 ↑",
-        })
+        # 반도체 외 레버리지 비중 계산 (TSLA·NFLX·QQQ 레버리지 등)
+        non_semi_lev = 0.0
+        for h in holdings:
+            if not h.get("leverage"):
+                continue
+            name = (h.get("name") or "") + " " + (h.get("ticker") or "")
+            if any(kw in name for kw in semi_keywords):
+                continue
+            non_semi_lev += _hold_value(h)
+        # 반도체 레버리지가 압도적이면 이미 위에서 다뤘으므로 보조 정보로만
+        if non_semi_lev / max(semi_value, 1) > 0.2:  # 비반도체 레버리지가 20%+ 면 별도 surfacing
+            sev = "warn" if lev_pct >= _LEVERAGE_DANGER_PCT else "info"
+            items.append({
+                "severity": sev,
+                "label": "총 레버리지 비중",
+                "detail": f"{lev_pct:.0f}% (순자산 대비) — 비반도체 레버리지 ₩{non_semi_lev / 1e6:.1f}M 별도 포함",
+            })
+        # 반도체와 100% 겹치면 — 위의 '반도체 집중' 신호로 충분 (중복 surfacing 제거)
 
     # 3) 익절 임박 — materiality 통과 + 수익률 ≥ +30%
     profit_candidates = []

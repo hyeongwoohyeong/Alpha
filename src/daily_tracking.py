@@ -22,11 +22,14 @@ log = get_logger("daily_tracking")
 # ---------------------------------------------------------------------------
 
 CORE_TRACKERS: list[dict[str, str]] = [
-    {"symbol": "TQQQ",    "name": "TQQQ",        "subtitle": "나스닥100 3X — 베타 공격형",  "kind": "leverage_us"},
-    {"symbol": "QQQ",     "name": "QQQ",         "subtitle": "나스닥100",                    "kind": "index_us"},
-    {"symbol": "SPY",     "name": "SPY",         "subtitle": "S&P500",                       "kind": "index_us"},
-    {"symbol": "BTC-USD", "name": "비트코인",     "subtitle": "BTC-USD",                      "kind": "crypto"},
-    {"symbol": "069500.KS", "name": "KODEX 200", "subtitle": "코스피 200",                   "kind": "index_kr"},
+    {"symbol": "TQQQ",     "name": "TQQQ",       "subtitle": "나스닥100 3X — 베타 공격형",  "kind": "leverage_us"},
+    {"symbol": "QQQ",      "name": "QQQ",        "subtitle": "나스닥100",                    "kind": "index_us"},
+    {"symbol": "SPY",      "name": "SPY",        "subtitle": "S&P500",                       "kind": "index_us"},
+    {"symbol": "SOXX",     "name": "SOXX",       "subtitle": "PHLX 반도체 — 사용자 핵심 섹터", "kind": "sector_us"},
+    {"symbol": "SMH",      "name": "SMH",        "subtitle": "반도체 Top-25",                "kind": "sector_us"},
+    {"symbol": "BTC-USD",  "name": "비트코인",    "subtitle": "BTC-USD",                      "kind": "crypto"},
+    {"symbol": "069500.KS","name": "KODEX 200",  "subtitle": "코스피 200",                   "kind": "index_kr"},
+    {"symbol": "000660.KS","name": "SK하이닉스",  "subtitle": "사용자 핵심 보유의 underlying",  "kind": "underlying_kr"},
 ]
 
 PARKING_UNIVERSE: list[dict[str, str]] = [
