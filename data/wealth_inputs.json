@@ -10,6 +10,7 @@
     "_note": "debt_krw 는 신한 U드림 마통 잔액 기준. 토스 + 연금 외부 cash 합산은 cash_outside_krw."
   },
   "realized_pnl": {
+    "_doc": "주식·ETF 실현손익 (코인 별도 — coin_realized_pnl 참조)",
     "kpi": {
       "ytdNet": 31772316,
       "ytdGain": 31766630,
@@ -53,6 +54,41 @@
     "asofMonth": "2026-05",
     "_income_breakdown": {"salary": 4840450, "bonus_samjeong": 13037410},
     "_other_breakdown": {"travel_living": -3000000}
+  },
+  "coin_realized_pnl": {
+    "_doc": "코인 거래 누적 실현손익 (KRW). 연도×코인 매트릭스. 거래소 기록 기준 — 새 거래 발생 시 by_year[YYYY][COIN] 수정 + 합계 재계산. 주식 realized_pnl 와 분리.",
+    "by_year": {
+      "2024": {
+        "BTC": -179764,
+        "_total": -179764
+      },
+      "2025": {
+        "BTC": 22873149,
+        "ETH": 3285941,
+        "SOL": 2036373,
+        "ADA": -12168,
+        "LINK": 1687,
+        "XRP": 87407,
+        "DOGE": -16356,
+        "_total": 28256033
+      },
+      "2026": {
+        "BTC": 3657314,
+        "SOL": -22224478,
+        "_total": -18567164,
+        "_note": "2026 SOL 대량 손실 — 단일 종목 베팅 실패. 향후 같은 패턴 경계"
+      }
+    },
+    "by_coin_lifetime": {
+      "BTC": 26350699,
+      "ETH": 3285941,
+      "SOL": -20188105,
+      "ADA": -12168,
+      "LINK": 1687,
+      "XRP": 87407,
+      "DOGE": -16356
+    },
+    "lifetime_total_krw": 9509105
   },
   "monthly_bridges": {
     "_doc": "월별 Net Worth Bridge 입력. 매달 말일 즈음 새 월 추가. 'opening_nw'는 전월 ending_nw, 'ending_nw'는 자산현황 기준. 그 외는 흐름 항목.",

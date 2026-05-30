@@ -404,6 +404,7 @@ def main() -> None:
     realized_kpi = inputs.get("realized_pnl", {}).get("kpi", {})
     realized_monthly = inputs.get("realized_pnl", {}).get("monthly", [])
     realized_recent = inputs.get("realized_pnl", {}).get("recent_ledger", [])
+    coin_realized_pnl = inputs.get("coin_realized_pnl", {})
     monthly_all = inputs.get("monthly_snapshots", [])
     cashflow_kpi = inputs.get("cashflow", {})
 
@@ -439,6 +440,7 @@ def main() -> None:
         "realizedKpi": realized_kpi,
         "realizedMonthly": realized_monthly,
         "realizedRecent": realized_recent,
+        "coinRealizedPnl": coin_realized_pnl,
         "cashflowKpi": cashflow_kpi,
         "bridge": bridge,           # latest month (legacy)
         "bridges": bridges,         # 월별 navigation 용
