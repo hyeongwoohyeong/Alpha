@@ -1643,6 +1643,7 @@ def render_tag(tag: str) -> str:
 NAV_ITEMS: list[tuple[str, str]] = [
     ("brief", "오늘의 투자 브리프"),
     ("regime", "Portfolio review"),
+    ("valuation", "Valuation"),
     ("validation", "Validation Lab"),
     ("journal", "Decision Journal"),
     ("discovery", "Discovery"),
@@ -4620,6 +4621,108 @@ def render_today_brief():
 # ---------------------------------------------------------------------------
 # 화면: 종목 상세 (Executive Summary)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Valuation 탭 — IC Memo + Financial Model (PE/IC 스타일)
+# ---------------------------------------------------------------------------
+
+def render_valuation():
+    """Valuation 탭 — 회사명 입력 → IC Memo + Financial Model 생성·노출.
+
+    PE/IC Memo 양식 기반. 사용자 본인 워크플로 도구이므로 JKL 등 로고/이름 없음.
+    Excel/PDF 미생성 — HTML + Python 으로 한 화면에 통합.
+
+    데이터 입력 흐름:
+      1. 사용자 회사명 입력 + Build 클릭
+      2. session_state["valuation_company"] 저장 + 채팅에 "회사명: XXX" 보내라는 안내
+      3. Claude 가 다음 턴에 분석 → session_state["valuation_data"] 채움 (dict)
+      4. 이 함수가 HTML 렌더 (상단 IC Memo / 하단 Model)
+
+    빈 상태에서는 안내 + empty template preview.
+    """
+    page_header("Valuation", meta="IC Memo + Financial Model — PE/IC 스타일")
+
+    # ───── 회사 입력 ─────
+    with st.container():
+        st.markdown(
+            '<div style="background:var(--panel,#0F172A); border-radius:8px; '
+            'padding:16px 20px; margin-bottom:14px;">'
+            '<div style="font-size:13px; color:var(--text,#F8FAFC); font-weight:600; margin-bottom:8px;">'
+            '회사 입력</div>'
+            '<div style="font-size:12px; color:var(--muted,#94A3B8); line-height:1.55; margin-bottom:8px;">'
+            '회사명 입력 후 채팅창에 <code style="background:rgba(59,130,246,0.15); padding:2px 6px; '
+            'border-radius:3px;">회사명: XXX</code> 형식으로 보내주세요. Claude 가 분석 후 이 페이지에 결과를 노출합니다.'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        col1, col2, col3 = st.columns([3, 1, 2])
+        with col1:
+            ticker_or_name = st.text_input(
+                "회사명 또는 ticker",
+                value=st.session_state.get("valuation_company", ""),
+                placeholder="예: 현대건설, OXY, CRDO, 파마리서치",
+                key="valuation_company_input",
+                label_visibility="collapsed",
+            )
+        with col2:
+            if st.button("저장", type="primary", use_container_width=True, key="valuation_save_btn"):
+                if ticker_or_name.strip():
+                    st.session_state["valuation_company"] = ticker_or_name.strip()
+                    st.success(f"채팅창에 '회사명: {ticker_or_name.strip()}' 입력 → 분석 시작")
+                else:
+                    st.warning("회사명 입력 필요")
+        with col3:
+            if st.button("초기화", use_container_width=True, key="valuation_clear_btn"):
+                for k in ("valuation_company", "valuation_data"):
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    # ───── 데이터 가져오기 ─────
+    valuation_data = st.session_state.get("valuation_data")
+    saved_company = st.session_state.get("valuation_company", "")
+
+    if not valuation_data:
+        # Empty state — empty template 으로 UI 골격 보여줌
+        try:
+            from src.valuation_template import make_empty_template, render_ic_memo_html
+            empty = make_empty_template()
+            if saved_company:
+                empty["company"]["name_ko"] = saved_company
+                empty["ic_memo"]["verdict_oneliner"] = (
+                    f"'{saved_company}' 분석 대기 중. "
+                    "채팅창에 '회사명: " + saved_company + "' 입력 → Claude 가 IC Memo + Model 자동 생성."
+                )
+            st.markdown(
+                '<div style="background:var(--panel,#0F172A); border-radius:8px; padding:18px 22px;">'
+                + render_ic_memo_html(empty)
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+        except Exception as e:
+            st.warning(f"템플릿 렌더 실패: {e}")
+        return
+
+    # ───── 데이터 있음 — IC Memo + Model 통합 노출 ─────
+    try:
+        from src.valuation_template import render_ic_memo_html, render_model_html
+
+        st.markdown(
+            '<div style="background:var(--panel,#0F172A); border-radius:8px; padding:18px 22px; margin-bottom:14px;">'
+            + render_ic_memo_html(valuation_data)
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div style="background:var(--panel,#0F172A); border-radius:8px; padding:18px 22px;">'
+            + render_model_html(valuation_data)
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+    except Exception as e:
+        st.error(f"Valuation 렌더 실패: {e}")
+        log.exception("valuation render error")
+
 
 def render_stock_detail():
     # scroll_to_top 처리는 라우팅 직전에 통합 처리되므로 여기서는 별도 처리 없음
@@ -8244,6 +8347,8 @@ if nav == "brief":
     render_today_brief()
 elif nav == "regime":
     render_portfolio_regime()
+elif nav == "valuation":
+    render_valuation()
 elif nav == "validation":
     render_validation_lab()
 elif nav == "journal":
