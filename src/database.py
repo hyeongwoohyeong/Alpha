@@ -691,7 +691,20 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (base_asset, bucket_label, target_asset, window_days)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS alert_log (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id       TEXT NOT NULL,            -- 룰 식별자 (예: 'alpha_bet:bet_001:scale_out_1')
+        ticker        TEXT,                     -- 대상 종목 (없을 수 있음)
+        severity      TEXT,                     -- info / warn / critical
+        message       TEXT,                     -- 송신된 메시지 (snapshot)
+        sent_at       TEXT NOT NULL,            -- ISO datetime UTC
+        ok            INTEGER DEFAULT 0,        -- 1=텔레그램 송신 성공
+        meta_json     TEXT                      -- 추가 metadata (가격 등)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
+    "CREATE INDEX IF NOT EXISTS idx_alert_rule_sent ON alert_log(rule_id, sent_at)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
     "CREATE INDEX IF NOT EXISTS idx_mc_asset ON market_cycles(asset, peak_date)",
