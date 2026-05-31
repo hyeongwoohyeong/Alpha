@@ -31,9 +31,9 @@ from src.telegram_notifier import send_telegram_plain
 from src.confluence_score import calculate_confluence_score, is_plus_100_candidate
 
 DATA_DIR = ROOT / "data"
-MIN_SCORE_TO_SAVE = 40.0      # 40+ 만 DB 저장 (저점 noise 제거)
-HYPER_GROWTH_THRESHOLD = 70.0
-SAMPLE_SIZE = 200              # GitHub Actions timeout 고려 (전체 cover 못 함 — N주 rotation)
+MIN_SCORE_TO_SAVE = 25.0      # 25+ 저장 (debug 단계 — 점수 분포 파악)
+HYPER_GROWTH_THRESHOLD = 50.0  # 50+ surface (전엔 70)
+SAMPLE_SIZE = 200              # GitHub Actions timeout 고려 (전체 cover 못 함 — N일 rotation)
 
 
 def load_kr_dynamic() -> list[dict]:
@@ -127,6 +127,12 @@ def score_and_save(rows: list[dict], scan_date: str, day_index: int) -> list[dic
              len(sliced), len(rows), rot + 1, days_to_cover, days_to_cover)
 
     hits = []
+    # 진단 통계
+    stats = {
+        "scored": 0, "score_0": 0, "score_25": 0, "score_40": 0,
+        "score_50": 0, "score_60": 0, "score_70": 0,
+        "catalyst_hit": 0, "valuation_fail": 0, "fetch_fail": 0,
+    }
     with db.db_session() as conn:
         db.init_schema(conn)
         cur = conn.cursor()
@@ -135,17 +141,28 @@ def score_and_save(rows: list[dict], scan_date: str, day_index: int) -> list[dic
             if (i + 1) % 20 == 0:
                 log.info("  진행 %d/%d", i + 1, len(sliced))
             try:
-                # Confluence — 4 신호 + valuation 통합
                 cf = calculate_confluence_score(ticker)
             except Exception as e:
                 log.debug("confluence %s 실패: %s", ticker, e)
+                stats["fetch_fail"] += 1
                 continue
             score = cf.get("total_score", 0) or 0
+            stats["scored"] += 1
+            # 분포 카운트
+            if score == 0: stats["score_0"] += 1
+            elif score < 25: stats["score_25"] += 1
+            elif score < 40: stats["score_40"] += 1
+            elif score < 50: stats["score_50"] += 1
+            elif score < 60: stats["score_60"] += 1
+            elif score < 70: stats["score_70"] += 1
+            if cf.get("catalyst"):
+                stats["catalyst_hit"] += 1
+
             if score < MIN_SCORE_TO_SAVE:
                 continue
-            # 극단 과대평가 제외
             if not cf.get("valuation_pass", True):
                 log.info("  %s 극단 과대평가 — skip", ticker)
+                stats["valuation_fail"] += 1
                 continue
             cur.execute(
                 "INSERT OR REPLACE INTO growth_scores "
@@ -166,6 +183,19 @@ def score_and_save(rows: list[dict], scan_date: str, day_index: int) -> list[dic
             })
         conn.commit()
     log.info("Confluence ≥ %.0f: %d / %d", MIN_SCORE_TO_SAVE, len(hits), len(sliced))
+    # 진단 — score 분포
+    log.info("=== Score 분포 ===")
+    log.info("  fetch 성공: %d / 실패: %d", stats["scored"], stats["fetch_fail"])
+    log.info("  Score=0:    %d", stats["score_0"])
+    log.info("  Score 1-24: %d", stats["score_25"])
+    log.info("  Score 25-39:%d", stats["score_40"])
+    log.info("  Score 40-49:%d", stats["score_50"])
+    log.info("  Score 50-59:%d", stats["score_60"])
+    log.info("  Score 60-69:%d", stats["score_70"])
+    log.info("  Catalyst hit: %d / %d (%.0f%%)",
+             stats["catalyst_hit"], stats["scored"],
+             stats["catalyst_hit"] / max(stats["scored"], 1) * 100)
+    log.info("  Valuation fail: %d", stats["valuation_fail"])
     return hits
 
 

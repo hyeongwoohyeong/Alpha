@@ -354,18 +354,18 @@ def check_hyper_growth_watch(conn: sqlite3.Connection) -> list[dict]:
         today_iso = _dt.date.today().isoformat()
         cutoff_30d = (_dt.date.today() - _dt.timedelta(days=30)).isoformat()
 
-        # 신규 진입: 최근 7일 안 score ≥ 60 + 30일 이전엔 < 60
+        # 신규 진입: 최근 7일 안 score ≥ 40 + 30일 이전엔 < 40 (debug 단계 임계 낮춤)
         cur.execute("""
             SELECT t.ticker, t.name, t.market, t.catalyst, t.score, t.yoy_recent
             FROM growth_scores t
             WHERE t.scan_date >= datetime('now', '-7 days')
-              AND t.score >= 60
+              AND t.score >= 40
               AND NOT EXISTS (
                   SELECT 1 FROM growth_scores p
                   WHERE p.ticker = t.ticker
                     AND p.scan_date < t.scan_date
                     AND p.scan_date >= ?
-                    AND p.score >= 60
+                    AND p.score >= 40
               )
             ORDER BY t.score DESC LIMIT 8
         """, (cutoff_30d,))
