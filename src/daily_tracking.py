@@ -260,6 +260,74 @@ def build_alpha_candidates_strict(rows: list[dict]) -> list[dict[str, Any]]:
     return qualified
 
 
+def build_unified_alpha_candidates(
+    rows: list[dict[str, Any]] | None = None,
+    conn=None,
+    days_lookback: int = 7,
+    confluence_min: float = 60.0,
+) -> list[dict[str, Any]]:
+    """Unified Discovery — 기존 alpha_score (score≥80+DD≤-10%) + 새 confluence (≥60) 통합.
+
+    같은 ticker 가 두 군데 hit 하면 *high confidence* 표시.
+    Daily Brief Layer B 의 single source of truth.
+    """
+    by_ticker: dict[str, dict] = {}
+
+    # 1) 기존 alpha_score 기반 후보 (rows 에서)
+    if rows:
+        alpha_cands = build_alpha_candidates_strict(rows)
+        for c in alpha_cands:
+            c["source_types"] = ["alpha_score"]
+            c["unified_label"] = f"α {c.get('score', 0):.0f}/100"
+            by_ticker[c["ticker"]] = c
+
+    # 2) 새 confluence_score 기반 후보 (DB growth_scores 최근 N일)
+    if conn:
+        try:
+            import datetime as _dt
+            cutoff = (_dt.date.today() - _dt.timedelta(days=days_lookback)).isoformat()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT ticker, name, market, catalyst, score, yoy_recent, is_accelerating "
+                "FROM growth_scores "
+                "WHERE scan_date >= ? AND score >= ? "
+                "ORDER BY score DESC LIMIT 30",
+                (cutoff, confluence_min),
+            )
+            for row in cur.fetchall():
+                t, name, market, cat, score, yoy, accel = row
+                if t in by_ticker:
+                    # 양쪽 hit → 강한 신호
+                    by_ticker[t]["source_types"].append("confluence")
+                    by_ticker[t]["confluence_score"] = score
+                    by_ticker[t]["catalyst"] = cat
+                    by_ticker[t]["yoy_recent"] = yoy
+                    by_ticker[t]["is_high_confidence"] = True
+                    by_ticker[t]["unified_label"] += f" + Confluence {score:.0f}"
+                else:
+                    by_ticker[t] = {
+                        "ticker": t,
+                        "name": name,
+                        "market": market,
+                        "catalyst": cat,
+                        "yoy_recent": yoy,
+                        "is_accelerating": bool(accel),
+                        "confluence_score": score,
+                        "source_types": ["confluence"],
+                        "unified_label": f"Confluence {score:.0f}/100",
+                    }
+        except Exception as e:
+            log.debug("confluence merge 실패: %s", e)
+
+    # 정렬: high_confidence 우선, 그 다음 score
+    out = list(by_ticker.values())
+    out.sort(key=lambda c: (
+        -int(c.get("is_high_confidence", False)),
+        -(c.get("score") or c.get("confluence_score") or 0)
+    ))
+    return out
+
+
 def build_parking_cards(tracker_data: dict, market_overheat: float | None) -> list[dict[str, Any]]:
     """Parking 후보 카드 — verdict.show=True 만 + max 4개.
 

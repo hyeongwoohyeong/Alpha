@@ -3340,6 +3340,7 @@ def render_today_decision(regime: Any, crash: Any):
         )
         from src.daily_tracking import (
             build_core_tracker_cards, build_alpha_candidates_strict,
+            build_unified_alpha_candidates,
             build_parking_cards,
         )
         # rows: module-level global (cached_build_rows 결과)
@@ -3376,7 +3377,9 @@ def render_today_decision(regime: Any, crash: Any):
         # Layer B — 3 sub
         with db.db_session() as _conn_for_verdict:
             core_cards = build_core_tracker_cards(tracker_data, conn=_conn_for_verdict)
-        alpha_candidates = build_alpha_candidates_strict(rows_for_alpha)
+            # Unified — 기존 alpha_score (≥80+DD≤-10%) + 새 confluence (≥60) 통합
+            alpha_candidates = build_unified_alpha_candidates(
+                rows=rows_for_alpha, conn=_conn_for_verdict)
         parking_cards = build_parking_cards(tracker_data, overheat)
 
         # Layer C — STRICT alpha 만 funding pair 후보로 사용
