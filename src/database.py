@@ -703,8 +703,25 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         meta_json     TEXT                      -- 추가 metadata (가격 등)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS growth_scores (
+        scan_date     TEXT NOT NULL,            -- 'YYYY-MM-DD' (주간 스캔 일자)
+        ticker        TEXT NOT NULL,
+        name          TEXT,
+        market        TEXT,                     -- KOSPI / KOSDAQ / NASDAQ / NYSE
+        catalyst      TEXT,                     -- auto-matched catalyst tag
+        score         REAL,                     -- Growth Momentum 0~100
+        yoy_recent    REAL,                     -- 최근 분기 YoY 매출 성장률
+        is_accelerating INTEGER,                -- 1/0
+        components_json TEXT,                   -- score breakdown
+        market_cap_krw REAL,
+        PRIMARY KEY (scan_date, ticker)
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_alert_rule_sent ON alert_log(rule_id, sent_at)",
+    "CREATE INDEX IF NOT EXISTS idx_growth_scan_score ON growth_scores(scan_date, score)",
+    "CREATE INDEX IF NOT EXISTS idx_growth_ticker ON growth_scores(ticker, scan_date)",
     "CREATE INDEX IF NOT EXISTS idx_rfr_regime ON regime_forward_returns(regime, asset)",
     "CREATE INDEX IF NOT EXISTS idx_dg_decision ON decision_grades(decision_id)",
     "CREATE INDEX IF NOT EXISTS idx_mc_asset ON market_cycles(asset, peak_date)",

@@ -1,0 +1,216 @@
+"""Weekly Universe-wide Growth Scan.
+
+매주 일요일 새벽 (UTC 18:00 토요일 = KST 03:00 일요일) 실행.
+
+작업:
+  1. kr_dynamic_universe.csv (1500~2000 종목) + wide_universe.csv (300 종목) 로드
+  2. 각 종목 Growth Momentum Score 계산 (yfinance 분기 매출 fetch)
+  3. catalyst_auto_match 로 catalyst tag 자동 부여
+  4. DB growth_scores 테이블 저장
+  5. 직전 주 vs 이번 주 비교 → 신규 진입 (전엔 score 낮았는데 이번에 ≥70) → 텔레그램 alert
+"""
+from __future__ import annotations
+
+import csv
+import datetime as _dt
+import json
+import logging
+import sys
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("weekly_growth_scan")
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from src import database as db
+from src.growth_momentum import score_ticker
+from src.catalyst_auto_match import match_catalyst, enrich_with_yfinance
+from src.telegram_notifier import send_telegram_plain
+
+DATA_DIR = ROOT / "data"
+MIN_SCORE_TO_SAVE = 40.0      # 40+ 만 DB 저장 (저점 noise 제거)
+HYPER_GROWTH_THRESHOLD = 70.0
+SAMPLE_SIZE = 200              # GitHub Actions timeout 고려 (전체 cover 못 함 — N주 rotation)
+
+
+def load_kr_dynamic() -> list[dict]:
+    """KR dynamic universe 로드 — 없으면 빈 list."""
+    path = DATA_DIR / "kr_dynamic_universe.csv"
+    if not path.exists():
+        log.warning("kr_dynamic_universe.csv 없음 — build_dynamic_universe.py 먼저 실행 필요")
+        return []
+    out = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            break
+        # reset file
+    with open(path, encoding="utf-8") as f:
+        # skip comment lines
+        lines = [l for l in f if not l.startswith("#")]
+    reader = csv.DictReader(lines)
+    for row in reader:
+        out.append({
+            "ticker": row.get("ticker"),
+            "name": row.get("name_ko"),
+            "market": row.get("market"),
+            "market_cap_krw": float(row.get("market_cap_krw") or 0),
+            "tier": row.get("market_cap_tier"),
+        })
+    return out
+
+
+def load_us_wide() -> list[dict]:
+    """US wide universe 로드."""
+    path = DATA_DIR / "wide_universe.csv"
+    if not path.exists():
+        return []
+    out = []
+    with open(path, encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            out.append({
+                "ticker": row.get("ticker"),
+                "name": row.get("name"),
+                "market": row.get("exchange"),
+                "sector": row.get("sector"),
+                "industry": row.get("industry"),
+                "tier": row.get("market_cap_tier"),
+            })
+    return out
+
+
+def score_and_save(rows: list[dict], scan_date: str, week_index: int) -> list[dict]:
+    """Sampling + score + DB 저장.
+
+    week_index 0~N: rotation 으로 매주 다른 subset cover (전체 K주에 한 번).
+    """
+    if not rows:
+        return []
+    # Rotation: week_index 별 다른 subset
+    weeks_to_cover = max(1, (len(rows) // SAMPLE_SIZE) + 1)
+    rot = week_index % weeks_to_cover
+    sliced = rows[rot * SAMPLE_SIZE : (rot + 1) * SAMPLE_SIZE]
+    log.info("This week scanning %d/%d (rotation %d/%d)",
+             len(sliced), len(rows), rot + 1, weeks_to_cover)
+
+    hits = []
+    with db.db_session() as conn:
+        db.init_schema(conn)
+        cur = conn.cursor()
+        for i, r in enumerate(sliced):
+            ticker = r["ticker"]
+            if (i + 1) % 20 == 0:
+                log.info("  진행 %d/%d", i + 1, len(sliced))
+            try:
+                sc = score_ticker(ticker)
+            except Exception as e:
+                log.debug("score %s 실패: %s", ticker, e)
+                continue
+            if not sc.get("available"):
+                continue
+            score = sc.get("score") or 0
+            if score < MIN_SCORE_TO_SAVE:
+                continue
+            # Catalyst 자동 매칭
+            cat = match_catalyst(
+                name=r.get("name"),
+                sector=r.get("sector"),
+                industry=r.get("industry"),
+            )
+            if not cat:
+                # yfinance enrich (sector/industry 가 빈 KR 종목 위주)
+                enriched = enrich_with_yfinance(ticker)
+                cat = match_catalyst(
+                    name=r.get("name"),
+                    sector=enriched.get("sector"),
+                    industry=enriched.get("industry"),
+                    business_summary=enriched.get("business_summary"),
+                )
+            cur.execute(
+                "INSERT OR REPLACE INTO growth_scores "
+                "(scan_date, ticker, name, market, catalyst, score, yoy_recent, "
+                "is_accelerating, components_json, market_cap_krw) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (scan_date, ticker, r.get("name"), r.get("market"),
+                 cat, score, sc.get("yoy_growth_recent"),
+                 1 if sc.get("is_accelerating") else 0,
+                 json.dumps(sc.get("components", {}), ensure_ascii=False),
+                 r.get("market_cap_krw"))
+            )
+            hits.append({"ticker": ticker, "name": r.get("name"),
+                         "score": score, "catalyst": cat,
+                         "is_accel": sc.get("is_accelerating")})
+        conn.commit()
+    log.info("Score ≥ %.0f: %d / %d", MIN_SCORE_TO_SAVE, len(hits), len(sliced))
+    return hits
+
+
+def detect_new_entrants(scan_date: str, prev_week_offset: int = 7) -> list[dict]:
+    """직전 주 vs 이번 주 비교 — 신규 진입 (이번 주 ≥70, 직전엔 X)."""
+    prev_date = (_dt.date.fromisoformat(scan_date) - _dt.timedelta(days=prev_week_offset)).isoformat()
+    with db.db_session() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT t.ticker, t.name, t.market, t.catalyst, t.score, t.yoy_recent "
+            "FROM growth_scores t "
+            "WHERE t.scan_date = ? AND t.score >= ? "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM growth_scores p "
+            "  WHERE p.ticker = t.ticker AND p.scan_date < ? "
+            "  AND p.scan_date >= ? AND p.score >= ?"
+            ")",
+            (scan_date, HYPER_GROWTH_THRESHOLD, scan_date,
+             (_dt.date.fromisoformat(scan_date) - _dt.timedelta(days=30)).isoformat(),
+             HYPER_GROWTH_THRESHOLD)
+        )
+        rows = cur.fetchall()
+    return [{"ticker": r[0], "name": r[1], "market": r[2],
+             "catalyst": r[3], "score": r[4], "yoy_recent": r[5]} for r in rows]
+
+
+def alert_new_entrants(new_hits: list[dict]) -> None:
+    """신규 진입 종목 텔레그램 alert (one consolidated message)."""
+    if not new_hits:
+        log.info("신규 진입 hyper-growth 종목 없음 — alert skip")
+        return
+    new_hits.sort(key=lambda x: -(x.get("score") or 0))
+    lines = ["💎 신규 +100% Watch 후보 (이번 주 진입)"]
+    for h in new_hits[:8]:
+        yoy = h.get("yoy_recent")
+        yoy_str = f" · YoY {yoy*100:+.0f}%" if yoy is not None else ""
+        cat = h.get("catalyst") or "—"
+        lines.append(f"  • {h['name']} ({h['ticker']}) — Score {h['score']:.0f}{yoy_str} · {cat}")
+    lines.append("")
+    lines.append("→ 대시보드 Discovery 탭 + Valuation 검토 후 알파 베팅 후보로 승격")
+    msg = "\n".join(lines)
+    result = send_telegram_plain(msg)
+    log.info("신규 진입 alert 전송: %d 건, ok=%s", len(new_hits), result.get("ok"))
+
+
+def main():
+    scan_date = _dt.date.today().isoformat()
+    log.info("=== Weekly Growth Scan — %s ===", scan_date)
+
+    # Rotation week index (week of year mod)
+    week_index = _dt.date.today().isocalendar()[1]
+
+    kr_rows = load_kr_dynamic()
+    us_rows = load_us_wide()
+    all_rows = kr_rows + us_rows
+    log.info("Universe 총: KR %d + US %d = %d", len(kr_rows), len(us_rows), len(all_rows))
+
+    # Score + 저장
+    hits = score_and_save(all_rows, scan_date, week_index)
+
+    # 신규 진입 alert
+    new_entrants = detect_new_entrants(scan_date)
+    alert_new_entrants(new_entrants)
+
+    log.info("=== 완료 — hits %d, new entrants %d ===", len(hits), len(new_entrants))
+
+
+if __name__ == "__main__":
+    main()

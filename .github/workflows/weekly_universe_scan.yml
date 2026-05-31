@@ -1,0 +1,59 @@
+name: Weekly Universe Scan
+
+# 매주 일요일 새벽 (UTC 18:00 토요일 = KST 03:00 일요일)
+# 1. KR dynamic universe rebuild (전종목)
+# 2. KR + US universe Growth Momentum scoring (rotation)
+# 3. 신규 hyper-growth 진입 종목 텔레그램 alert
+on:
+  schedule:
+    - cron: "0 18 * * 6"   # 토요일 UTC 18:00 = 일요일 KST 03:00
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45     # 200 종목 score 약 30분
+    permissions:
+      contents: write       # DB commit 위해
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pykrx yfinance pandas requests
+
+      - name: 1) KR Dynamic Universe rebuild
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python scripts/build_dynamic_universe.py
+
+      - name: 2) Weekly Growth Scan + Alert
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/weekly_growth_scan.py
+
+      - name: 3) Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/kr_dynamic_universe.csv data/alpha.db || true
+          if git diff --cached --quiet; then
+            echo "변경 없음 — commit skip"
+          else
+            git commit -m "weekly universe scan $(date -u +'%Y-%m-%d')"
+            git push origin main || git pull --rebase origin main && git push origin main
+          fi
