@@ -866,27 +866,76 @@ def render_core_tracker_row(card: dict) -> str:
 
 
 def render_alpha_candidate_row(c: dict) -> str:
-    """Alpha 후보 한 줄 — score≥80+DD≤-10% 통과한 것만."""
+    """Alpha 후보 한 줄 — Unified (alpha + confluence) 통합 표시.
+
+    Tier 별 시각:
+      - high_confidence (양쪽 hit): ★ 표시 + 강조 border
+      - alpha_only: α score 만
+      - confluence_only: Confluence score 만 (catalyst 표시)
+    """
     dd = c.get("drawdown")
     dd_str = f"{dd * 100:+.1f}%" if dd is not None else "—"
-    sc = c.get("score")
-    sc_str = f"{sc:.0f}" if sc is not None else "—"
+    unified = c.get("unified") or {}
+    tier = unified.get("tier")
+    label = unified.get("label", "")
+    u_score = unified.get("unified_score")
+
+    # tier 별 색
+    tier_color = {
+        "high_confidence": "#06B6D4",   # cyan (강조)
+        "alpha_only":      "#15803D",   # green (펀더멘털)
+        "confluence_only": "#F59E0B",   # amber (모멘텀)
+    }.get(tier, "#6B7280")
+    tier_label = {
+        "high_confidence": "🔥 양쪽 hit",
+        "alpha_only":      "펀더멘털",
+        "confluence_only": "모멘텀",
+    }.get(tier, "")
+
+    # 추가 정보 라인 (catalyst, yoy)
+    extra_parts = []
+    if c.get("catalyst"):
+        extra_parts.append(c["catalyst"])
+    if c.get("yoy_recent") is not None:
+        extra_parts.append(f"YoY {c['yoy_recent']*100:+.0f}%")
+    if c.get("theme"):
+        extra_parts.append(c["theme"])
+    if c.get("tag"):
+        extra_parts.append(c["tag"])
+    extra_str = " · ".join(p for p in extra_parts if p)
+
+    # border 강조 (high_confidence)
+    border_left = f"3px solid {tier_color}" if tier == "high_confidence" else "0"
+    pad_left = "10px" if tier == "high_confidence" else "0"
+
+    # u_score 표시
+    score_html = ""
+    if u_score is not None:
+        score_html = (
+            f'<div style="font-size:11px; color:{tier_color}; font-weight:700;">'
+            f'{label} {u_score:.0f}/100</div>'
+        )
+        if tier_label:
+            score_html += (
+                f'<div style="font-size:10px; color:{tier_color}; margin-top:1px;">'
+                f'{tier_label}</div>'
+            )
+
     return (
-        '<div style="display:flex; justify-content:space-between; gap:10px; '
-        'padding:8px 0; border-top:1px solid var(--line);">'
+        f'<div style="display:flex; justify-content:space-between; gap:10px; '
+        f'padding:8px 0 8px {pad_left}; border-top:1px solid var(--line); '
+        f'border-left:{border_left};">'
         '<div style="flex:1 1 auto; min-width:0;">'
         '<div style="font-size:13.5px; color:var(--text); font-weight:600;">'
         f'{c["name"]} '
         f'<span style="color:var(--muted); font-weight:400; font-size:12px;">{c["ticker"]}</span>'
         '</div>'
         '<div style="font-size:12px; color:var(--muted); margin-top:1px;">'
-        f'{c.get("theme", "")} · {c.get("tag", "")}</div>'
+        f'{extra_str}</div>'
         '</div>'
         '<div style="flex:0 0 auto; text-align:right;">'
-        '<div style="font-size:11px; color:#15803D; font-weight:700;">'
-        f'score {sc_str} 🔥</div>'
-        '<div style="font-size:11px; color:#EF4444; margin-top:2px;">'
-        f'DD {dd_str}</div>'
+        + score_html +
+        f'<div style="font-size:11px; color:#EF4444; margin-top:2px;">DD {dd_str}</div>'
         '</div>'
         '</div>'
     )

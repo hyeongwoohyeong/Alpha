@@ -427,38 +427,77 @@ def build_news_section() -> list[str]:
 
 
 def build_hyper_growth_section() -> list[str]:
-    """+100% Watch — Growth Momentum + Catalyst hit 종목.
+    """+100% Watch — DB growth_scores 최근 7일 high score 통합 표시.
 
-    DB 의 최근 R8 alert log 에서 추출 (실시간 score 안 함, 비용 큼).
+    Unified score 적용 — alpha + confluence merge.
     """
     try:
         from . import database as db
-        import sqlite3
-        # alert_log 에서 최근 7일 R8 hit
+        from .unified_score import compute_unified_score
         with db.db_session() as conn:
             cur = conn.cursor()
+            # growth_scores 최근 7일, score ≥ 60
             cur.execute(
-                "SELECT ticker, message FROM alert_log "
-                "WHERE rule_id LIKE 'R8:%' AND ok=1 "
-                "AND sent_at >= datetime('now', '-7 days') "
-                "ORDER BY sent_at DESC LIMIT 5"
+                "SELECT ticker, name, catalyst, score, yoy_recent "
+                "FROM growth_scores "
+                "WHERE scan_date >= datetime('now', '-7 days') "
+                "AND score >= 60 "
+                "ORDER BY score DESC LIMIT 8"
             )
-            rows = cur.fetchall()
+            scored = cur.fetchall()
+
+            # 각 ticker 의 alpha_score 도 함께 (stock_research 의 alpha_score_json)
+            results = []
+            for row in scored:
+                ticker, name, cat, conf_score, yoy = row
+                # alpha_score 조회 (있으면)
+                cur.execute(
+                    "SELECT alpha_score_json FROM stock_research WHERE ticker = ? "
+                    "ORDER BY run_id DESC LIMIT 1",
+                    (ticker,)
+                )
+                alpha_row = cur.fetchone()
+                alpha_score = None
+                if alpha_row and alpha_row[0]:
+                    try:
+                        import json as _json
+                        a = _json.loads(alpha_row[0])
+                        alpha_score = a.get("composite") or a.get("final_score")
+                    except Exception:
+                        pass
+                unified = compute_unified_score(
+                    alpha_score=alpha_score, confluence_score=conf_score
+                )
+                results.append({
+                    "ticker": ticker, "name": name, "catalyst": cat,
+                    "yoy": yoy, "unified": unified,
+                })
     except Exception as e:
         log.debug("hyper-growth section 빌드 실패: %s", e)
         return []
-    if not rows:
+    if not results:
         return []
-    lines = ["💎 +100% Watch (이번 주)"]
-    for ticker, msg in rows:
-        # 메시지 첫 줄에서 종목명 추출
-        first_line = (msg or "").split("\n")[0]
-        # "💎 +100% Watch — {name} ({ticker})" 패턴
-        if "—" in first_line:
-            name_part = first_line.split("—", 1)[1].strip()
-        else:
-            name_part = ticker
-        lines.append(f"  {name_part}")
+
+    # tier 우선 정렬
+    tier_order = {"high_confidence": 0, "alpha_only": 1, "confluence_only": 2}
+    results.sort(key=lambda r: (
+        tier_order.get((r["unified"] or {}).get("tier"), 3),
+        -((r["unified"] or {}).get("unified_score") or 0)
+    ))
+
+    lines = ["💎 +100% Watch (이번 주, Unified Score)"]
+    for r in results[:6]:
+        u = r["unified"] or {}
+        label = u.get("label", "")
+        u_score = u.get("unified_score")
+        tier = u.get("tier", "")
+        u_str = f"{label} {u_score:.0f}" if u_score is not None else "—"
+        tier_str = ""
+        if tier == "high_confidence":
+            tier_str = " 🔥"
+        cat_str = f" · {r['catalyst']}" if r['catalyst'] else ""
+        yoy_str = f" · YoY {r['yoy']*100:+.0f}%" if r['yoy'] is not None else ""
+        lines.append(f"  • {r['name']} ({r['ticker']}) {u_str}{tier_str}{cat_str}{yoy_str}")
     return lines
 
 
