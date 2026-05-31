@@ -319,12 +319,21 @@ def build_unified_alpha_candidates(
         except Exception as e:
             log.debug("confluence merge 실패: %s", e)
 
-    # 정렬: high_confidence 우선, 그 다음 score
+    # Unified score 부여 + 정렬
+    from .unified_score import rank_candidates, format_unified_chip
     out = list(by_ticker.values())
-    out.sort(key=lambda c: (
-        -int(c.get("is_high_confidence", False)),
-        -(c.get("score") or c.get("confluence_score") or 0)
-    ))
+    # rank_candidates 가 'alpha_score' 키 기대 — 'score' alias 보정
+    for c in out:
+        if "score" in c and "alpha_score" not in c:
+            c["alpha_score"] = c["score"] / 10 if c["score"] > 10 else c["score"]
+            # alpha_score 가 0-10 scale 인지 0-100 scale 인지 — 기존 build_alpha_candidates_strict 의 score 는 0-100 (final_score)
+            # → 100 단위 그대로 → /10 하지 말고
+            c["alpha_score"] = c["score"] / 10  # 0-100 → 0-10 normalize
+    out = rank_candidates(out)
+    # format chip
+    for c in out:
+        if c.get("unified"):
+            c["unified_label"] = format_unified_chip(c["unified"])
     return out
 
 

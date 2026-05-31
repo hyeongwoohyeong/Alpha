@@ -193,22 +193,16 @@ def detect_new_entrants(scan_date: str, prev_week_offset: int = 7) -> list[dict]
 
 
 def alert_new_entrants(new_hits: list[dict]) -> None:
-    """신규 진입 종목 텔레그램 alert (one consolidated message)."""
+    """DEPRECATED — alert_engine.R8 가 DB 조회로 자동 발화.
+
+    weekly_scan 은 *데이터 저장만*. 실제 텔레그램 발화는 alert_engine 단일 책임.
+    Dedup 도 alert_engine 이 자체 alert_log 로 처리.
+    """
     if not new_hits:
-        log.info("신규 진입 hyper-growth 종목 없음 — alert skip")
+        log.info("신규 진입 hyper-growth 종목 없음")
         return
-    new_hits.sort(key=lambda x: -(x.get("score") or 0))
-    lines = ["💎 신규 +100% Watch 후보 (이번 주 진입)"]
-    for h in new_hits[:8]:
-        yoy = h.get("yoy_recent")
-        yoy_str = f" · YoY {yoy*100:+.0f}%" if yoy is not None else ""
-        cat = h.get("catalyst") or "—"
-        lines.append(f"  • {h['name']} ({h['ticker']}) — Score {h['score']:.0f}{yoy_str} · {cat}")
-    lines.append("")
-    lines.append("→ 대시보드 Discovery 탭 + Valuation 검토 후 알파 베팅 후보로 승격")
-    msg = "\n".join(lines)
-    result = send_telegram_plain(msg)
-    log.info("신규 진입 alert 전송: %d 건, ok=%s", len(new_hits), result.get("ok"))
+    log.info("신규 진입 %d 건 DB 저장 완료 — alert_engine R8 가 다음 cycle 에 발화",
+             len(new_hits))
 
 
 def main():

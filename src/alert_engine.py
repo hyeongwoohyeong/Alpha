@@ -321,130 +321,65 @@ def check_new_alpha_discovery(conn: sqlite3.Connection, rows: list[dict]) -> lis
 # ---------------------------------------------------------------------------
 
 def check_hyper_growth_watch(conn: sqlite3.Connection) -> list[dict]:
-    """+100% 가능 후보 자동 발굴.
+    """+100% 가능 후보 자동 발굴 — 단일 source.
 
-    조건 (모두 hit):
-      - Growth Momentum Score ≥ 70 (4분기 가속 패턴)
-      - Active catalyst tag 보유 (AI/HBM/양자/비만 등 21개 cycle 중 하나)
-      - 시총 적정 (small~mid cap — large 는 +100% 어려움)
-      - 52W DD ≤ -10% (저점 진입 chance) OR break-out (+10% from base)
+    데이터 소스:
+      1. DB growth_scores (weekly_scan 이 저장한 confluence ≥60 종목)
+      2. 신규 진입 (오늘 score ≥60, 지난 30일엔 X) 우선 surface
+
+    이 함수가 *유일한* hyper-growth alert 발화. weekly_scan 은 DB 저장만.
     """
     if not RULES_ENABLED.get("R8_hyper_growth_watch"):
         return []
     out: list[dict] = []
 
-    # universe + catalyst tag 로드
+    # 신규 진입 종목 DB 에서 직접 detect — single source
     try:
-        import csv
-        from pathlib import Path
-        from .catalyst_tags import CATALYSTS, ACTIVE_CATALYSTS
+        import datetime as _dt
+        cur = conn.cursor()
+        today_iso = _dt.date.today().isoformat()
+        cutoff_30d = (_dt.date.today() - _dt.timedelta(days=30)).isoformat()
+
+        # 신규 진입: 최근 7일 안 score ≥ 60 + 30일 이전엔 < 60
+        cur.execute("""
+            SELECT t.ticker, t.name, t.market, t.catalyst, t.score, t.yoy_recent
+            FROM growth_scores t
+            WHERE t.scan_date >= datetime('now', '-7 days')
+              AND t.score >= 60
+              AND NOT EXISTS (
+                  SELECT 1 FROM growth_scores p
+                  WHERE p.ticker = t.ticker
+                    AND p.scan_date < t.scan_date
+                    AND p.scan_date >= ?
+                    AND p.score >= 60
+              )
+            ORDER BY t.score DESC LIMIT 8
+        """, (cutoff_30d,))
+        new_entrants = cur.fetchall()
     except Exception as e:
-        log.debug("R8 import 실패: %s", e)
-        return []
+        log.debug("R8 신규 진입 DB 조회 실패: %s", e)
+        new_entrants = []
 
-    # 1) Universe 후보 — KR momentum + US wide (active catalyst 있는 종목만)
-    candidates: list[dict] = []
+    if new_entrants:
+        # 한 번에 한 메시지로 묶음 (texting fewer noise)
+        lines = ["💎 신규 +100% Watch 후보"]
+        for row in new_entrants[:8]:
+            ticker, name, market, cat, score, yoy = row
+            yoy_str = f" · YoY {yoy*100:+.0f}%" if yoy is not None else ""
+            cat_str = f" · {cat}" if cat else ""
+            lines.append(f"  • {name} ({ticker}) Score {score:.0f}{yoy_str}{cat_str}")
+        lines.append("")
+        lines.append("→ 대시보드 Discovery 탭 + Valuation 검토 후 알파 베팅 후보로 승격")
+        msg = "\n".join(lines)
 
-    # KR momentum universe
-    kr_path = Path(__file__).resolve().parents[1] / "data" / "kr_momentum_universe.csv"
-    if kr_path.exists():
-        with open(kr_path, encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                cat = row.get("catalyst", "")
-                if cat in ACTIVE_CATALYSTS:
-                    candidates.append({
-                        "ticker": row.get("ticker"),
-                        "name": row.get("name_ko"),
-                        "catalyst": cat,
-                        "market": "KR",
-                        "tier": row.get("market_cap_tier", "mid"),
-                    })
+        # dedup: 같은 ticker set 대해 24h 한 번만
+        ticker_key = ",".join(sorted([r[0] for r in new_entrants]))[:60]
+        rule_id = f"R8:new_entrants:{ticker_key}"
+        result = _send_or_skip(conn, rule_id, None, "critical", msg, dedup_hours=24)
+        out.append({"rule": rule_id, "n_entrants": len(new_entrants), **result})
+        return out
 
-    # US wide universe — catalyst 가 명시 안 됨, industry 매칭
-    us_path = Path(__file__).resolve().parents[1] / "data" / "wide_universe.csv"
-    industry_to_catalyst = {
-        "Quantum Computing": "quantum_computing",
-        "BTC Mining": "btc_mining",
-        "BTC Treasury": "btc_treasury",
-        "Nuclear Power": "nuclear_power",
-        "Nuclear SMR": "nuclear_power",
-        "AI Cloud Infrastructure": "ai_infra",
-        "AI Drug Discovery": "ai_drug_discovery",
-        "Power Construction": "ai_infra",
-        "Space Launch": "space",
-        "Satellite Connectivity": "space",
-        "Auto Retail": "auto",
-        "Brokerage Crypto": "fintech_crypto",
-        "Digital Banking": "fintech_crypto",
-        "Software (BTC strategy)": "btc_treasury",
-    }
-    if us_path.exists():
-        with open(us_path, encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                industry = row.get("industry", "")
-                cat = industry_to_catalyst.get(industry)
-                if cat and cat in ACTIVE_CATALYSTS:
-                    candidates.append({
-                        "ticker": row.get("ticker"),
-                        "name": row.get("name"),
-                        "catalyst": cat,
-                        "market": "US",
-                        "tier": row.get("market_cap_tier", "mid"),
-                    })
-
-    if not candidates:
-        return []
-
-    # 2) Growth Momentum Score (sampling — 비용 큼)
-    # 매일 N개씩 rotate 또는 weekly fresh — 단순화: top 5 candidate 만 score
-    try:
-        from .growth_momentum import score_ticker
-    except Exception as e:
-        log.debug("growth_momentum import 실패: %s", e)
-        return []
-
-    # tier 'small'/'mid' 우선 (large 는 +100% 어려움)
-    candidates.sort(key=lambda c: {"small": 0, "mid": 1, "large": 2}.get(c.get("tier"), 1))
-
-    # 매 cycle 마다 N개씩 score (전체는 weekly cron 가정)
-    sample_size = 10
-    sampled = candidates[:sample_size]
-
-    hits: list[dict] = []
-    for c in sampled:
-        sc = score_ticker(c["ticker"])
-        if not sc.get("available"):
-            continue
-        score = sc.get("score") or 0
-        if score < _HYPER_GROWTH_THRESHOLD:
-            continue
-        c["growth_score"] = score
-        c["yoy_recent"] = sc.get("yoy_growth_recent")
-        c["is_accelerating"] = sc.get("is_accelerating")
-        hits.append(c)
-
-    # 3) 텔레그램 alert
-    for c in hits:
-        ticker = c["ticker"]
-        name = c["name"]
-        cat = c["catalyst"]
-        cat_label = CATALYSTS.get(cat, {}).get("ko", cat)
-        score = c["growth_score"]
-        yoy = c.get("yoy_recent")
-        emoji = "💎" if score >= _HYPER_GROWTH_CRITICAL else "🌱"
-        severity = "critical" if score >= _HYPER_GROWTH_CRITICAL else "info"
-        rule_id = f"R8:hyper_growth:{ticker}:{int(score)}"
-
-        accel_tag = " · 가속중" if c.get("is_accelerating") else ""
-        yoy_str = f"YoY {yoy*100:+.0f}%" if yoy is not None else ""
-        msg = (f"{emoji} +100% Watch — {name} ({ticker})\n"
-               f"Growth Momentum {score:.0f}/100{accel_tag}\n"
-               f"Catalyst: {cat_label}\n"
-               f"{yoy_str} (최근 분기 매출 성장)\n\n"
-               f"→ Discovery 탭 + Valuation 확인")
-        result = _send_or_skip(conn, rule_id, ticker, severity, msg, dedup_hours=168)  # 7일
-        out.append({"rule": rule_id, **result})
-
+    # 신규 진입 없으면 침묵 — weekly_scan 이 다시 DB 업데이트할 때까지 대기
     return out
 
 
