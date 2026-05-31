@@ -65,21 +65,50 @@ def load_kr_dynamic() -> list[dict]:
 
 
 def load_us_wide() -> list[dict]:
-    """US wide universe 로드."""
-    path = DATA_DIR / "wide_universe.csv"
-    if not path.exists():
-        return []
+    """US universe 로드 — dynamic (NASDAQ+NYSE+AMEX 전종목) + manual curated 합집합."""
+    seen = set()
     out = []
-    with open(path, encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+    # 1) US dynamic (fdr fetched, daily rebuild)
+    dyn_path = DATA_DIR / "us_dynamic_universe.csv"
+    if dyn_path.exists():
+        with open(dyn_path, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                break
+        # reset, re-read skipping comments
+        with open(dyn_path, encoding="utf-8") as f:
+            lines = [l for l in f if not l.startswith("#")]
+        for row in csv.DictReader(lines):
+            t = row.get("ticker", "").strip()
+            if not t or t in seen:
+                continue
+            seen.add(t)
             out.append({
-                "ticker": row.get("ticker"),
+                "ticker": t,
                 "name": row.get("name"),
-                "market": row.get("exchange"),
+                "market": row.get("market"),
                 "sector": row.get("sector"),
                 "industry": row.get("industry"),
                 "tier": row.get("market_cap_tier"),
             })
+    # 2) Manual curated (wide_universe.csv) — 빠진 catalyst 종목 보완
+    manual_path = DATA_DIR / "wide_universe.csv"
+    if manual_path.exists():
+        with open(manual_path, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                t = row.get("ticker", "").strip()
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                out.append({
+                    "ticker": t,
+                    "name": row.get("name"),
+                    "market": row.get("exchange"),
+                    "sector": row.get("sector"),
+                    "industry": row.get("industry"),
+                    "tier": row.get("market_cap_tier"),
+                })
     return out
 
 

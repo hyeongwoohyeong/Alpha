@@ -48,13 +48,58 @@ def _ts(d: _dt.date) -> str:
 
 
 def fetch_kr_universe() -> list[dict]:
-    """KOSPI + KOSDAQ 전종목 fetch → 필터링."""
+    """KOSPI + KOSDAQ 전종목 fetch → 필터링.
+
+    1차: FinanceDataReader (KRX 차단 우회, 더 robust)
+    2차 fallback: pykrx (실패 시 빈 list 반환 — graceful)
+    """
+    # === 1차: FinanceDataReader ===
+    try:
+        import FinanceDataReader as fdr
+        log.info("FinanceDataReader 로 KR universe fetch 시도")
+        rows = []
+        for market_name in ["KOSPI", "KOSDAQ"]:
+            df = fdr.StockListing(market_name)
+            if df is None or df.empty:
+                log.warning("fdr %s 빈 응답", market_name)
+                continue
+            for _, r in df.iterrows():
+                try:
+                    mcap = float(r.get("Marcap", 0) or 0)
+                    if mcap < MIN_MARKET_CAP:
+                        continue
+                    name = str(r.get("Name", "") or "")
+                    if not name or name.endswith(("우", "우B")) \
+                       or "SPAC" in name.upper() or "스팩" in name:
+                        continue
+                    rows.append({
+                        "ticker": str(r.get("Code", "")),
+                        "name_ko": name,
+                        "market": market_name,
+                        "market_cap_krw": int(mcap),
+                        "avg_dollar_vol_60d": 0,  # fdr 에선 별도 fetch 필요 — skip
+                        "market_cap_tier": (
+                            "large" if mcap >= 10_000_000_000_000
+                            else "mid" if mcap >= 1_000_000_000_000
+                            else "small"
+                        ),
+                    })
+                except Exception:
+                    continue
+        if rows:
+            log.info("✓ FinanceDataReader KR fetch 성공: %d 종목", len(rows))
+            return rows
+    except ImportError:
+        log.warning("FinanceDataReader 미설치 — pykrx fallback")
+    except Exception as e:
+        log.warning("FinanceDataReader KR fail: %s — pykrx fallback", e)
+
+    # === 2차 fallback: pykrx ===
     if not HAS_PYKRX:
-        log.error("pykrx 미설치 — 빌드 중단")
+        log.error("pykrx도 미설치 — KR universe 빈 list 반환 (graceful)")
         return []
 
     today = _dt.date.today()
-    # 영업일로 보정 — pykrx 가 휴일이면 fail. 단순화: today 부터 거꾸로 5일 시도
     end_date = today
     for back in range(5):
         try:
@@ -66,12 +111,15 @@ def fetch_kr_universe() -> list[dict]:
         end_date = today - _dt.timedelta(days=back + 1)
 
     start_date = end_date - _dt.timedelta(days=LOOKBACK_DAYS)
-    log.info("KR universe fetch: %s ~ %s", start_date, end_date)
+    log.info("pykrx KR universe fetch: %s ~ %s", start_date, end_date)
 
-    # 시총 + 거래대금 한 번에 (KOSPI + KOSDAQ 통합)
-    market_cap = krx.get_market_cap(_ts(end_date), market="ALL")
+    try:
+        market_cap = krx.get_market_cap(_ts(end_date), market="ALL")
+    except Exception as e:
+        log.error("pykrx 시총 fetch 실패: %s — 빈 list 반환", e)
+        return []
     if market_cap is None or market_cap.empty:
-        log.error("시총 데이터 fetch 실패")
+        log.error("pykrx 시총 빈 응답 — 빈 list 반환")
         return []
 
     # KOSPI, KOSDAQ 종목 list 별도로 (market 구분 위해)
@@ -128,9 +176,51 @@ def fetch_kr_universe() -> list[dict]:
     return out
 
 
+def fetch_us_dynamic() -> list[dict]:
+    """US universe — NASDAQ + NYSE + AMEX 전종목 (FinanceDataReader).
+
+    소형주 (Russell 2000 zone, 시총 $200M~$2B) 포함 — 2~10베거 가능 영역.
+    """
+    out = []
+    try:
+        import FinanceDataReader as fdr
+    except ImportError:
+        log.warning("FinanceDataReader 미설치 — US dynamic skip, manual list 만")
+        return out
+    for market in ["NASDAQ", "NYSE", "AMEX"]:
+        try:
+            df = fdr.StockListing(market)
+            if df is None or df.empty:
+                continue
+            for _, r in df.iterrows():
+                try:
+                    ticker = str(r.get("Symbol", "") or r.get("ticker", ""))
+                    if not ticker or len(ticker) > 6:  # 너무 긴 ticker 제외 (warrant 등)
+                        continue
+                    # ETF 제외 (ETF 는 별도 list)
+                    name = str(r.get("Name", "") or "")
+                    if not name or any(x in name.upper() for x in [" ETF", " FUND", " TRUST"]):
+                        continue
+                    industry = str(r.get("Industry", "") or r.get("IndustryCode", ""))
+                    sector = str(r.get("Sector", "") or "")
+                    out.append({
+                        "ticker": ticker,
+                        "name": name,
+                        "market": market,
+                        "sector": sector,
+                        "industry": industry,
+                        "market_cap_tier": "unknown",  # fdr 시총 X — yfinance enrich 별도
+                    })
+                except Exception:
+                    continue
+            log.info("fdr %s: %d 종목", market, len(out))
+        except Exception as e:
+            log.warning("fdr %s fetch 실패: %s", market, e)
+    return out
+
+
 def fetch_us_universe_static() -> list[dict]:
-    """US universe — 기존 wide_universe.csv 그대로 활용 (이미 dynamic 수준).
-    필요 시 추후 Wikipedia S&P 1500 scrape 추가."""
+    """기존 wide_universe.csv (manual curated)."""
     src = DATA_DIR / "wide_universe.csv"
     if not src.exists():
         return []
@@ -146,6 +236,23 @@ def fetch_us_universe_static() -> list[dict]:
                 "market_cap_tier": row.get("market_cap_tier", "mid"),
             })
     return out
+
+
+def write_us_dynamic(rows: list[dict]) -> None:
+    """US dynamic universe (NASDAQ+NYSE+AMEX 전종목) CSV 저장."""
+    if not rows:
+        log.warning("US rows 비어있음 — write skip")
+        return
+    out_path = DATA_DIR / "us_dynamic_universe.csv"
+    cols = ["ticker", "name", "market", "sector", "industry", "market_cap_tier"]
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
+        f.write(f"# US dynamic universe — built {_dt.date.today().isoformat()}\n")
+        f.write(f"# Source: FinanceDataReader (NASDAQ + NYSE + AMEX)\n")
+        f.write(f"# Count: {len(rows)} 종목\n")
+        w = csv.DictWriter(f, fieldnames=cols)
+        w.writeheader()
+        w.writerows(rows)
+    log.info("✓ %s 저장 (%d 종목)", out_path, len(rows))
 
 
 def write_kr_dynamic(rows: list[dict]) -> None:
@@ -167,9 +274,19 @@ def write_kr_dynamic(rows: list[dict]) -> None:
 
 def main():
     log.info("=== Dynamic Universe Builder ===")
-    rows = fetch_kr_universe()
-    write_kr_dynamic(rows)
-    # US 는 wide_universe.csv 그대로 사용 (별도 fetch 안 함)
+    # KR (FinanceDataReader primary, pykrx fallback)
+    try:
+        kr_rows = fetch_kr_universe()
+        write_kr_dynamic(kr_rows)
+    except Exception as e:
+        log.error("KR universe build 실패 (graceful): %s", e)
+
+    # US (FinanceDataReader dynamic — NASDAQ + NYSE + AMEX 전종목)
+    try:
+        us_rows = fetch_us_dynamic()
+        write_us_dynamic(us_rows)
+    except Exception as e:
+        log.error("US dynamic build 실패 (graceful): %s", e)
 
 
 if __name__ == "__main__":

@@ -32,15 +32,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pykrx yfinance pandas requests
+          pip install pykrx yfinance pandas requests finance-datareader
 
-      - name: 1) KR Dynamic Universe rebuild
+      - name: 1) Dynamic Universe rebuild (KR + US)
+        continue-on-error: true  # universe build 실패해도 다음 step 진행 (manual list 만으로도 동작)
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           python scripts/build_dynamic_universe.py
 
-      - name: 2) Weekly Growth Scan + Alert
+      - name: 2) Confluence Score Scan + Alert
         env:
           PYTHONUNBUFFERED: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
