@@ -39,7 +39,13 @@ RULES_ENABLED: dict[str, bool] = {
     "R5_btc_drawdown_deep":  True,
     "R6_intraday_spike":     False,  # 기본 OFF (spam 방지)
     "R7_new_alpha_discovery": True,
+    "R8_hyper_growth_watch": True,   # +100% Watch — Growth Momentum + Catalyst
 }
+
+# +100% Watch — Universe 별로 score 캐시 (매일 update 큰 비용이라 weekly cron)
+# 실제 데이터는 GitHub Actions Daily Research 워크플로가 별도 채움
+_HYPER_GROWTH_THRESHOLD = 70.0
+_HYPER_GROWTH_CRITICAL = 80.0
 
 
 def _now_utc_iso() -> str:
@@ -311,6 +317,138 @@ def check_new_alpha_discovery(conn: sqlite3.Connection, rows: list[dict]) -> lis
 
 
 # ---------------------------------------------------------------------------
+# R8 — +100% Watch (Hyper-Growth + Catalyst)
+# ---------------------------------------------------------------------------
+
+def check_hyper_growth_watch(conn: sqlite3.Connection) -> list[dict]:
+    """+100% 가능 후보 자동 발굴.
+
+    조건 (모두 hit):
+      - Growth Momentum Score ≥ 70 (4분기 가속 패턴)
+      - Active catalyst tag 보유 (AI/HBM/양자/비만 등 21개 cycle 중 하나)
+      - 시총 적정 (small~mid cap — large 는 +100% 어려움)
+      - 52W DD ≤ -10% (저점 진입 chance) OR break-out (+10% from base)
+    """
+    if not RULES_ENABLED.get("R8_hyper_growth_watch"):
+        return []
+    out: list[dict] = []
+
+    # universe + catalyst tag 로드
+    try:
+        import csv
+        from pathlib import Path
+        from .catalyst_tags import CATALYSTS, ACTIVE_CATALYSTS
+    except Exception as e:
+        log.debug("R8 import 실패: %s", e)
+        return []
+
+    # 1) Universe 후보 — KR momentum + US wide (active catalyst 있는 종목만)
+    candidates: list[dict] = []
+
+    # KR momentum universe
+    kr_path = Path(__file__).resolve().parents[1] / "data" / "kr_momentum_universe.csv"
+    if kr_path.exists():
+        with open(kr_path, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                cat = row.get("catalyst", "")
+                if cat in ACTIVE_CATALYSTS:
+                    candidates.append({
+                        "ticker": row.get("ticker"),
+                        "name": row.get("name_ko"),
+                        "catalyst": cat,
+                        "market": "KR",
+                        "tier": row.get("market_cap_tier", "mid"),
+                    })
+
+    # US wide universe — catalyst 가 명시 안 됨, industry 매칭
+    us_path = Path(__file__).resolve().parents[1] / "data" / "wide_universe.csv"
+    industry_to_catalyst = {
+        "Quantum Computing": "quantum_computing",
+        "BTC Mining": "btc_mining",
+        "BTC Treasury": "btc_treasury",
+        "Nuclear Power": "nuclear_power",
+        "Nuclear SMR": "nuclear_power",
+        "AI Cloud Infrastructure": "ai_infra",
+        "AI Drug Discovery": "ai_drug_discovery",
+        "Power Construction": "ai_infra",
+        "Space Launch": "space",
+        "Satellite Connectivity": "space",
+        "Auto Retail": "auto",
+        "Brokerage Crypto": "fintech_crypto",
+        "Digital Banking": "fintech_crypto",
+        "Software (BTC strategy)": "btc_treasury",
+    }
+    if us_path.exists():
+        with open(us_path, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                industry = row.get("industry", "")
+                cat = industry_to_catalyst.get(industry)
+                if cat and cat in ACTIVE_CATALYSTS:
+                    candidates.append({
+                        "ticker": row.get("ticker"),
+                        "name": row.get("name"),
+                        "catalyst": cat,
+                        "market": "US",
+                        "tier": row.get("market_cap_tier", "mid"),
+                    })
+
+    if not candidates:
+        return []
+
+    # 2) Growth Momentum Score (sampling — 비용 큼)
+    # 매일 N개씩 rotate 또는 weekly fresh — 단순화: top 5 candidate 만 score
+    try:
+        from .growth_momentum import score_ticker
+    except Exception as e:
+        log.debug("growth_momentum import 실패: %s", e)
+        return []
+
+    # tier 'small'/'mid' 우선 (large 는 +100% 어려움)
+    candidates.sort(key=lambda c: {"small": 0, "mid": 1, "large": 2}.get(c.get("tier"), 1))
+
+    # 매 cycle 마다 N개씩 score (전체는 weekly cron 가정)
+    sample_size = 10
+    sampled = candidates[:sample_size]
+
+    hits: list[dict] = []
+    for c in sampled:
+        sc = score_ticker(c["ticker"])
+        if not sc.get("available"):
+            continue
+        score = sc.get("score") or 0
+        if score < _HYPER_GROWTH_THRESHOLD:
+            continue
+        c["growth_score"] = score
+        c["yoy_recent"] = sc.get("yoy_growth_recent")
+        c["is_accelerating"] = sc.get("is_accelerating")
+        hits.append(c)
+
+    # 3) 텔레그램 alert
+    for c in hits:
+        ticker = c["ticker"]
+        name = c["name"]
+        cat = c["catalyst"]
+        cat_label = CATALYSTS.get(cat, {}).get("ko", cat)
+        score = c["growth_score"]
+        yoy = c.get("yoy_recent")
+        emoji = "💎" if score >= _HYPER_GROWTH_CRITICAL else "🌱"
+        severity = "critical" if score >= _HYPER_GROWTH_CRITICAL else "info"
+        rule_id = f"R8:hyper_growth:{ticker}:{int(score)}"
+
+        accel_tag = " · 가속중" if c.get("is_accelerating") else ""
+        yoy_str = f"YoY {yoy*100:+.0f}%" if yoy is not None else ""
+        msg = (f"{emoji} +100% Watch — {name} ({ticker})\n"
+               f"Growth Momentum {score:.0f}/100{accel_tag}\n"
+               f"Catalyst: {cat_label}\n"
+               f"{yoy_str} (최근 분기 매출 성장)\n\n"
+               f"→ Discovery 탭 + Valuation 확인")
+        result = _send_or_skip(conn, rule_id, ticker, severity, msg, dedup_hours=168)  # 7일
+        out.append({"rule": rule_id, **result})
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Top-level runner
 # ---------------------------------------------------------------------------
 
@@ -338,6 +476,10 @@ def run_alert_cycle(holdings: list[dict] | None = None,
         summary["runs"].extend(check_intraday_spike(conn, holdings))
         if rows:
             summary["runs"].extend(check_new_alpha_discovery(conn, rows))
+        # R8 — 매일은 비용 큼. UTC 13:00 (KST 22:00 밤 brief 시점) 에만 실행
+        from datetime import datetime as _dt2
+        if _dt2.utcnow().hour == 13:
+            summary["runs"].extend(check_hyper_growth_watch(conn))
     sent = sum(1 for r in summary["runs"] if r.get("sent"))
     summary["sent_count"] = sent
     summary["total_rules_evaluated"] = len(summary["runs"])

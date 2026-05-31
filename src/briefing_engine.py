@@ -426,6 +426,42 @@ def build_news_section() -> list[str]:
         return []
 
 
+def build_hyper_growth_section() -> list[str]:
+    """+100% Watch — Growth Momentum + Catalyst hit 종목.
+
+    DB 의 최근 R8 alert log 에서 추출 (실시간 score 안 함, 비용 큼).
+    """
+    try:
+        from . import database as db
+        import sqlite3
+        # alert_log 에서 최근 7일 R8 hit
+        with db.db_session() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT ticker, message FROM alert_log "
+                "WHERE rule_id LIKE 'R8:%' AND ok=1 "
+                "AND sent_at >= datetime('now', '-7 days') "
+                "ORDER BY sent_at DESC LIMIT 5"
+            )
+            rows = cur.fetchall()
+    except Exception as e:
+        log.debug("hyper-growth section 빌드 실패: %s", e)
+        return []
+    if not rows:
+        return []
+    lines = ["💎 +100% Watch (이번 주)"]
+    for ticker, msg in rows:
+        # 메시지 첫 줄에서 종목명 추출
+        first_line = (msg or "").split("\n")[0]
+        # "💎 +100% Watch — {name} ({ticker})" 패턴
+        if "—" in first_line:
+            name_part = first_line.split("—", 1)[1].strip()
+        else:
+            name_part = ticker
+        lines.append(f"  {name_part}")
+    return lines
+
+
 def build_morning_briefing() -> tuple[str, dict]:
     """08:30 KST — 어젯밤 미국 + 뉴스 + 오늘 KR 가이드."""
     now = _NOW_KST()
@@ -463,7 +499,7 @@ def build_evening_briefing() -> tuple[str, dict]:
 
 
 def build_night_briefing() -> tuple[str, dict]:
-    """22:00 KST — 미국 EOD 직전 + 내일 KR 준비."""
+    """22:00 KST — 미국 EOD 직전 + 내일 KR 준비 + +100% Watch."""
     now = _NOW_KST()
     header = [f"🌃 밤 브리핑 — {now.strftime('%Y.%m.%d (%a)')} 미국 EOD 직전"]
     progress_lines, meta = build_progress_section()
@@ -472,6 +508,7 @@ def build_night_briefing() -> tuple[str, dict]:
         progress_lines,
         build_market_section(),
         build_alpha_bet_section(),
+        build_hyper_growth_section(),
         build_macro_section(days_ahead=3),
         ["⏰ 내일 KR 09:00 준비 — 미국 NVDA/TSMC 변동 확인 후 시초가 판단"],
         build_quote_section(),
