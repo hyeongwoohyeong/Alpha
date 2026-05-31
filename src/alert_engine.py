@@ -40,7 +40,21 @@ RULES_ENABLED: dict[str, bool] = {
     "R6_intraday_spike":     False,  # 기본 OFF (spam 방지)
     "R7_new_alpha_discovery": True,
     "R8_hyper_growth_watch": True,   # +100% Watch — Growth Momentum + Catalyst
+    "R9_phase_transition":   True,   # Phase A→B→C 전환 NW 도달 알림
+    "R10_tax_calendar":      True,   # 12월 양도세 250만 공제 alert
 }
+
+# Phase 전환 NW 임계 (memory: apartment_deadline.md / user_profile.md)
+_PHASE_TRANSITIONS = [
+    (400_000_000,   "A_to_B", "🏠 Phase A → B 전환 가능",
+        "NW ₩4억 도달 — 분양 잔금 가능 영역. KODEX 하이닉스 익절·BTC 전환 검토."),
+    (500_000_000,   "B_entry", "📊 Phase B 진입 (코어 적립)",
+        "NW ₩5억 — 코어 적립 (QLD/JEPQ/SCHD) 자동화 시점. 알파는 위성으로 축소."),
+    (1_000_000_000, "C_entry", "💰 Phase C 진입 (배당 시스템)",
+        "NW ₩10억 — JEPQ/SCHD 배당으로 월 ₩400만+ 가능. 워라밸 직장 이직 가능 영역."),
+    (2_000_000_000, "final",   "🎯 최종 목표 ₩20억 도달",
+        "황제드라몬 팔라딘모드 — 자유 도달."),
+]
 
 # +100% Watch — Universe 별로 score 캐시 (매일 update 큰 비용이라 weekly cron)
 # 실제 데이터는 GitHub Actions Daily Research 워크플로가 별도 채움
@@ -384,6 +398,68 @@ def check_hyper_growth_watch(conn: sqlite3.Connection) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# R9 — Phase 전환 NW 도달 알림
+# ---------------------------------------------------------------------------
+
+def check_phase_transition(conn: sqlite3.Connection) -> list[dict]:
+    """NW snapshot 기반 Phase 전환 도달 자동 감지.
+
+    어제까지 < 임계, 오늘 ≥ 임계 인 경우 alert.
+    매 cycle 한 번만 (dedup_hours=720 = 30일).
+    """
+    if not RULES_ENABLED.get("R9_phase_transition"):
+        return []
+    out: list[dict] = []
+    try:
+        from .nw_snapshot import calculate_current_nw, get_recent_snapshots
+        snaps = get_recent_snapshots(days=7)
+        if len(snaps) < 2:
+            # snapshot 데이터 부족 — 첫 진입은 알림 X (false trigger 방지)
+            return out
+        today_nw = snaps[0]["nw_krw"]
+        yesterday_nw = snaps[1]["nw_krw"]
+        for threshold, key, title, body in _PHASE_TRANSITIONS:
+            if yesterday_nw < threshold <= today_nw:
+                rule_id = f"R9:phase:{key}"
+                msg = (f"{title}\n\n"
+                       f"NW ₩{today_nw/1e6:.0f}M 도달 (어제 ₩{yesterday_nw/1e6:.0f}M)\n\n"
+                       f"{body}\n\n"
+                       f"→ 대시보드 portfolio + alpha_bets 검토")
+                # 30일 dedup — 같은 임계 한 번만
+                result = _send_or_skip(conn, rule_id, None, "critical", msg, dedup_hours=720)
+                out.append({"rule": rule_id, "threshold": threshold, **result})
+    except Exception as e:
+        log.debug("R9 phase transition 실패: %s", e)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# R10 — 세금 캘린더 (12월 양도세 공제)
+# ---------------------------------------------------------------------------
+
+def check_tax_calendar(conn: sqlite3.Connection) -> list[dict]:
+    """12월 첫주 텔레그램: 양도세 공제 한도 활용 reminder.
+
+    Korea: 해외주식 양도세 연 ₩250만 공제. 매년 12월 한도 안 채우면 사라짐.
+    """
+    if not RULES_ENABLED.get("R10_tax_calendar"):
+        return []
+    import datetime as _dt
+    now_kst = _dt.datetime.utcnow() + _dt.timedelta(hours=9)
+    # 12월 1~7일 사이 한 번만
+    if now_kst.month != 12 or now_kst.day > 7:
+        return []
+    rule_id = f"R10:tax:{now_kst.year}"
+    msg = (f"💵 해외주식 양도세 reminder ({now_kst.year}년)\n\n"
+           f"연 ₩250만 공제 한도 — 12월 안 채우면 사라짐.\n"
+           f"올해 실현 PnL 확인 후 ₩250만 한도까지 익절 검토.\n\n"
+           f"→ 토스증권 매도 + 손익 확인 (당년 결제일 기준 12/30)")
+    # 1년 dedup — 매년 한 번
+    result = _send_or_skip(conn, rule_id, None, "info", msg, dedup_hours=8760)
+    return [{"rule": rule_id, **result}]
+
+
+# ---------------------------------------------------------------------------
 # Top-level runner
 # ---------------------------------------------------------------------------
 
@@ -415,6 +491,10 @@ def run_alert_cycle(holdings: list[dict] | None = None,
         from datetime import datetime as _dt2
         if _dt2.utcnow().hour == 13:
             summary["runs"].extend(check_hyper_growth_watch(conn))
+        # R9 — Phase 전환 (매시간 체크, dedup 30일)
+        summary["runs"].extend(check_phase_transition(conn))
+        # R10 — 세금 캘린더 (12월 첫주만, dedup 1년)
+        summary["runs"].extend(check_tax_calendar(conn))
     sent = sum(1 for r in summary["runs"] if r.get("sent"))
     summary["sent_count"] = sent
     summary["total_rules_evaluated"] = len(summary["runs"])

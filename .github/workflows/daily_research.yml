@@ -59,6 +59,13 @@ jobs:
             python run_research.py
           fi
 
+      - name: Save NW snapshot (daily)
+        continue-on-error: true
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python -m src.nw_snapshot
+
       - name: Commit alpha.db
         run: |
           git config user.name  "alpha-bot"
