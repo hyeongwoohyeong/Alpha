@@ -16,9 +16,13 @@ import datetime as _dt
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote as urllib_quote
 
 from .utils import get_logger
-from .telegram_notifier import send_telegram_plain
+from .telegram_notifier import send_telegram_plain, send_telegram_photo
+
+# 디지몬 이미지 URL — GitHub Pages 의 AlphaDashboard repo
+_DIGIMON_IMAGE_BASE = "https://hyeongwoohyeong.github.io/Alpha_research/digimon%20image/"
 
 log = get_logger("briefing_engine")
 
@@ -380,8 +384,19 @@ def _join(*sections: list[str]) -> str:
     return f"\n\n{_SEP}\n".join(out)
 
 
+def build_news_section() -> list[str]:
+    """뉴스 섹션 — LLM 요약 top 3. 실패 시 빈 list."""
+    try:
+        from .news_brief import get_news_for_briefing, format_news_section
+        items = get_news_for_briefing()
+        return format_news_section(items)
+    except Exception as e:
+        log.warning("뉴스 섹션 빌드 실패: %s", e)
+        return []
+
+
 def build_morning_briefing() -> tuple[str, dict]:
-    """08:30 KST — 어젯밤 미국 + 오늘 KR 가이드."""
+    """08:30 KST — 어젯밤 미국 + 뉴스 + 오늘 KR 가이드."""
     now = _NOW_KST()
     header = [f"🌅 아침 브리핑 — {now.strftime('%Y.%m.%d (%a)')}"]
     progress_lines, meta = build_progress_section()
@@ -389,6 +404,7 @@ def build_morning_briefing() -> tuple[str, dict]:
         header,
         progress_lines,
         build_market_section(),
+        build_news_section(),
         build_macro_section(days_ahead=7),
         build_alpha_bet_section(),
         build_checklist_section(),
@@ -433,6 +449,23 @@ def build_night_briefing() -> tuple[str, dict]:
 # Runner
 # ---------------------------------------------------------------------------
 
+def _build_digimon_image_url(evo_stage: dict | None) -> str | None:
+    """진화 단계 → GitHub Pages 이미지 URL.
+
+    파일명은 한글이라 URL encoding 필요. NFD normalize 후 quote (대시보드와 동일).
+    """
+    if not evo_stage:
+        return None
+    name = evo_stage.get("name")
+    if not name:
+        return None
+    import unicodedata
+    # macOS NFD 저장 → URL encoding (대시보드 imagePath() 와 동일 패턴)
+    nfd = unicodedata.normalize("NFD", name)
+    encoded = urllib_quote(nfd + ".png", safe="")
+    return _DIGIMON_IMAGE_BASE + encoded
+
+
 def run_briefing(slot: str) -> dict[str, Any]:
     """slot: 'morning' | 'evening' | 'night'."""
     builders = {
@@ -443,9 +476,20 @@ def run_briefing(slot: str) -> dict[str, Any]:
     if slot not in builders:
         return {"ok": False, "error": f"unknown_slot:{slot}"}
     msg, meta = builders[slot]()
+    # 1) 본문 텍스트 전송
     result = send_telegram_plain(msg)
-    out = {"slot": slot, "msg_preview": msg[:300], "evo_stage": meta.get("evo_stage", {}).get("name"), **result}
-    # 다음 turn 에 sendPhoto 추가 — 현재는 텍스트 only
+    out = {"slot": slot, "msg_preview": msg[:300],
+           "evo_stage": meta.get("evo_stage", {}).get("name"), **result}
+    # 2) 디지몬 이미지 별도 전송 (텍스트 send 성공 시만)
+    if result.get("ok"):
+        evo = meta.get("evo_stage")
+        photo_url = _build_digimon_image_url(evo)
+        if photo_url:
+            stage_no = evo.get("stage", "?")
+            caption = f"진화 단계 {stage_no}/8 — {evo.get('name','')}"
+            photo_result = send_telegram_photo(photo_url, caption=caption)
+            out["photo_sent"] = photo_result.get("ok", False)
+            out["photo_url"] = photo_url
     return out
 
 

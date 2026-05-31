@@ -89,3 +89,42 @@ def send_telegram(
 def send_telegram_plain(text: str, **kwargs) -> dict[str, Any]:
     """parse_mode 없는 plain text 송신 — escape 안 함, 간편."""
     return send_telegram(text, parse_mode="", **kwargs)
+
+
+_TG_PHOTO = "https://api.telegram.org/bot{token}/sendPhoto"
+
+
+def send_telegram_photo(
+    photo_url: str,
+    caption: str | None = None,
+    timeout_sec: int = 10,
+) -> dict[str, Any]:
+    """텔레그램 이미지 송신 (URL 기반). 토큰 없으면 graceful skip.
+
+    photo_url: 공개 접근 가능한 이미지 URL (예: GitHub Pages).
+    caption: 이미지 아래 표시될 텍스트 (1024자 한도).
+    """
+    token, chat_id = _get_creds()
+    if not token or not chat_id:
+        log.info("Telegram creds 없음 — photo skip (%s)", photo_url)
+        return {"ok": False, "skipped": True, "error": "no_creds"}
+
+    url = _TG_PHOTO.format(token=token)
+    payload = {
+        "chat_id": str(chat_id),
+        "photo": photo_url,
+        "disable_notification": True,  # 이미지는 알림 없이 (메시지가 알림)
+    }
+    if caption:
+        # caption 은 plain text — escape 안 함
+        payload["caption"] = caption[:1024]
+
+    try:
+        r = requests.post(url, json=payload, timeout=timeout_sec)
+        if r.status_code == 200:
+            return {"ok": True, "skipped": False, "error": None}
+        log.warning("Telegram photo 실패 status=%s body=%s", r.status_code, r.text[:200])
+        return {"ok": False, "skipped": False, "error": f"http_{r.status_code}: {r.text[:160]}"}
+    except Exception as e:
+        log.warning("Telegram photo 예외: %s", e)
+        return {"ok": False, "skipped": False, "error": str(e)}
