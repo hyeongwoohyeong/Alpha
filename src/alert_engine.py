@@ -375,13 +375,31 @@ def check_hyper_growth_watch(conn: sqlite3.Connection) -> list[dict]:
         new_entrants = []
 
     if new_entrants:
-        # 한 번에 한 메시지로 묶음 (texting fewer noise)
-        lines = ["💎 신규 +100% Watch 후보"]
+        # 한 번에 한 메시지로 묶음 + position sizing 권장
+        try:
+            from .position_sizing import recommend_size_for_bet
+            from .nw_snapshot import calculate_current_nw
+            nw_krw = calculate_current_nw().get("nw_krw", 0)
+        except Exception:
+            nw_krw = 0
+
+        lines = ["💎 신규 +100% Watch 후보 + 권장 사이즈"]
         for row in new_entrants[:8]:
             ticker, name, market, cat, score, yoy = row
             yoy_str = f" · YoY {yoy*100:+.0f}%" if yoy is not None else ""
             cat_str = f" · {cat}" if cat else ""
-            lines.append(f"  • {name} ({ticker}) Score {score:.0f}{yoy_str}{cat_str}")
+            # Position size 권장
+            size_str = ""
+            if nw_krw > 0:
+                try:
+                    rec = recommend_size_for_bet(nw_krw=nw_krw, confluence_score=score)
+                    krw_m = rec["recommended_krw"] / 1e6
+                    pct = rec["recommended_pct"] * 100
+                    if krw_m > 0.5:  # ₩0.5M 이상만 표시
+                        size_str = f"\n     💼 권장: ₩{krw_m:.0f}M ({pct:.0f}% NW)"
+                except Exception:
+                    pass
+            lines.append(f"  • {name} ({ticker}) Score {score:.0f}{yoy_str}{cat_str}{size_str}")
         lines.append("")
         lines.append("→ 대시보드 Discovery 탭 + Valuation 검토 후 알파 베팅 후보로 승격")
         msg = "\n".join(lines)
