@@ -1,0 +1,63 @@
+name: Daily Briefings
+
+# 하루 3회 시황 브리핑 — 텔레그램 다이제스트 push.
+# 시간대 (KST → UTC 변환, KST = UTC+9):
+#   08:30 KST = 23:30 UTC (전날)
+#   18:00 KST = 09:00 UTC
+#   22:00 KST = 13:00 UTC
+# Note: GitHub Actions cron 은 ±10분 드리프트 — 정확한 시각 보장 X.
+on:
+  schedule:
+    - cron: "30 23 * * *"   # 08:30 KST — 아침
+    - cron: "0 9 * * *"     # 18:00 KST — 저녁
+    - cron: "0 13 * * *"    # 22:00 KST — 밤
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "수동 실행 slot (morning/evening/night)"
+        required: false
+        default: "morning"
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies (minimal)
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests yfinance pykrx
+
+      - name: Determine slot
+        id: slot
+        run: |
+          # cron 시간으로 slot 자동 결정 (UTC 기준 hour 추출)
+          if [ -n "${{ inputs.slot }}" ]; then
+            echo "value=${{ inputs.slot }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H)
+            if [ "$HOUR" -ge 23 ] || [ "$HOUR" -le 1 ]; then
+              echo "value=morning" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" -ge 8 ] && [ "$HOUR" -le 10 ]; then
+              echo "value=evening" >> $GITHUB_OUTPUT
+            else
+              echo "value=night" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run briefing
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m src.briefing_engine ${{ steps.slot.outputs.value }}
