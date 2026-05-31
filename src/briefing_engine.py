@@ -1,14 +1,14 @@
-"""시황 브리핑 엔진 — 하루 3회 텔레그램 다이제스트.
+"""시황 브리핑 엔진 v2 — 하루 3회 텔레그램 다이제스트.
 
 시간대 (KST):
-  08:30 — 아침: 어젯밤 미국 결과 + 오늘 KR 진입 가이드
-  18:00 — 저녁: 오늘 KR 결과 + alpha bet verdict
+  08:30 — 아침: 어젯밤 미국 + 오늘 KR 가이드 + 매크로 이벤트
+  18:00 — 저녁: 오늘 KR 결과 + alpha bet verdict + 미국 개장 watch
   22:00 — 밤:   미국 EOD 직전 + 내일 KR 준비
 
 원칙:
-  - Rule-based, LLM 토큰 안 씀
-  - graceful: 가격 fetch 실패해도 사용 가능한 데이터만 노출
-  - 다이제스트: 한 텔레그램 메시지 안에 핵심만
+  - Rule-based + LLM 뉴스 요약 (선택적 — gpt-4o-mini)
+  - graceful: 외부 API 실패 시 누락만, 다른 섹션은 계속
+  - 진행도 anchor: 디지몬 진화 단계로 동기부여
 """
 from __future__ import annotations
 
@@ -24,30 +24,45 @@ log = get_logger("briefing_engine")
 
 _NOW_KST = lambda: _dt.datetime.utcnow() + _dt.timedelta(hours=9)
 
-_PORTFOLIO_PATH = Path(__file__).resolve().parents[1] / "data" / "portfolio.json"
-_ALPHA_BETS_PATH = Path(__file__).resolve().parents[1] / "data" / "alpha_bets.json"
+_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+_PORTFOLIO_PATH = _DATA_DIR / "portfolio.json"
+_ALPHA_BETS_PATH = _DATA_DIR / "alpha_bets.json"
+_WEALTH_PATH = _DATA_DIR / "wealth_inputs.json"
+_MACRO_CAL_PATH = _DATA_DIR / "macro_calendar.json"
 
-# 브리핑별 모니터 종목
-_US_TRACKERS = ["QQQ", "SPY", "SOXL", "TQQQ"]
-_HOLDINGS_TICKERS_US = ["SOXL"]  # holdings 중 미국 종목 (자동 발견 가능하지만 명시)
+# 디지몬 진화 단계 — research_dashboard.html 의 EVO_CHARS 와 동기화
+EVO_STAGES = [
+    {"stage": 1, "name": "치코몬",                "min_eok": 0,  "max_eok": 1},
+    {"stage": 2, "name": "꼬마몬",                "min_eok": 1,  "max_eok": 2},
+    {"stage": 3, "name": "브이몬",                "min_eok": 2,  "max_eok": 3},
+    {"stage": 4, "name": "엑스브이몬",            "min_eok": 3,  "max_eok": 5},
+    {"stage": 5, "name": "파일드라몬",            "min_eok": 5,  "max_eok": 8},
+    {"stage": 6, "name": "황제드라몬 드래곤모드", "min_eok": 8,  "max_eok": 12},
+    {"stage": 7, "name": "황제드라몬 파이터모드", "min_eok": 12, "max_eok": 20},
+    {"stage": 8, "name": "황제드라몬 팔라딘모드", "min_eok": 20, "max_eok": 100},
+]
+FINAL_GOAL_EOK = 20
+
+# 아파트 분양 deadline
+APARTMENT_DEADLINE = _dt.date(2028, 7, 1)
+APARTMENT_TARGET_KRW = 400_000_000
+
+
+def _load_json(path: Path) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f) or {}
+    except Exception as e:
+        log.warning("%s 로드 실패: %s", path.name, e)
+        return {}
 
 
 def _load_holdings() -> list[dict]:
-    try:
-        with open(_PORTFOLIO_PATH, encoding="utf-8") as f:
-            return (json.load(f) or {}).get("holdings", [])
-    except Exception as e:
-        log.warning("portfolio.json 로드 실패: %s", e)
-        return []
+    return _load_json(_PORTFOLIO_PATH).get("holdings", [])
 
 
-def _load_alpha_bets() -> list[dict]:
-    try:
-        with open(_ALPHA_BETS_PATH, encoding="utf-8") as f:
-            return [b for b in (json.load(f) or {}).get("bets", []) if b.get("status") == "active"]
-    except Exception as e:
-        log.warning("alpha_bets.json 로드 실패: %s", e)
-        return []
+def _load_active_bets() -> list[dict]:
+    return [b for b in _load_json(_ALPHA_BETS_PATH).get("bets", []) if b.get("status") == "active"]
 
 
 def _fmt_pct(p: float | None, digits: int = 1) -> str:
@@ -56,217 +71,382 @@ def _fmt_pct(p: float | None, digits: int = 1) -> str:
     return f"{p*100:+.{digits}f}%"
 
 
-def _fmt_krw_mm(v: float | None) -> str:
-    if v is None:
-        return "—"
-    if abs(v) >= 1_000_000:
-        return f"₩{v/1e6:+.1f}M"
-    return f"₩{v:,.0f}"
+def _net_worth_krw() -> float:
+    """wealth_inputs.json + portfolio.json 으로 현재 NW 계산.
+
+    가장 신뢰할 수 있는 source: wealth_inputs.balance_sheet.
+    """
+    wi = _load_json(_WEALTH_PATH)
+    bs = wi.get("balance_sheet", {})
+    # 투자자산 = portfolio.json holdings 합
+    inv = sum(float(h.get("value_krw") or 0) for h in _load_holdings())
+    nw = (
+        inv
+        + float(bs.get("real_estate_krw") or 0)
+        + float(bs.get("apartment_paid_krw") or 0)
+        + float(bs.get("deposit_krw") or 0)
+        + float(bs.get("cash_outside_krw") or 0)
+        + float(bs.get("btc_krw") or 0)
+        - float(bs.get("debt_krw") or 0)
+    )
+    return nw
 
 
-def _build_us_market_summary() -> list[str]:
-    """US tracker 종목 변동률 요약 (yfinance)."""
-    from .realtime_prices import fetch_us_ticker
-    lines = []
-    for t in _US_TRACKERS:
+# ---------------------------------------------------------------------------
+# 1) 포트폴리오 진행도 (디지몬 + 분양 + 본주 target)
+# ---------------------------------------------------------------------------
+
+def build_progress_section() -> tuple[list[str], dict]:
+    """진행도 섹션 — 디지몬 단계 + 분양 + 본주 target.
+
+    Returns (lines, meta) where meta has 'evo_stage' for image attachment.
+    """
+    lines = ["🎯 포트폴리오 진행도"]
+    nw = _net_worth_krw()
+    nw_eok = nw / 1e8
+    nw_m = nw / 1e6
+
+    # 디지몬 진화 단계
+    cur = next((s for s in EVO_STAGES if s["min_eok"] <= nw_eok < s["max_eok"]), EVO_STAGES[0])
+    nxt = next((s for s in EVO_STAGES if s["stage"] == cur["stage"] + 1), None)
+    stage_range = cur["max_eok"] - cur["min_eok"]
+    stage_progress = ((nw_eok - cur["min_eok"]) / stage_range * 100) if stage_range else 100
+    lines.append(f"🦴 진화 단계: {cur['name']} (Stage {cur['stage']}/8) — 단계 {stage_progress:.0f}%")
+    if nxt:
+        remain_eok = nxt["min_eok"] - nw_eok
+        lines.append(f"   다음: {nxt['name']} (₩{nxt['min_eok']}억) — ₩{remain_eok*100:.0f}M 남음")
+
+    # 전체 목표 (₩20억)
+    total_progress = nw_eok / FINAL_GOAL_EOK * 100
+    lines.append(f"🏆 전체 목표 (₩{FINAL_GOAL_EOK}억): {total_progress:.1f}% 진행")
+
+    # 분양 deadline
+    today = _NOW_KST().date()
+    d_days = (APARTMENT_DEADLINE - today).days
+    apt_progress = (nw / APARTMENT_TARGET_KRW * 100) if APARTMENT_TARGET_KRW else 0
+    lines.append(f"🏠 분양 D-{d_days}일 — NW ₩{nw_m:.0f}M / 목표 ₩4억 ({apt_progress:.0f}%)")
+
+    # SK하이닉스 본주 target (alpha_bets 의 target_underlying_price 기반)
+    sk_target_line = _build_hynix_target_line()
+    if sk_target_line:
+        lines.append(sk_target_line)
+
+    return lines, {"evo_stage": cur}
+
+
+def _build_hynix_target_line() -> str | None:
+    """SK하이닉스 ₩2.5M target 까지 잔여 거리. 본주 실시간 가격 fetch."""
+    bets = _load_active_bets()
+    hynix_bet = next((b for b in bets if "하이닉스" in (b.get("name") or "")), None)
+    if not hynix_bet:
+        return None
+    er = hynix_bet.get("exit_rules") or {}
+    underlying = er.get("target_underlying_price")
+    if not underlying:
+        return None
+    # 가격 파싱 (예: "SK하이닉스 ₩2,500,000")
+    import re
+    m = re.search(r"₩\s*([\d,]+)", underlying)
+    if not m:
+        return None
+    target = float(m.group(1).replace(",", ""))
+    # 실시간 SK하이닉스 (000660) 가격
+    try:
+        from .realtime_prices import fetch_kr_ticker
+        q = fetch_kr_ticker("000660")
+    except Exception as e:
+        log.warning("hynix 가격 fetch 실패: %s", e)
+        return None
+    if not q.get("available"):
+        return None
+    price = q["price"]
+    remain_pct = (target - price) / price * 100  # 양수 = 아직 도달 안 함
+    return f"🎯 SK하이닉스 ₩{int(target):,} 달성: {remain_pct:.1f}% 남음 (현재 ₩{int(price):,})"
+
+
+# ---------------------------------------------------------------------------
+# 2) 글로벌 시장 (TQQQ 제거)
+# ---------------------------------------------------------------------------
+
+_MARKET_TICKERS = ["QQQ", "SPY", "SOXL"]
+
+
+def build_market_section() -> list[str]:
+    """어젯밤 글로벌 시장 — TQQQ 제거 (사용자 요청)."""
+    from .realtime_prices import fetch_us_ticker, fetch_upbit
+    lines = ["🌐 어젯밤 글로벌 시장"]
+    parts = []
+    for t in _MARKET_TICKERS:
         q = fetch_us_ticker(t)
         if not q.get("available"):
             continue
         ch = q.get("change_pct_24h")
-        dd = q.get("drawdown_from_52w_high")
-        price = q.get("price")
-        sweet = ""
-        if t == "QQQ" and dd is not None and -0.15 <= dd <= -0.05:
-            sweet = " 🎯 sweet spot!"
-        lines.append(
-            f"  {t} ${price:,.2f} · {_fmt_pct(ch)}"
-            f"{' · DD ' + _fmt_pct(dd) if dd is not None else ''}{sweet}"
-        )
+        parts.append(f"{t} {_fmt_pct(ch)}")
+    if parts:
+        lines.append("  " + " / ".join(parts))
+    # BTC
+    btc = fetch_upbit("KRW-BTC")
+    if btc.get("available"):
+        ch = btc.get("change_pct_24h")
+        dd = btc.get("drawdown_from_52w_high")
+        price = btc.get("price")
+        line = f"  BTC ₩{price/1e6:.1f}M · 24h {_fmt_pct(ch)}"
+        if dd is not None:
+            line += f" · 52W DD {_fmt_pct(dd)}"
+        lines.append(line)
+    if len(lines) == 1:
+        lines.append("  데이터 누적 중")
     return lines
 
 
-def _build_btc_summary() -> list[str]:
-    """BTC 변동 + drawdown."""
-    from .realtime_prices import fetch_upbit
-    q = fetch_upbit("KRW-BTC")
-    if not q.get("available"):
+# ---------------------------------------------------------------------------
+# 3) 매크로 이벤트 (오늘+다음 7일)
+# ---------------------------------------------------------------------------
+
+def build_macro_section(days_ahead: int = 7) -> list[str]:
+    """다가오는 매크로 이벤트 — macro_calendar.json + yfinance 어닝."""
+    cal = _load_json(_MACRO_CAL_PATH)
+    events = list(cal.get("events", []))
+    # yfinance 어닝 자동 fetch (보유 종목)
+    events.extend(_fetch_holdings_earnings(days_ahead))
+    if not events:
         return []
-    ch = q.get("change_pct_24h")
-    dd = q.get("drawdown_from_52w_high")
-    price = q.get("price")
-    return [f"  BTC ₩{price:,.0f} · 24h {_fmt_pct(ch)}"
-            f"{' · 52W DD ' + _fmt_pct(dd) if dd is not None else ''}"]
-
-
-def _build_holdings_summary(holdings: list[dict], min_value_mm: int = 5) -> list[str]:
-    """평가액 ≥ ₩5M holdings 의 현재 상태 한 줄씩."""
-    lines = []
-    items = sorted(
-        [h for h in holdings if (h.get("value_krw") or 0) >= min_value_mm * 1_000_000],
-        key=lambda h: -(h.get("value_krw") or 0)
-    )[:8]
-    for h in items:
-        name = h.get("name") or h.get("ticker", "?")
-        # 이름 길면 줄임
-        if len(name) > 22:
-            name = name[:20] + ".."
-        ret = h.get("return_pct") or 0
-        value = (h.get("value_krw") or 0) / 1e6
-        sign = "📈" if ret >= 0 else "📉"
-        lines.append(f"  {sign} {name} {ret:+.1f}% (₩{value:.0f}M)")
+    # 오늘 부터 days_ahead 안 필터
+    today = _NOW_KST().date()
+    cutoff = today + _dt.timedelta(days=days_ahead)
+    upcoming = []
+    for e in events:
+        try:
+            d = _dt.date.fromisoformat(e.get("date", ""))
+        except Exception:
+            continue
+        if today <= d <= cutoff:
+            upcoming.append((d, e))
+    if not upcoming:
+        return []
+    upcoming.sort(key=lambda x: x[0])
+    lines = ["📅 다가오는 지표·이벤트 (KST)"]
+    importance_emoji = {"critical": "🔴", "high": "🔴", "medium": "🟡", "low": "🟢"}
+    for d, e in upcoming[:6]:
+        emoji = importance_emoji.get(e.get("importance", "medium"), "🟡")
+        d_str = "오늘" if d == today else ("내일" if d == today + _dt.timedelta(days=1) else d.strftime("%m/%d"))
+        t = e.get("time_kst", "")
+        title = e.get("title", "")
+        lines.append(f"  {emoji} {d_str} {t} — {title}")
     return lines
 
 
-def _build_alpha_bet_section(holdings: list[dict]) -> list[str]:
-    """Alpha bet signals (Layer 0) 요약."""
+def _fetch_holdings_earnings(days_ahead: int) -> list[dict]:
+    """보유 종목 어닝 일정 자동 fetch — yfinance Ticker.calendar."""
+    events = []
+    try:
+        import yfinance as yf
+    except Exception:
+        return events
+    today = _NOW_KST().date()
+    # 보유 종목 중 미국 ETF/주식만 (KR 은 yfinance 어닝 부정확)
+    seen = set()
+    for h in _load_holdings():
+        ticker = (h.get("ticker") or "").strip().upper()
+        # 6자리 숫자 = KR / KODEX_*/TIGER_* = 알파 별칭, skip
+        if not ticker or ticker.isdigit() or "_" in ticker:
+            continue
+        if ticker in seen:
+            continue
+        seen.add(ticker)
+        try:
+            t = yf.Ticker(ticker)
+            cal = t.calendar
+            if cal is None or (hasattr(cal, "empty") and cal.empty):
+                continue
+            # cal 은 DataFrame 일 수도 dict 일 수도 — 안전하게 처리
+            earnings_date = None
+            if hasattr(cal, "get"):
+                ed = cal.get("Earnings Date")
+                if ed is not None and len(ed) > 0:
+                    earnings_date = ed[0] if hasattr(ed, "__getitem__") else None
+            if earnings_date is None:
+                continue
+            # datetime → date
+            ed_date = earnings_date.date() if hasattr(earnings_date, "date") else earnings_date
+            if not isinstance(ed_date, _dt.date):
+                continue
+            days_off = (ed_date - today).days
+            if 0 <= days_off <= days_ahead:
+                events.append({
+                    "date": ed_date.isoformat(),
+                    "time_kst": "06:00",  # 미국 EOD = KST 06:00 다음 날
+                    "title": f"{ticker} 어닝",
+                    "importance": "high",
+                    "category": "earnings",
+                })
+        except Exception as e:
+            log.debug("어닝 fetch %s 실패: %s", ticker, e)
+    return events
+
+
+# ---------------------------------------------------------------------------
+# 4) Alpha Bet Verdict
+# ---------------------------------------------------------------------------
+
+def build_alpha_bet_section() -> list[str]:
+    """Alpha Bet 상태 — Layer 0 와 동일 로직."""
     try:
         from .today_decision import build_alpha_bet_signals
+        holdings = _load_holdings()
         signals = build_alpha_bet_signals(holdings)
     except Exception as e:
         log.warning("alpha bet signals 실패: %s", e)
         return []
     if not signals:
-        return ["  Active bet 없음 — data/alpha_bets.json 확인"]
+        return ["🎯 Alpha Bet Verdict", "  Active bet 없음"]
     verdict_emoji = {"STOP": "🛑", "SELL": "📤", "TRIM": "✂️", "ADD": "➕", "STAY": "✅"}
-    lines = []
+    lines = ["🎯 Alpha Bet Verdict"]
     for s in signals:
         v = s.get("verdict", "STAY")
         emoji = verdict_emoji.get(v, "•")
         bet_name = s.get("bet_name") or s.get("label", "")
-        # 짧게
         if len(bet_name) > 28:
             bet_name = bet_name[:26] + ".."
         lines.append(f"  {emoji} {v} — {bet_name}")
     return lines
 
 
-def _build_kr_holdings_section(holdings: list[dict]) -> list[str]:
-    """KR holdings (KODEX 하이닉스 등) 의 현재 상태."""
-    lines = []
-    for h in holdings:
-        ticker = (h.get("ticker") or "").strip()
-        # KR ticker: 6자리 숫자 또는 KODEX_/TIGER_ 별칭
-        is_kr = (ticker.isdigit() and len(ticker) == 6) or ticker.startswith(("KODEX_", "TIGER_"))
-        if not is_kr:
+# ---------------------------------------------------------------------------
+# 5) 오늘의 체크리스트 (분양 적금 제거 — 사용자 안 가입)
+# ---------------------------------------------------------------------------
+
+def build_checklist_section() -> list[str]:
+    """오늘 할 일 — 룰 + 매크로 + 본인 ledger 기반."""
+    lines = ["✅ 오늘의 체크리스트"]
+    today = _NOW_KST().date()
+    # 1) 매크로 critical/high 이벤트
+    cal = _load_json(_MACRO_CAL_PATH)
+    for e in cal.get("events", []):
+        try:
+            d = _dt.date.fromisoformat(e.get("date", ""))
+        except Exception:
             continue
-        value = (h.get("value_krw") or 0) / 1e6
-        if value < 5:
-            continue
-        ret = h.get("return_pct") or 0
-        sign = "📈" if ret >= 0 else "📉"
-        name = h.get("name") or ticker
-        if len(name) > 22:
-            name = name[:20] + ".."
-        lines.append(f"  {sign} {name} {ret:+.1f}% (₩{value:.0f}M)")
+        if d == today and e.get("importance") in ("critical", "high"):
+            t = e.get("time_kst", "")
+            lines.append(f"□ {t} {e.get('title','')} watch")
+    # 2) KR 개장 모니터 (active bet 있을 때만)
+    bets = _load_active_bets()
+    has_kr_bet = any(("하이닉스" in (b.get("name") or "")) or ("KODEX" in (b.get("ticker") or "")) for b in bets)
+    if has_kr_bet:
+        lines.append("□ 09:00 KR 개장 — KODEX 하이닉스 시초 ±2% 모니터")
+    # 3) 작전 정상 진행 메시지 (STAY 만 있을 때)
+    try:
+        from .today_decision import build_alpha_bet_signals
+        signals = build_alpha_bet_signals(_load_holdings())
+        all_stay = all(s.get("verdict") == "STAY" for s in signals) and signals
+        if all_stay:
+            lines.append("□ 매매 X (작전 정상 진행)")
+        else:
+            lines.append("□ Alpha Bet verdict 확인 + 트리거 시 액션")
+    except Exception:
+        pass
+    if len(lines) == 1:
+        lines.append("  특이 사항 없음")
     return lines
 
 
 # ---------------------------------------------------------------------------
-# Briefing builders — 시간대별
+# 6) 자산 변동 (어제 대비)
 # ---------------------------------------------------------------------------
 
-def build_morning_briefing() -> str:
-    """08:30 KST — 어젯밤 미국 + 오늘 KR 진입 가이드."""
+def build_asset_delta_section() -> list[str]:
+    """어제 대비 NW 변동 — 단순화 (snapshot table 없으면 skip)."""
+    nw = _net_worth_krw()
+    return [
+        "💰 자산 변동",
+        f"  NW ₩{nw/1e6:.1f}M (어제 대비 +₩X.XM)  *snapshot table 필요",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Top-level builders
+# ---------------------------------------------------------------------------
+
+_SEP = "━" * 18
+
+
+def _join(*sections: list[str]) -> str:
+    out = []
+    for sec in sections:
+        if not sec:
+            continue
+        out.append("\n".join(sec))
+    return f"\n\n{_SEP}\n".join(out)
+
+
+def build_morning_briefing() -> tuple[str, dict]:
+    """08:30 KST — 어젯밤 미국 + 오늘 KR 가이드."""
     now = _NOW_KST()
-    holdings = _load_holdings()
-    parts = [f"🌅 아침 브리핑 — {now.strftime('%Y.%m.%d (%a)')}", ""]
-
-    parts.append("📊 어젯밤 미국 시장")
-    us = _build_us_market_summary()
-    parts.extend(us if us else ["  데이터 누적 중"])
-    parts.append("")
-
-    parts.append("🪙 비트코인 24h")
-    btc = _build_btc_summary()
-    parts.extend(btc if btc else ["  데이터 누적 중"])
-    parts.append("")
-
-    parts.append("🎯 Alpha Bet 상태")
-    parts.extend(_build_alpha_bet_section(holdings))
-    parts.append("")
-
-    parts.append("⏰ 오늘 KR 액션 가이드")
-    bets = _load_alpha_bets()
-    has_kodex_hynix = any("하이닉스" in (b.get("name") or "") for b in bets)
-    if has_kodex_hynix:
-        parts.append("  • KODEX 하이닉스 본주(SK하이닉스) 가격 모니터")
-        parts.append("  • 작전 정상 진행: 임계 도달 전까지 추가 매매 X")
-    else:
-        parts.append("  • Active alpha bet 없음 — Daily Brief 에서 신규 후보 확인")
-    return "\n".join(parts)
+    header = [f"🌅 아침 브리핑 — {now.strftime('%Y.%m.%d (%a)')}"]
+    progress_lines, meta = build_progress_section()
+    msg = _join(
+        header,
+        progress_lines,
+        build_market_section(),
+        build_macro_section(days_ahead=7),
+        build_alpha_bet_section(),
+        build_checklist_section(),
+        build_asset_delta_section(),
+    )
+    return msg, meta
 
 
-def build_evening_briefing() -> str:
-    """18:00 KST — 오늘 KR 결과 + alpha bet verdict + 저녁 watch."""
+def build_evening_briefing() -> tuple[str, dict]:
+    """18:00 KST — 오늘 KR 결과 + 미국 개장 직전."""
     now = _NOW_KST()
-    holdings = _load_holdings()
-    parts = [f"🌆 저녁 브리핑 — {now.strftime('%Y.%m.%d (%a)')} KR 마감 후", ""]
-
-    parts.append("📊 오늘 KR 보유 종목")
-    kr_lines = _build_kr_holdings_section(holdings)
-    parts.extend(kr_lines if kr_lines else ["  KR 보유 종목 없음 (₩5M+)"])
-    parts.append("")
-
-    parts.append("🎯 Alpha Bet Verdict")
-    parts.extend(_build_alpha_bet_section(holdings))
-    parts.append("")
-
-    parts.append("🌙 저녁 watch (미국 개장 22:30 KST)")
-    us = _build_us_market_summary()  # 개장 전이므로 어제 종가 기준
-    parts.extend(us if us else ["  데이터 누적 중"])
-    parts.append("")
-
-    parts.append("⏰ 액션 가이드")
-    parts.append("  • 22:30 KST 미국 개장 — SOXL/QQQ 변동 모니터")
-    parts.append("  • alpha bet trigger 도달 시 별도 알림 (1시간 cron)")
-    return "\n".join(parts)
+    header = [f"🌆 저녁 브리핑 — {now.strftime('%Y.%m.%d (%a)')} KR 마감 후"]
+    progress_lines, meta = build_progress_section()
+    msg = _join(
+        header,
+        progress_lines,
+        build_alpha_bet_section(),
+        build_market_section(),
+        build_macro_section(days_ahead=3),
+        ["⏰ 22:30 KST 미국 개장 — SOXL/QQQ 변동 모니터"],
+    )
+    return msg, meta
 
 
-def build_night_briefing() -> str:
+def build_night_briefing() -> tuple[str, dict]:
     """22:00 KST — 미국 EOD 직전 + 내일 KR 준비."""
     now = _NOW_KST()
-    holdings = _load_holdings()
-    parts = [f"🌃 밤 브리핑 — {now.strftime('%Y.%m.%d (%a)')} 미국 EOD 직전", ""]
-
-    parts.append("📊 미국 시장 (EOD 직전)")
-    us = _build_us_market_summary()
-    parts.extend(us if us else ["  데이터 누적 중"])
-    parts.append("")
-
-    parts.append("🪙 비트코인 24h")
-    btc = _build_btc_summary()
-    parts.extend(btc if btc else ["  데이터 누적 중"])
-    parts.append("")
-
-    parts.append("🎯 오늘의 Alpha Bet 종합")
-    parts.extend(_build_alpha_bet_section(holdings))
-    parts.append("")
-
-    parts.append("⏰ 내일 KR 09:00 준비")
-    bets = _load_alpha_bets()
-    has_kodex_hynix = any("하이닉스" in (b.get("name") or "") for b in bets)
-    if has_kodex_hynix:
-        parts.append("  • KODEX 하이닉스 — 미국 NVIDIA/TSMC 변동 확인 후 시초가 판단")
-    parts.append("  • 평단 회복 / 손절 임박 시 별도 알림")
-    return "\n".join(parts)
+    header = [f"🌃 밤 브리핑 — {now.strftime('%Y.%m.%d (%a)')} 미국 EOD 직전"]
+    progress_lines, meta = build_progress_section()
+    msg = _join(
+        header,
+        progress_lines,
+        build_market_section(),
+        build_alpha_bet_section(),
+        build_macro_section(days_ahead=3),
+        ["⏰ 내일 KR 09:00 준비 — 미국 NVDA/TSMC 변동 확인 후 시초가 판단"],
+    )
+    return msg, meta
 
 
 # ---------------------------------------------------------------------------
-# Top-level runner
+# Runner
 # ---------------------------------------------------------------------------
 
 def run_briefing(slot: str) -> dict[str, Any]:
     """slot: 'morning' | 'evening' | 'night'."""
-    if slot == "morning":
-        msg = build_morning_briefing()
-    elif slot == "evening":
-        msg = build_evening_briefing()
-    elif slot == "night":
-        msg = build_night_briefing()
-    else:
+    builders = {
+        "morning": build_morning_briefing,
+        "evening": build_evening_briefing,
+        "night":   build_night_briefing,
+    }
+    if slot not in builders:
         return {"ok": False, "error": f"unknown_slot:{slot}"}
+    msg, meta = builders[slot]()
     result = send_telegram_plain(msg)
-    return {"slot": slot, "msg_preview": msg[:200], **result}
+    out = {"slot": slot, "msg_preview": msg[:300], "evo_stage": meta.get("evo_stage", {}).get("name"), **result}
+    # 다음 turn 에 sendPhoto 추가 — 현재는 텍스트 only
+    return out
 
 
 if __name__ == "__main__":

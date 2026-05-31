@@ -1,0 +1,67 @@
+{
+  "_doc": "매크로 이벤트 캘린더 — 브리핑 엔진이 다가오는 이벤트 7일 surfacing. 시간은 KST. FOMC 등 알려진 일정은 하드코딩, 어닝 일정은 yfinance Ticker.calendar 로 자동 보강.",
+  "_source": "FRED + Fed 공식 발표 + yfinance + 주요 발표 패턴",
+  "_updated": "2026-05-31",
+  "events": [
+    {
+      "date": "2026-06-04",
+      "time_kst": "21:30",
+      "title": "미국 4월 잡스 (Job Openings, JOLTS)",
+      "category": "macro",
+      "importance": "medium",
+      "impact": "QQQ/SPY 단기 변동 ↑ — 고용 강세면 Fed 매파"
+    },
+    {
+      "date": "2026-06-06",
+      "time_kst": "21:30",
+      "title": "미국 5월 비농업 고용 (NFP)",
+      "category": "macro",
+      "importance": "high",
+      "impact": "QQQ/SPY/TQQQ 큰 변동 — Fed 금리 경로 신호"
+    },
+    {
+      "date": "2026-06-11",
+      "time_kst": "21:30",
+      "title": "미국 5월 CPI",
+      "category": "macro",
+      "importance": "high",
+      "impact": "TQQQ/QQQ 큰 변동 — 인플레 surprise 시 ±2%+"
+    },
+    {
+      "date": "2026-06-12",
+      "time_kst": "21:30",
+      "title": "미국 5월 PPI",
+      "category": "macro",
+      "importance": "medium",
+      "impact": "TQQQ/QQQ 단기 변동"
+    },
+    {
+      "date": "2026-06-17",
+      "time_kst": "21:30",
+      "title": "미국 5월 소매판매",
+      "category": "macro",
+      "importance": "medium",
+      "impact": "소비 강세면 SPY ↑, TLT ↓"
+    },
+    {
+      "date": "2026-06-18",
+      "time_kst": "03:00",
+      "title": "FOMC 결정 + 점도표 + 파월 기자회견",
+      "category": "macro",
+      "importance": "critical",
+      "impact": "TQQQ/QQQ/BTC 큰 변동 ±3%+ 가능. 6월 점도표가 핵심"
+    },
+    {
+      "date": "2026-06-26",
+      "time_kst": "21:30",
+      "title": "미국 5월 PCE (Fed 가 가장 보는 인플레 지표)",
+      "category": "macro",
+      "importance": "high",
+      "impact": "TQQQ/QQQ ±1~2% 변동, FOMC 후속 신호"
+    }
+  ],
+  "earnings_auto": {
+    "_note": "보유 종목 어닝 일정은 briefing_engine 가 yfinance Ticker.calendar 로 자동 보강. 여기는 수동 입력 추가용.",
+    "manual_events": []
+  }
+}
