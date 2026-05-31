@@ -138,6 +138,36 @@ def load_wide_universe() -> list[dict[str, Any]]:
                     "is_adr": (r.get("is_adr") or "0").strip() == "1",
                 }
             )
+
+    # 통합 Step F — master_universe 의 다른 source 종목들도 wide 에 합산
+    # (kr_momentum, kr_dynamic, us_dynamic 의 종목들이 wide_universe 에 자동 추가)
+    try:
+        from .master_universe import load_master_universe
+        master_rows = load_master_universe()
+        added = 0
+        for m in master_rows:
+            t = (m.get("ticker") or "").strip().upper()
+            if not t or t in seen:
+                continue
+            # core source 는 universe.csv 에서 별도 처리 — 여기선 skip
+            if "core" in m.get("sources", []) and len(m.get("sources", [])) == 1:
+                continue
+            seen.add(t)
+            rows.append({
+                "ticker": t,
+                "name": m.get("name") or t,
+                "sector": m.get("sector") or "",
+                "industry": m.get("industry") or "",
+                "market_cap_tier": m.get("market_cap_tier") or "unknown",
+                "exchange": m.get("market") or "",
+                "is_adr": False,
+            })
+            added += 1
+        if added:
+            log.info("master_universe 에서 wide 에 %d 종목 추가 (총 %d)", added, len(rows))
+    except Exception as e:
+        log.debug("master_universe 통합 실패 (graceful): %s", e)
+
     return rows
 
 

@@ -718,6 +718,19 @@ _SCHEMA_STATEMENTS: tuple[str, ...] = (
         PRIMARY KEY (scan_date, ticker)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS nw_snapshots (
+        snapshot_date     TEXT PRIMARY KEY,        -- 'YYYY-MM-DD'
+        nw_krw            REAL NOT NULL,           -- 순자산 (부채 차감)
+        investment_krw    REAL,                    -- 투자자산 합 (portfolio.json holdings)
+        cash_krw          REAL,                    -- 현금
+        real_estate_krw   REAL,
+        deposit_krw       REAL,
+        debt_krw          REAL,
+        apartment_paid_krw REAL,
+        notes             TEXT
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_mph_ticker_date ON market_price_history(ticker, date)",
     "CREATE INDEX IF NOT EXISTS idx_alert_rule_sent ON alert_log(rule_id, sent_at)",
     "CREATE INDEX IF NOT EXISTS idx_growth_scan_score ON growth_scores(scan_date, score)",

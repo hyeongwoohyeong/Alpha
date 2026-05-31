@@ -361,12 +361,43 @@ def build_checklist_section() -> list[str]:
 # ---------------------------------------------------------------------------
 
 def build_asset_delta_section() -> list[str]:
-    """어제 대비 NW 변동 — 단순화 (snapshot table 없으면 skip)."""
-    nw = _net_worth_krw()
-    return [
-        "💰 자산 변동",
-        f"  NW ₩{nw/1e6:.1f}M (어제 대비 +₩X.XM)  *snapshot table 필요",
-    ]
+    """어제 대비 NW 변동 — DB nw_snapshots 기반 정확화."""
+    try:
+        from .nw_snapshot import save_snapshot, get_delta, check_pace_vs_target
+        # 호출 시점에 오늘 snapshot 자동 저장
+        snap = save_snapshot()
+        delta_1d = get_delta(days_back=1)
+        delta_30d = get_delta(days_back=30)
+        pace = check_pace_vs_target()
+    except Exception as e:
+        log.warning("NW snapshot 실패: %s", e)
+        nw = _net_worth_krw()
+        return ["💰 자산 변동", f"  NW ₩{nw/1e6:.1f}M"]
+
+    nw = snap["nw_krw"]
+    lines = ["💰 자산 변동", f"  NW ₩{nw/1e6:.1f}M"]
+
+    if delta_1d.get("available"):
+        d = delta_1d["delta_krw"]
+        sign = "+" if d >= 0 else ""
+        lines.append(f"  어제 대비: {sign}₩{d/1e6:.2f}M ({delta_1d['delta_pct']:+.2f}%)")
+    if delta_30d.get("available"):
+        d = delta_30d["delta_krw"]
+        sign = "+" if d >= 0 else ""
+        days = delta_30d["days"]
+        lines.append(f"  최근 {days}일: {sign}₩{d/1e6:.1f}M ({delta_30d['delta_pct']:+.1f}%)")
+
+    # 분양 페이스 알림
+    if pace.get("available"):
+        monthly = pace["monthly_nw_growth"]
+        target = pace["target_monthly_growth"]
+        if pace["on_pace"]:
+            lines.append(f"  🏠 분양 페이스: ✓ 월 ₩{monthly/1e6:.1f}M (target ₩{target/1e6:.1f}M)")
+        else:
+            shortfall = target - monthly
+            lines.append(f"  🏠 분양 페이스: ⚠️ 월 ₩{monthly/1e6:.1f}M "
+                         f"(target ₩{target/1e6:.1f}M, 부족 ₩{shortfall/1e6:.1f}M)")
+    return lines
 
 
 def build_quote_section() -> list[str]:
@@ -537,21 +568,40 @@ def build_evening_briefing() -> tuple[str, dict]:
     return msg, meta
 
 
+def build_violation_section() -> list[str]:
+    """주간 룰 위반 리포트 — 일요일 밤만."""
+    try:
+        from .rule_violation_tracker import format_weekly_violation_report
+        return format_weekly_violation_report()
+    except Exception as e:
+        log.debug("violation report 실패: %s", e)
+        return []
+
+
 def build_night_briefing() -> tuple[str, dict]:
-    """22:00 KST — 미국 EOD 직전 + 내일 KR 준비 + +100% Watch."""
+    """22:00 KST — 미국 EOD 직전 + 내일 KR 준비 + +100% Watch.
+
+    일요일 밤엔 주간 룰 위반 리포트도 포함.
+    """
     now = _NOW_KST()
+    is_sunday = now.weekday() == 6
     header = [f"🌃 밤 브리핑 — {now.strftime('%Y.%m.%d (%a)')} 미국 EOD 직전"]
     progress_lines, meta = build_progress_section()
-    msg = _join(
+    sections = [
         header,
         progress_lines,
         build_market_section(),
         build_alpha_bet_section(),
         build_hyper_growth_section(),
         build_macro_section(days_ahead=3),
+    ]
+    if is_sunday:
+        sections.append(build_violation_section())
+    sections.extend([
         ["⏰ 내일 KR 09:00 준비 — 미국 NVDA/TSMC 변동 확인 후 시초가 판단"],
         build_quote_section(),
-    )
+    ])
+    msg = _join(*sections)
     return msg, meta
 
 
