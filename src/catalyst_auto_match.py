@@ -25,19 +25,24 @@ _KEYWORD_MAP: list[tuple[str, list[str]]] = [
     # AI 하이퍼스케일 (specific catalyst 매칭 우선)
     ("ai_hyperscale", [
         "palantir", "AIP", "데이터 플랫폼", "AI platform",
-        "AppLovin", "광고 AI", "ad tech AI", "AXON",
+        "applovin", "광고 AI", "ad tech AI", "AXON",
+        "OpenAI", "Anthropic", "AI agent", "agentic AI",
+        "predictive analytics", "decision intelligence",
     ]),
     ("ai_software", [
         "AI software", "machine learning platform", "generative AI",
-        "인공지능 소프트웨어", "MLOps",
+        "인공지능 소프트웨어", "MLOps", "computer vision",
+        "natural language processing", "NLP platform",
     ]),
     ("ai_drug_discovery", [
         "AI drug", "AI 신약", "drug discovery AI", "Recursion",
+        "AI biology", "computational biology",
     ]),
     ("ai_infra", [
         "AI infrastructure", "AI server", "AI 인프라", "AI PCB",
         "high-end PCB", "data center cooling", "liquid cooling",
-        "Nebius", "Argan",
+        "Nebius", "Argan", "GPU cloud", "AI compute", "neoclouds",
+        "data center construction", "hyperscale",
     ]),
     # HBM·AI 반도체 — 매우 specific
     ("hbm_ai_semi", [

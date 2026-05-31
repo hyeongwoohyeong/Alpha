@@ -179,14 +179,28 @@ def fetch_kr_universe() -> list[dict]:
 def fetch_us_dynamic() -> list[dict]:
     """US universe — NASDAQ + NYSE + AMEX 전종목 (FinanceDataReader).
 
-    소형주 (Russell 2000 zone, 시총 $200M~$2B) 포함 — 2~10베거 가능 영역.
+    필터:
+        - 주식만 (Note/Warrant/Preferred/Right 제외)
+        - ETF/Fund/Trust 제외
+        - 시총 정보 없으면 yfinance enrich 별도
     """
     out = []
     try:
         import FinanceDataReader as fdr
     except ImportError:
-        log.warning("FinanceDataReader 미설치 — US dynamic skip, manual list 만")
+        log.warning("FinanceDataReader 미설치 — US dynamic skip")
         return out
+
+    # 5자 ticker 의 비주식 suffix (Note / Warrant / Right / Preferred 시리즈)
+    NON_STOCK_SUFFIX = {"L", "Z", "G", "N", "T", "R", "P", "I", "W"}
+    # ETF / Fund / Trust 등 이름 키워드
+    EXCLUDE_NAME_KEYWORDS = [
+        " ETF", " FUND", " TRUST", " NOTE", " PREFERRED", " WARRANT", " RIGHT",
+        "%", " UNIT", " DEPOSITARY", " ETN", " REIT INDEX", " INDEX FUND",
+    ]
+
+    total_seen = 0
+    filtered_out = 0
     for market in ["NASDAQ", "NYSE", "AMEX"]:
         try:
             df = fdr.StockListing(market)
@@ -194,12 +208,23 @@ def fetch_us_dynamic() -> list[dict]:
                 continue
             for _, r in df.iterrows():
                 try:
-                    ticker = str(r.get("Symbol", "") or r.get("ticker", ""))
-                    if not ticker or len(ticker) > 6:  # 너무 긴 ticker 제외 (warrant 등)
+                    total_seen += 1
+                    ticker = str(r.get("Symbol", "") or r.get("ticker", "")).strip().upper()
+                    if not ticker or len(ticker) > 5:
+                        filtered_out += 1
                         continue
-                    # ETF 제외 (ETF 는 별도 list)
-                    name = str(r.get("Name", "") or "")
-                    if not name or any(x in name.upper() for x in [" ETF", " FUND", " TRUST"]):
+                    # 5자 ticker 의 비주식 suffix 제외
+                    if len(ticker) == 5 and ticker[-1] in NON_STOCK_SUFFIX:
+                        filtered_out += 1
+                        continue
+                    name = str(r.get("Name", "") or "").strip()
+                    if not name:
+                        filtered_out += 1
+                        continue
+                    # 이름 키워드 제외
+                    name_upper = name.upper()
+                    if any(kw in name_upper for kw in EXCLUDE_NAME_KEYWORDS):
+                        filtered_out += 1
                         continue
                     industry = str(r.get("Industry", "") or r.get("IndustryCode", ""))
                     sector = str(r.get("Sector", "") or "")
@@ -209,13 +234,17 @@ def fetch_us_dynamic() -> list[dict]:
                         "market": market,
                         "sector": sector,
                         "industry": industry,
-                        "market_cap_tier": "unknown",  # fdr 시총 X — yfinance enrich 별도
+                        "market_cap_tier": "unknown",
                     })
                 except Exception:
                     continue
-            log.info("fdr %s: %d 종목", market, len(out))
+            log.info("fdr %s: %d 종목 통과 (전체 %d 중)", market,
+                     len([x for x in out if x["market"] == market]),
+                     len(df) if df is not None else 0)
         except Exception as e:
             log.warning("fdr %s fetch 실패: %s", market, e)
+    log.info("US dynamic: %d 통과 / %d 제외 (Note/Warrant/ETF 등) / %d total",
+             len(out), filtered_out, total_seen)
     return out
 
 
