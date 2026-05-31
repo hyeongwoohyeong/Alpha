@@ -28,6 +28,7 @@ from src import database as db
 from src.growth_momentum import score_ticker
 from src.catalyst_auto_match import match_catalyst, enrich_with_yfinance
 from src.telegram_notifier import send_telegram_plain
+from src.confluence_score import calculate_confluence_score, is_plus_100_candidate
 
 DATA_DIR = ROOT / "data"
 MIN_SCORE_TO_SAVE = 40.0      # 40+ 만 DB 저장 (저점 noise 제거)
@@ -105,46 +106,37 @@ def score_and_save(rows: list[dict], scan_date: str, week_index: int) -> list[di
             if (i + 1) % 20 == 0:
                 log.info("  진행 %d/%d", i + 1, len(sliced))
             try:
-                sc = score_ticker(ticker)
+                # Confluence — 4 신호 + valuation 통합
+                cf = calculate_confluence_score(ticker)
             except Exception as e:
-                log.debug("score %s 실패: %s", ticker, e)
+                log.debug("confluence %s 실패: %s", ticker, e)
                 continue
-            if not sc.get("available"):
-                continue
-            score = sc.get("score") or 0
+            score = cf.get("total_score", 0) or 0
             if score < MIN_SCORE_TO_SAVE:
                 continue
-            # Catalyst 자동 매칭
-            cat = match_catalyst(
-                name=r.get("name"),
-                sector=r.get("sector"),
-                industry=r.get("industry"),
-            )
-            if not cat:
-                # yfinance enrich (sector/industry 가 빈 KR 종목 위주)
-                enriched = enrich_with_yfinance(ticker)
-                cat = match_catalyst(
-                    name=r.get("name"),
-                    sector=enriched.get("sector"),
-                    industry=enriched.get("industry"),
-                    business_summary=enriched.get("business_summary"),
-                )
+            # 극단 과대평가 제외
+            if not cf.get("valuation_pass", True):
+                log.info("  %s 극단 과대평가 — skip", ticker)
+                continue
             cur.execute(
                 "INSERT OR REPLACE INTO growth_scores "
                 "(scan_date, ticker, name, market, catalyst, score, yoy_recent, "
                 "is_accelerating, components_json, market_cap_krw) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (scan_date, ticker, r.get("name"), r.get("market"),
-                 cat, score, sc.get("yoy_growth_recent"),
-                 1 if sc.get("is_accelerating") else 0,
-                 json.dumps(sc.get("components", {}), ensure_ascii=False),
+                 cf.get("catalyst"), score, cf.get("yoy_recent"),
+                 1 if cf.get("is_accelerating") else 0,
+                 json.dumps(cf.get("breakdown", {}), ensure_ascii=False),
                  r.get("market_cap_krw"))
             )
-            hits.append({"ticker": ticker, "name": r.get("name"),
-                         "score": score, "catalyst": cat,
-                         "is_accel": sc.get("is_accelerating")})
+            hits.append({
+                "ticker": ticker, "name": r.get("name"),
+                "score": score, "catalyst": cf.get("catalyst"),
+                "is_high_confidence": cf.get("is_high_confidence"),
+                "breakdown": cf.get("breakdown"),
+            })
         conn.commit()
-    log.info("Score ≥ %.0f: %d / %d", MIN_SCORE_TO_SAVE, len(hits), len(sliced))
+    log.info("Confluence ≥ %.0f: %d / %d", MIN_SCORE_TO_SAVE, len(hits), len(sliced))
     return hits
 
 
