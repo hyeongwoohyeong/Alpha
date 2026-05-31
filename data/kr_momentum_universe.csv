@@ -1,0 +1,41 @@
+ticker,name_ko,sector,industry,catalyst,market_cap_tier,exchange
+042700,한미반도체,Technology,HBM Bonding Machine,hbm_ai_semi,large,KOSPI
+196170,알테오젠,Healthcare,ADC Bispecific,adc_oncology,large,KOSDAQ
+454910,두산로보틱스,Industrials,Industrial Robot,robotics,mid,KOSPI
+007660,이수페타시스,Technology,AI High-end PCB,ai_infra,mid,KOSPI
+082740,한화엔진,Industrials,Marine Engine,shipbuilding,mid,KOSPI
+003230,삼양식품,Consumer Staples,K-Food Global,k_food,mid,KOSPI
+217730,펩트론,Healthcare,GLP-1 Long-acting,obesity_drug,small,KOSDAQ
+068270,셀트리온,Healthcare,Biosimilar Oncology,biosimilar,large,KOSPI
+329180,HD현대중공업,Industrials,Shipbuilding,shipbuilding,large,KOSPI
+006400,삼성SDI,Technology,EV Battery,ev_battery,large,KOSPI
+373220,LG에너지솔루션,Technology,EV Battery,ev_battery,large,KOSPI
+141080,리가켐바이오,Healthcare,ADC Platform,adc_oncology,mid,KOSDAQ
+247540,에코프로비엠,Technology,Cathode Material,ev_battery,mid,KOSDAQ
+086520,에코프로,Technology,EV Battery Holding,ev_battery,mid,KOSDAQ
+357780,솔브레인,Technology,Semi Chemical,semi_material,small,KOSDAQ
+095340,ISC,Technology,Semi Test Socket,hbm_ai_semi,small,KOSDAQ
+000270,기아,Consumer Discretionary,Automotive,auto,large,KOSPI
+064350,현대로템,Industrials,Defense Rail,defense,mid,KOSPI
+079550,LIG넥스원,Industrials,Defense Missile,defense,mid,KOSPI
+064960,SNT모티브,Industrials,Defense Auto,defense,small,KOSDAQ
+028050,삼성E&A,Industrials,EPC,energy_epc,mid,KOSPI
+383310,에코프로에이치엔,Technology,EV Battery Recycling,ev_battery,small,KOSDAQ
+041510,에스엠,Communication,K-Pop Entertainment,k_culture,mid,KOSDAQ
+035900,JYP Ent.,Communication,K-Pop Entertainment,k_culture,mid,KOSDAQ
+122870,와이지엔터테인먼트,Communication,K-Pop Entertainment,k_culture,mid,KOSDAQ
+352820,하이브,Communication,K-Pop Entertainment,k_culture,large,KOSPI
+278280,천보,Technology,Battery Electrolyte,ev_battery,small,KOSDAQ
+145020,휴젤,Healthcare,Botox K-Beauty,k_beauty_med,mid,KOSPI
+214450,파마리서치,Healthcare,Rejuran Aesthetic,k_beauty_med,small,KOSDAQ
+161890,한국콜마,Healthcare,Cosmetics ODM,k_beauty_med,mid,KOSPI
+067310,하나마이크론,Technology,Semi Packaging,hbm_ai_semi,small,KOSDAQ
+240810,원익IPS,Technology,Semi Equipment,hbm_ai_semi,mid,KOSDAQ
+108860,셀바스AI,Technology,AI Voice,ai_software,small,KOSDAQ
+278470,에이피알,Consumer Discretionary,Beauty Devices,k_beauty_med,small,KOSDAQ
+347860,알체라,Technology,AI Vision,ai_software,small,KOSDAQ
+078340,컴투스,Communication,Mobile Game,gaming,mid,KOSDAQ
+112040,위메이드,Communication,Blockchain Game,gaming_crypto,small,KOSDAQ
+293490,카카오게임즈,Communication,Mobile Game,gaming,mid,KOSDAQ
+036570,엔씨소프트,Communication,MMO Game,gaming,mid,KOSPI
+402340,SK스퀘어,Technology,Tech Holdings,tech_holding,mid,KOSPI
