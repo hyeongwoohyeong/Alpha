@@ -1,12 +1,14 @@
-name: Weekly Universe Scan
+name: Daily Universe Scan
 
-# 매주 일요일 새벽 (UTC 18:00 토요일 = KST 03:00 일요일)
+# 매일 새벽 03:00 KST (UTC 18:00 전날)
 # 1. KR dynamic universe rebuild (전종목)
-# 2. KR + US universe Growth Momentum scoring (rotation)
+# 2. KR + US universe Confluence Score (rotation 200 종목/일)
 # 3. 신규 hyper-growth 진입 종목 텔레그램 alert
+# 신선도: 평균 1주 지연 (어닝 후 가속 시점 빠르게 detect)
+# 비용: ~1,350분/월 (free tier 2,000분 안)
 on:
   schedule:
-    - cron: "0 18 * * 6"   # 토요일 UTC 18:00 = 일요일 KST 03:00
+    - cron: "0 18 * * *"   # 매일 UTC 18:00 = KST 03:00
   workflow_dispatch:
 
 jobs:

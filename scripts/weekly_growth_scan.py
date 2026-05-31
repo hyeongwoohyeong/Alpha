@@ -83,19 +83,19 @@ def load_us_wide() -> list[dict]:
     return out
 
 
-def score_and_save(rows: list[dict], scan_date: str, week_index: int) -> list[dict]:
+def score_and_save(rows: list[dict], scan_date: str, day_index: int) -> list[dict]:
     """Sampling + score + DB 저장.
 
-    week_index 0~N: rotation 으로 매주 다른 subset cover (전체 K주에 한 번).
+    day_index (day-of-year 1~365): rotation 으로 매일 다른 subset cover.
+    전체 universe 약 12일에 1회 cover (2300종 / 200/일).
     """
     if not rows:
         return []
-    # Rotation: week_index 별 다른 subset
-    weeks_to_cover = max(1, (len(rows) // SAMPLE_SIZE) + 1)
-    rot = week_index % weeks_to_cover
+    days_to_cover = max(1, (len(rows) // SAMPLE_SIZE) + 1)
+    rot = day_index % days_to_cover
     sliced = rows[rot * SAMPLE_SIZE : (rot + 1) * SAMPLE_SIZE]
-    log.info("This week scanning %d/%d (rotation %d/%d)",
-             len(sliced), len(rows), rot + 1, weeks_to_cover)
+    log.info("Today scanning %d/%d (rotation %d/%d, 전체 cover 주기 %d일)",
+             len(sliced), len(rows), rot + 1, days_to_cover, days_to_cover)
 
     hits = []
     with db.db_session() as conn:
@@ -186,8 +186,8 @@ def main():
     scan_date = _dt.date.today().isoformat()
     log.info("=== Weekly Growth Scan — %s ===", scan_date)
 
-    # Rotation week index (week of year mod)
-    week_index = _dt.date.today().isocalendar()[1]
+    # Rotation day index (day-of-year 1~365)
+    day_index = _dt.date.today().timetuple().tm_yday
 
     kr_rows = load_kr_dynamic()
     us_rows = load_us_wide()
@@ -195,7 +195,7 @@ def main():
     log.info("Universe 총: KR %d + US %d = %d", len(kr_rows), len(us_rows), len(all_rows))
 
     # Score + 저장
-    hits = score_and_save(all_rows, scan_date, week_index)
+    hits = score_and_save(all_rows, scan_date, day_index)
 
     # 신규 진입 alert
     new_entrants = detect_new_entrants(scan_date)
