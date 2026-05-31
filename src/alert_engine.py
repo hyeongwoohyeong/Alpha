@@ -505,10 +505,9 @@ def run_alert_cycle(holdings: list[dict] | None = None,
         summary["runs"].extend(check_intraday_spike(conn, holdings))
         if rows:
             summary["runs"].extend(check_new_alpha_discovery(conn, rows))
-        # R8 — 매일은 비용 큼. UTC 13:00 (KST 22:00 밤 brief 시점) 에만 실행
-        from datetime import datetime as _dt2
-        if _dt2.utcnow().hour == 13:
-            summary["runs"].extend(check_hyper_growth_watch(conn))
+        # R8 — 항시 실행 (dedup 24h 가 같은 ticker 중복 방지)
+        # 단 DB 조회만이라 비용 ↓
+        summary["runs"].extend(check_hyper_growth_watch(conn))
         # R9 — Phase 전환 (매시간 체크, dedup 30일)
         summary["runs"].extend(check_phase_transition(conn))
         # R10 — 세금 캘린더 (12월 첫주만, dedup 1년)
