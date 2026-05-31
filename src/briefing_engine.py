@@ -33,6 +33,7 @@ _PORTFOLIO_PATH = _DATA_DIR / "portfolio.json"
 _ALPHA_BETS_PATH = _DATA_DIR / "alpha_bets.json"
 _WEALTH_PATH = _DATA_DIR / "wealth_inputs.json"
 _MACRO_CAL_PATH = _DATA_DIR / "macro_calendar.json"
+_QUOTES_PATH = _DATA_DIR / "quotes.json"
 
 # 디지몬 진화 단계 — research_dashboard.html 의 EVO_CHARS 와 동기화
 EVO_STAGES = [
@@ -368,6 +369,36 @@ def build_asset_delta_section() -> list[str]:
     ]
 
 
+def build_quote_section() -> list[str]:
+    """랜덤 명언 — 텔레그램 메시지 맨 아래.
+
+    카테고리 가중치: consolation 30% / wisdom 25% / investing 25% / long_term 10% / discipline 10%.
+    위로하는 명언이 좀 더 자주 나오도록.
+    """
+    import random
+    data = _load_json(_QUOTES_PATH)
+    quotes = data.get("quotes", [])
+    if not quotes:
+        return []
+    weights = {
+        "consolation": 30,
+        "wisdom": 25,
+        "investing": 25,
+        "long_term": 10,
+        "discipline": 10,
+    }
+    weighted_pool = []
+    for q in quotes:
+        cat = q.get("category", "wisdom")
+        weighted_pool.extend([q] * weights.get(cat, 10))
+    pick = random.choice(weighted_pool) if weighted_pool else quotes[0]
+    return [
+        "💭 오늘의 한 마디",
+        f"  \"{pick['text']}\"",
+        f"  — {pick.get('author', '')}",
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Top-level builders
 # ---------------------------------------------------------------------------
@@ -409,6 +440,7 @@ def build_morning_briefing() -> tuple[str, dict]:
         build_alpha_bet_section(),
         build_checklist_section(),
         build_asset_delta_section(),
+        build_quote_section(),
     )
     return msg, meta
 
@@ -425,6 +457,7 @@ def build_evening_briefing() -> tuple[str, dict]:
         build_market_section(),
         build_macro_section(days_ahead=3),
         ["⏰ 22:30 KST 미국 개장 — SOXL/QQQ 변동 모니터"],
+        build_quote_section(),
     )
     return msg, meta
 
@@ -441,6 +474,7 @@ def build_night_briefing() -> tuple[str, dict]:
         build_alpha_bet_section(),
         build_macro_section(days_ahead=3),
         ["⏰ 내일 KR 09:00 준비 — 미국 NVDA/TSMC 변동 확인 후 시초가 판단"],
+        build_quote_section(),
     )
     return msg, meta
 
@@ -467,7 +501,7 @@ def _build_digimon_image_url(evo_stage: dict | None) -> str | None:
 
 
 def run_briefing(slot: str) -> dict[str, Any]:
-    """slot: 'morning' | 'evening' | 'night'."""
+    """slot: 'morning' | 'evening' | 'night'. 텍스트 본문만 전송 (이미지 제거)."""
     builders = {
         "morning": build_morning_briefing,
         "evening": build_evening_briefing,
@@ -476,21 +510,9 @@ def run_briefing(slot: str) -> dict[str, Any]:
     if slot not in builders:
         return {"ok": False, "error": f"unknown_slot:{slot}"}
     msg, meta = builders[slot]()
-    # 1) 본문 텍스트 전송
     result = send_telegram_plain(msg)
-    out = {"slot": slot, "msg_preview": msg[:300],
-           "evo_stage": meta.get("evo_stage", {}).get("name"), **result}
-    # 2) 디지몬 이미지 별도 전송 (텍스트 send 성공 시만)
-    if result.get("ok"):
-        evo = meta.get("evo_stage")
-        photo_url = _build_digimon_image_url(evo)
-        if photo_url:
-            stage_no = evo.get("stage", "?")
-            caption = f"진화 단계 {stage_no}/8 — {evo.get('name','')}"
-            photo_result = send_telegram_photo(photo_url, caption=caption)
-            out["photo_sent"] = photo_result.get("ok", False)
-            out["photo_url"] = photo_url
-    return out
+    return {"slot": slot, "msg_preview": msg[:300],
+            "evo_stage": meta.get("evo_stage", {}).get("name"), **result}
 
 
 if __name__ == "__main__":

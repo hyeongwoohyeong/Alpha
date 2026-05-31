@@ -1,0 +1,52 @@
+{
+  "_doc": "텔레그램 브리핑 맨 아래에 노출되는 명언 풀. 매일 random pick. 카테고리: investing / wisdom / consolation. 적당히 배분.",
+  "quotes": [
+    {"category": "investing", "author": "워런 버핏", "text": "기다림은 투자자의 가장 중요한 자질이다."},
+    {"category": "investing", "author": "워런 버핏", "text": "10년 동안 보유할 생각이 없는 주식은 10분도 보유하지 말라."},
+    {"category": "investing", "author": "워런 버핏", "text": "남들이 욕심부릴 때 두려워하고, 남들이 두려워할 때 욕심부려라."},
+    {"category": "investing", "author": "찰리 멍거", "text": "큰 돈은 매매에 있지 않고 기다림에 있다."},
+    {"category": "investing", "author": "찰리 멍거", "text": "역으로 생각해라. 항상 역으로 생각해라."},
+    {"category": "investing", "author": "찰리 멍거", "text": "당신이 똑똑한 것보다 더 중요한 건, 어리석은 짓을 하지 않는 것이다."},
+    {"category": "investing", "author": "피터 린치", "text": "조정에서 손실로 잃은 돈보다, 조정을 대비하다 잃은 돈이 훨씬 많다."},
+    {"category": "investing", "author": "하워드 막스", "text": "사이클에서 가장 중요한 것은 당신이 사이클의 어디에 있는지 아는 것이다."},
+    {"category": "investing", "author": "벤저민 그레이엄", "text": "투자자의 가장 큰 적은 자기 자신이다."},
+    {"category": "investing", "author": "존 보글", "text": "건초더미에서 바늘을 찾으려 하지 말라. 건초더미를 사라."},
+    {"category": "investing", "author": "필립 피셔", "text": "주식 시장은 인내심 없는 사람의 돈을 인내심 있는 사람에게 옮기는 장치다."},
+    {"category": "investing", "author": "조지 소로스", "text": "내가 옳거나 그른 게 중요한 게 아니다. 옳을 때 얼마나 벌고, 틀릴 때 얼마나 잃는지가 중요하다."},
+    {"category": "investing", "author": "레이 달리오", "text": "고통 + 성찰 = 발전."},
+    {"category": "investing", "author": "스탠리 드러켄밀러", "text": "옳을 때 큰 베팅, 틀릴 때 작은 베팅. 그게 전부다."},
+
+    {"category": "wisdom", "author": "마르쿠스 아우렐리우스", "text": "오늘 일어나는 모든 일은, 일어나야 할 일이거나 이미 자연이 정한 것이다."},
+    {"category": "wisdom", "author": "세네카", "text": "인생이 짧은 것이 아니라, 우리가 인생을 짧게 만든다."},
+    {"category": "wisdom", "author": "에픽테토스", "text": "통제할 수 있는 것에 집중하고, 통제할 수 없는 것을 받아들여라."},
+    {"category": "wisdom", "author": "헤르만 헤세", "text": "새는 알을 깨고 나온다. 알은 세계다. 태어나려는 자는 한 세계를 파괴해야 한다."},
+    {"category": "wisdom", "author": "도스토옙스키", "text": "인간은 자신이 행복하다는 것을 모르기 때문에 불행하다."},
+    {"category": "wisdom", "author": "톨스토이", "text": "가장 중요한 시간은 지금이고, 가장 중요한 사람은 지금 함께 있는 사람이고, 가장 중요한 일은 지금 하고 있는 일이다."},
+    {"category": "wisdom", "author": "스티브 잡스", "text": "당신의 시간은 한정되어 있다. 다른 사람의 삶을 살며 시간을 낭비하지 마라."},
+    {"category": "wisdom", "author": "노자", "text": "천 리 길도 한 걸음부터."},
+    {"category": "wisdom", "author": "공자", "text": "아는 것이 좋아하는 것만 못하고, 좋아하는 것이 즐기는 것만 못하다."},
+    {"category": "wisdom", "author": "장자", "text": "물이 모이면 큰 강이 되고, 작은 흙이 쌓이면 큰 산이 된다."},
+
+    {"category": "consolation", "author": "릴케", "text": "당신의 안에서 풀리지 않는 모든 것에 대해 인내심을 가져라. 질문 그 자체를 사랑하려고 노력해라."},
+    {"category": "consolation", "author": "윤동주", "text": "죽는 날까지 하늘을 우러러 한 점 부끄럼이 없기를."},
+    {"category": "consolation", "author": "헤르만 헤세", "text": "당신이 누군가를 미워한다면, 당신은 그 사람 안에서 당신 자신의 일부를 미워하는 것이다. 우리 안에 없는 것은 우리를 흔들지 못한다."},
+    {"category": "consolation", "author": "프리드리히 니체", "text": "왜 살아야 하는지 아는 사람은 어떻게든 살아갈 수 있다."},
+    {"category": "consolation", "author": "빅터 프랭클", "text": "모든 것을 빼앗긴 인간에게도 남는 것이 있다 — 주어진 상황에서 자신의 태도를 선택할 자유."},
+    {"category": "consolation", "author": "안톤 체호프", "text": "어떤 어리석은 사람도 위기 속에서는 살아남을 수 있다. 일상의 작은 일들이야말로 우리를 망가뜨린다."},
+    {"category": "consolation", "author": "정약용", "text": "삶이 평탄하지 못함을 슬퍼하지 말고, 그 평탄하지 못함이 나를 단단하게 만든 것을 기뻐하라."},
+    {"category": "consolation", "author": "법정스님", "text": "행복은 결코 많고 큰 데만 있는 것이 아니다. 작은 것을 가지고도 고마워하고 만족할 수 있다면 그는 행복한 사람이다."},
+    {"category": "consolation", "author": "이순신", "text": "한 번 죽으면 그뿐, 두려울 게 없다."},
+    {"category": "consolation", "author": "정호승", "text": "울지 마라. 외로우니까 사람이다. 살아간다는 것은 외로움을 견디는 일이다."},
+
+    {"category": "discipline", "author": "마르쿠스 아우렐리우스", "text": "당신을 둘러싼 일을 바꿀 수 없을 때, 당신은 그것을 바라보는 방식을 바꿀 수 있다."},
+    {"category": "discipline", "author": "벤저민 프랭클린", "text": "오늘 할 수 있는 일을 내일로 미루지 말라."},
+    {"category": "discipline", "author": "이건희", "text": "마누라와 자식 빼고 다 바꿔라."},
+    {"category": "discipline", "author": "정주영", "text": "이봐, 해봤어?"},
+    {"category": "discipline", "author": "워런 버핏", "text": "습관의 사슬은 너무 가벼워서 끊어진 후에야 비로소 알게 된다."},
+
+    {"category": "long_term", "author": "찰리 멍거", "text": "복리는 세상의 8번째 불가사의다. 이해하는 자는 그것에서 이익을 얻고, 모르는 자는 그것에 대가를 치른다."},
+    {"category": "long_term", "author": "워런 버핏", "text": "주식 시장은 활동적인 자에서 인내심 있는 자로 돈이 이동하는 장치다."},
+    {"category": "long_term", "author": "모건 하우절", "text": "당신이 가진 가장 큰 자산은 시간이다."},
+    {"category": "long_term", "author": "나발 라비칸트", "text": "복리는 단순히 돈에만 적용되는 게 아니다. 관계, 평판, 학습, 모든 것에 적용된다."}
+  ]
+}
