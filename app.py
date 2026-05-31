@@ -3334,6 +3334,8 @@ def render_today_decision(regime: Any, crash: Any):
     try:
         from src.today_decision import (
             build_portfolio_check, build_rebalance_actions,
+            build_alpha_bet_signals,
+            render_layer_0_html,
             render_layer_a_html, render_layer_b_html, render_layer_c_html,
         )
         from src.daily_tracking import (
@@ -3365,7 +3367,10 @@ def render_today_decision(regime: Any, crash: Any):
         except Exception:
             overheat = None
 
-        # Layer A
+        # Layer 0 — Alpha Bet 신호 (사용자 본인 ledger 룰 — 최우선)
+        alpha_bet_signals = build_alpha_bet_signals(holdings)
+
+        # Layer A — 포트폴리오 점검 (alpha_bet 매칭 종목은 Layer 0 에서 처리)
         layer_a_items = build_portfolio_check(holdings, diag)
 
         # Layer B — 3 sub
@@ -3378,17 +3383,20 @@ def render_today_decision(regime: Any, crash: Any):
         layer_c_items = build_rebalance_actions(
             holdings, diag, alpha_candidates, regime)
 
-        # 동적 헤드라인 — 3-Layer 종합 (이전의 sol/plan 헤드라인 override)
+        # 동적 헤드라인 — 4-Layer (0/A/B/C) 종합. Layer 0 우선.
         from src.today_decision import synthesize_headline
         synthesized = synthesize_headline(
-            layer_a_items, alpha_candidates, layer_c_items, core_cards)
+            layer_a_items, alpha_candidates, layer_c_items, core_cards,
+            alpha_bet_signals=alpha_bet_signals)
         if synthesized and synthesized != "데이터 수집 중":
             headline = synthesized
 
+        # 렌더 순서: Layer 0 (Alpha Bet 본인 룰) → A (포트폴리오) → B (시장) → C (액션)
         action_block = (
-            render_layer_a_html(layer_a_items)
+            render_layer_0_html(alpha_bet_signals)
+            + render_layer_a_html(layer_a_items)
             + render_layer_b_html(core_cards, alpha_candidates, parking_cards)
-            + render_layer_c_html(layer_c_items)   # 비면 빈 문자열 → 섹션 생략
+            + render_layer_c_html(layer_c_items)
         )
     except Exception as e:
         log.warning("3-layer 내러티브 빌드 실패: %s — 기존 액션 목록으로 폴백", e)

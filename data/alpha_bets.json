@@ -1,0 +1,221 @@
+{
+  "_doc": "100% × 3~5번 alpha 베팅 ledger. 형우의 mission: 큰 베팅으로 자산 cycle 단축. Hit rate 추적 + 학습 패턴 누적.",
+  "_workflow": "신규 베팅 → status='active' 추가. 익절/손절 → status='realized' or 'failed'. lessons 채워서 학습 누적.",
+  "as_of": "2026-05-30",
+  "bets": [
+    {
+      "id": "bet_001_kodex_hynix",
+      "name": "KODEX SK하이닉스 단일종목레버리지 (2x)",
+      "ticker": "KODEX_HYNIX_2X",
+      "thesis": "SK하이닉스 HBM cycle + AI capex 수혜. 본주 ₩2.5M 도달 시 단계 익절.",
+      "category": "Leveraged single-stock (Tactical alpha)",
+      "status": "active",
+      "entry": {
+        "date": "2026-04",
+        "price_krw_approx": 29900,
+        "amount_krw_mm": 71.3,
+        "shares": 2450
+      },
+      "current": {
+        "date": "2026-05-30",
+        "value_krw_mm": 73.2,
+        "return_pct": 0.027,
+        "pnl_krw_mm": 1.9
+      },
+      "exit_rules": {
+        "target_underlying_price": "SK하이닉스 ₩2,500,000",
+        "target_return_pct": 0.25,
+        "stop_loss_pct": -0.15,
+        "scale_out": [
+          {"trigger_pct": 0.15, "fraction": 0.33, "note": "1차 익절 (보수)"},
+          {"trigger_pct": 0.25, "fraction": 0.33, "note": "2차 익절 (target)"},
+          {"trigger_pct": 0.40, "fraction": 0.34, "note": "3차 익절 (over-shoot)"}
+        ]
+      },
+      "realized": null,
+      "lessons": []
+    },
+    {
+      "id": "bet_002_soxl",
+      "name": "Direxion Semi Bull 3x (SOXL)",
+      "ticker": "SOXL",
+      "thesis": "글로벌 반도체 cycle + AI capex. 3x 베타로 빠른 hit. 하이닉스 보완 (KR semi + US semi).",
+      "category": "Leveraged ETF (Sector 3x)",
+      "status": "active",
+      "entry": {
+        "date": "2026-04",
+        "price_krw_approx": 351117,
+        "amount_krw_mm": 30.5,
+        "shares": 87
+      },
+      "current": {
+        "date": "2026-05-30",
+        "value_krw_mm": 29.2,
+        "return_pct": -0.044,
+        "pnl_krw_mm": -1.3
+      },
+      "exit_rules": {
+        "target_return_pct": 0.30,
+        "stop_loss_pct": -0.15,
+        "scale_out": [
+          {"trigger_pct": 0.20, "fraction": 0.50, "note": "1차 익절"},
+          {"trigger_pct": 0.30, "fraction": 0.50, "note": "2차 익절"}
+        ]
+      },
+      "realized": null,
+      "lessons": []
+    },
+    {
+      "id": "bet_003_btc_lifetime",
+      "name": "비트코인 (lifetime 누적)",
+      "ticker": "BTC",
+      "thesis": "Halving cycle 베팅. 2017 / 2020 / 2024 halving 후 18개월 peak 패턴.",
+      "category": "Crypto (Cycle)",
+      "status": "realized",
+      "entry": {
+        "date": "2024 ~ 2026",
+        "price_krw_approx": null,
+        "amount_krw_mm": null,
+        "shares": null,
+        "note": "여러 번 진입/익절 — 정확한 entry 추적 X. coin_realized_pnl 누적만 잡힘."
+      },
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "date": "2024~2026 누적",
+        "exit_value_krw_mm": null,
+        "gain_krw_mm": 26.35,
+        "gain_pct": null,
+        "hold_days": null,
+        "note": "2024: -0.18M, 2025: +22.87M, 2026: +3.66M. 총 lifetime +₩26.35M."
+      },
+      "lessons": [
+        "BTC cycle 베팅은 자기 강점 — track record 입증",
+        "Halving cycle (4년 주기) 가 가장 안정적 entry 신호"
+      ]
+    },
+    {
+      "id": "bet_004_eth",
+      "name": "이더리움 (lifetime)",
+      "ticker": "ETH",
+      "thesis": "BTC 동조 + smart contract layer-1",
+      "category": "Crypto (Layer-1)",
+      "status": "realized",
+      "entry": {"date": "2025", "note": "2025 단일 진입/매도"},
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "gain_krw_mm": 3.29,
+        "note": "2025 +₩3.29M 실현. 작지만 BTC 동조 베팅 성공."
+      },
+      "lessons": []
+    },
+    {
+      "id": "bet_005_sol_failed",
+      "name": "솔라나 (실패)",
+      "ticker": "SOL",
+      "thesis": "Layer-1 경쟁 / 단일 코인 베팅",
+      "category": "Crypto (Single Layer-1)",
+      "status": "failed",
+      "entry": {"date": "2025~2026", "note": "2025 +₩2M 익절 후 2026 재진입 → 손실"},
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "gain_krw_mm": -20.19,
+        "note": "2025 +2.04M / 2026 -22.22M. 누적 -₩20.19M. **단일 코인 집중 베팅 실패 사례.**"
+      },
+      "lessons": [
+        "BTC 외 단일 알트코인 집중 = 위험",
+        "Layer-1 경쟁 narrative 는 fragile — 시장 sentiment 따라 -70%+ 가능",
+        "다음 alpha 베팅 시 단일 알트코인 max 자산의 5%"
+      ]
+    },
+    {
+      "id": "bet_006_qld_tqqq_realized",
+      "name": "QLD + TQQQ (2X/3X 나스닥 — 2026.05 익절)",
+      "ticker": "QLD/TQQQ",
+      "thesis": "나스닥 cycle dislocation 진입 후 빠른 익절 (2026.05.22)",
+      "category": "Leveraged ETF (Tactical)",
+      "status": "realized",
+      "entry": {"date": "이전", "note": "정확한 entry 추적 안 됨"},
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "date": "2026-05-22",
+        "gain_krw_mm": 0.54,
+        "gain_pct_qld": 0.416,
+        "gain_pct_tqqq": 0.710,
+        "note": "QLD +41.6% / TQQQ +71.0% 짧은 보유 후 익절. 100% 베팅 mission 의 partial proof — *훨씬 큰 자금 투입 시* +71% 가 큰 alpha."
+      },
+      "lessons": [
+        "QLD/TQQQ 단기 hit rate 우수 — 적절 timing 잡으면 +40~70% 가능",
+        "다음에는 *훨씬 큰 자금* 투입 (₩50M+) 으로 베팅 사이즈 키워야 mission 달성"
+      ]
+    },
+    {
+      "id": "bet_007_tiger_semi_realized",
+      "name": "TIGER 반도체 TOP10 레버리지 2X (2026.05 익절)",
+      "ticker": "TIGER_SEMI_2X",
+      "thesis": "한국 반도체 cycle 베팅 — 하이닉스/삼성전자 동조",
+      "category": "Leveraged ETF (Sector 2x)",
+      "status": "realized",
+      "entry": {"date": "2026 초 추정", "amount_krw_mm": 60.65},
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "date": "2026-05-27",
+        "gain_krw_mm": 12.31,
+        "gain_pct": 0.203,
+        "note": "+20.3% 익절 후 자금을 KODEX 하이닉스 단일종목으로 swap. 광범위 → 집중 베팅 전환."
+      },
+      "lessons": [
+        "반도체 cycle 자체는 hit — 다만 sector ETF 보다 단일 종목 (하이닉스) 집중이 더 큰 alpha 가능 판단",
+        "전환 결정 합리적 — 다만 단일 종목 집중은 risk 도 동시 증가"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "name": "TQQQ Drawdown Sweet Spot 베팅",
+      "thesis": "실증 데이터 (QQQ 1999~, entry_timing_buckets DB) 기준 sweet spot 진입. QQQ 52W DD -5~-10% 구간 진입 시 TQQQ 3M 평균 +21.7%, win rate 84% (n=661). -10~-15% 도 유사 (+23.8%, win 81%, n=245). -20%+ 들어가면 win rate 폭락 (48~60%).",
+      "entry_trigger": "QQQ 52W DD ∈ [-5%, -15%] 진입 + market_cycle_analyzer.recommend_current_entry best_asset='TQQQ' 출력 시",
+      "target_pct": 0.22,
+      "stop_pct": -0.25,
+      "expected_hold_months": "3개월 (실증 윈도우)",
+      "estimated_capital_krw_mm": "분양 deadline 이전: max 40 / 분양 후: 100~150",
+      "_data_basis": "entry_timing_buckets table — QQQ 1999~, 63일 윈도우. 옛 '나스닥 -15% 조정 → target +100% (4~6개월)' 가설은 데이터에 backed 안 됨 — 평균 +22% 수준이고 100% 는 outlier 인 -35%+ 표본 n=2 의 환상."
+    },
+    {
+      "name": "BTC Cycle 5 (Post-2028 Halving) 베팅",
+      "thesis": "Halving cycle 1-3 실증: cycle 1 peak +9,500% / cycle 2 +2,930% / cycle 3 +711% — 감쇠 추세 명확. Post-peak drawdown 평균 -78~85%. Cycle 5 (2028.3 halving) peak 예상 2029.7~2030.4 — 분양 deadline (2028.7) 직후, 본격 진입 가능 timing.",
+      "entry_trigger": "Cycle 4 peak (예상 2025.8~2026.4) 이후 BTC -70~80% drawdown 도달 시 분할 매수 시작. 분양 잔금 이후 (2028.7+) 본격 deploy.",
+      "target_pct": "+100~250% (cycle 1-3 감쇠 추세 반영 — base case)",
+      "stop_pct": "-30% from average entry (또는 cycle thesis 무효 시점)",
+      "expected_hold_months": "12~24개월 (halving → peak)",
+      "estimated_capital_krw_mm": "분양 후 자금의 30~40% (₩100~200M)",
+      "_data_basis": "BTC halving cycle 1-3 (2012/2016/2020) 공개 가격 데이터. 옛 가설 'target +200~400%' 는 감쇠 추세 반영 안 한 낙관 시나리오 — base case 는 +100~250%. 옛 entry '-50~70% DD' 도 역사적 trough -78~85% 대비 빠름 — 분할 매수는 -70%부터, full deploy 는 -75%+."
+    },
+    {
+      "name": "고확신 Alpha 종목 Deep Deploy",
+      "thesis": "Discovery engine 발굴 + alpha score ≥80 + 52W DD ≤-10% (사용자 quant_standards 룰). 발굴된 종목별로 Valuation 탭의 score_breakdown (총 100점) + IC Memo 결과로 target/stop 개별 산정.",
+      "entry_trigger": "엔진 발굴 + valuation_workflow 통과 (score ≥67/100 → 매수 band) + 52W DD ≤-10%",
+      "target_pct": "종목별 — Valuation IC Memo 의 base case IRR/MOIC 또는 목표주가 lookup",
+      "stop_pct": "종목별 — IC Memo 의 worst case 또는 thesis-break 시점",
+      "expected_hold_months": "종목별 (보통 6~24개월)",
+      "estimated_capital_krw_mm": "건당 ₩30~50M",
+      "_data_basis": "옛 'target 50%, stop -20%' 는 임의 일반화 — 종목별 fundamental 무시. 정정: Valuation 탭의 개별 모델 결과를 lookup. 가용 valuations: 파마리서치 (매수 72/100), 현대건설 (중립 50), 삼성바이오 (중립 37)."
+    }
+  ],
+  "lifetime_stats": {
+    "_computed_from_above": true,
+    "total_realized_bets": 5,
+    "wins": 4,
+    "losses": 1,
+    "hit_rate": 0.80,
+    "total_realized_pnl_krw_mm": 21.78,
+    "biggest_win_krw_mm": 26.35,
+    "biggest_loss_krw_mm": -20.19,
+    "avg_active_capital_per_bet_krw_mm": 51,
+    "note": "Hit rate 80% (4승 1패). 단 SOL 1패의 손실 크기가 작지 않음 (-₩20M). 다음 베팅은 단일 알트 코인 비중 제한 룰 적용."
+  }
+}

@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from .utils import get_logger
@@ -25,21 +27,25 @@ log = get_logger("today_decision")
 # 임계값 (단일 정의)
 # ---------------------------------------------------------------------------
 
-# Materiality
+# Materiality (사용자 룰 — feedback_materiality_principle 메모리)
 _MIN_VALUE_KRW = 5_000_000          # 종목별 알림은 절대 평가액 ≥ ₩5M
 _MIN_PNL_KRW = 2_000_000            # 익절/손실 알림은 PnL 절대값 ≥ ₩2M
 
-# Concentration
-_TOP1_WARNING_PCT = 30.0            # Top1 > 30% → 집중 경고
-_TOP1_DANGER_PCT = 45.0             # Top1 > 45% → 위험
+# Concentration · Leverage (사용자 룰 — 실증 backed 아님)
+# 일반 가이드라인. 종목별 alpha_bet 룰 우선 적용 후 fallback.
+_TOP1_WARNING_PCT = 30.0
+_TOP1_DANGER_PCT = 45.0
+_LEVERAGE_WARNING_PCT = 30.0
+_LEVERAGE_DANGER_PCT = 50.0
 
-# Leverage
-_LEVERAGE_WARNING_PCT = 30.0        # 레버리지 비중 > 30% → 경고
-_LEVERAGE_DANGER_PCT = 50.0         # > 50% → 위험
+# Profit-take / Loss-cut — 일반 fallback ONLY.
+# 종목별 alpha_bets.exit_rules 가 있으면 그것을 우선 사용한다 (단위: % — holdings.return_pct 와 동일).
+# 이 일반 임계값은 alpha_bet 룰 없는 종목에만 적용되며, 라벨에 "일반 룰" 명시.
+_PROFIT_TAKE_PCT = 30.0
+_LOSS_CUT_PCT = -15.0
 
-# Profit-take / Loss-cut
-_PROFIT_TAKE_PCT = 30.0             # +30% 이상 → 익절 후보
-_LOSS_CUT_PCT = -15.0               # -15% 이하 → 손실 컷 후보
+# Alpha Bet ledger 경로
+_ALPHA_BETS_PATH = Path(__file__).resolve().parents[1] / "data" / "alpha_bets.json"
 
 # Upside discovery — DEPRECATED for direct use
 # Layer B 는 이제 daily_tracking.build_alpha_candidates_strict (score≥80+DD≤-10%) 사용
@@ -75,6 +81,206 @@ def _hold_return(h: dict) -> float:
 
 def _hold_name(h: dict) -> str:
     return h.get("name") or h.get("ticker") or "(이름 없음)"
+
+
+# ---------------------------------------------------------------------------
+# Alpha Bet ledger lookup — 종목별 exit_rules 적용
+# ---------------------------------------------------------------------------
+
+def _load_active_alpha_bets() -> list[dict]:
+    """alpha_bets.json 에서 status='active' bets 만 반환. 실패 시 [] (graceful)."""
+    try:
+        with open(_ALPHA_BETS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return [b for b in (data.get("bets") or []) if b.get("status") == "active"]
+    except Exception as e:
+        log.debug("alpha_bets 로드 실패: %s", e)
+        return []
+
+
+def _match_alpha_bet(holding: dict, bets: list[dict]) -> dict | None:
+    """holding 과 alpha_bet 매칭 — ticker 정확 매칭 우선, name 부분 매칭 fallback."""
+    h_ticker = (holding.get("ticker") or "").strip().lower()
+    h_name = (holding.get("name") or "").strip().lower()
+    if not bets:
+        return None
+    # 1) ticker 정확 매칭
+    if h_ticker:
+        for b in bets:
+            b_ticker = (b.get("ticker") or "").strip().lower()
+            if b_ticker and h_ticker == b_ticker:
+                return b
+    # 2) name 부분 매칭 (한글 키워드)
+    if h_name:
+        for b in bets:
+            b_name = (b.get("name") or "").strip().lower()
+            if not b_name:
+                continue
+            for kw in ["하이닉스", "soxl", "tqqq", "qld", "tiger 반도체", "kodex"]:
+                if kw in h_name and kw in b_name:
+                    return b
+    return None
+
+
+def _bet_signal_for_holding(holding: dict, bet: dict) -> list[dict[str, Any]]:
+    """bet.exit_rules vs holding 현재 수익률 → 신호 list.
+
+    holdings.return_pct 는 % (예: 2.7), bet.exit_rules.*_pct 는 분수 (예: 0.025).
+    내부에서 분수로 통일 (ret_frac = holding.return_pct / 100).
+
+    Returns list of dicts {severity, label, detail, verdict}.
+    verdict ∈ {STAY, ADD, TRIM, SELL, STOP}.
+    """
+    out: list[dict[str, Any]] = []
+    er = bet.get("exit_rules") or {}
+    if not er:
+        return out
+    ret_pct = _hold_return(holding)          # % 단위
+    ret_frac = ret_pct / 100.0               # 분수 단위
+    name = _hold_name(holding)
+    pnl = _hold_pnl(holding)
+
+    # 1) Stop loss 도달
+    stop = er.get("stop_loss_pct")
+    if stop is not None and ret_frac <= stop:
+        out.append({
+            "severity": "warn",
+            "label": "Alpha Bet STOP — 손절 도달",
+            "detail": f"{name} {ret_pct:+.1f}% (₩{pnl/1e6:+.1f}M), 설정 손절 {stop*100:+.0f}% 도달",
+            "verdict": "STOP",
+        })
+        return out  # stop 이 발화되면 다른 시그널 무시
+
+    # 2) Stop 임박 (stop 의 80% 도달)
+    if stop is not None and ret_frac <= stop * 0.8 and ret_frac > stop:
+        margin = (ret_frac - stop) * 100  # 양수 (남은 여유)
+        out.append({
+            "severity": "warn",
+            "label": "Alpha Bet 손절 임박",
+            "detail": f"{name} {ret_pct:+.1f}%, 손절 {stop*100:+.0f}% 까지 {margin:+.1f}%pt 남음",
+            "verdict": "STAY",  # 손절 전까지는 보유 — 다만 모니터링
+        })
+
+    # 3) Scale-out trigger 단계별
+    scale_outs = er.get("scale_out") or []
+    for s in scale_outs:
+        trig = s.get("trigger_pct")
+        if trig is None:
+            continue
+        frac = s.get("fraction") or 0
+        note = s.get("note") or ""
+        # 95% 도달부터 surfacing
+        if ret_frac >= trig * 0.95:
+            margin = (ret_frac - trig) * 100  # 양수 = 도달
+            if margin >= 0:
+                # 도달
+                verdict = "TRIM" if frac < 0.5 else "SELL"
+                out.append({
+                    "severity": "warn",
+                    "label": f"Alpha Bet 익절 트리거 도달",
+                    "detail": f"{name} {ret_pct:+.1f}% — {note} 도달 (계획: {int(frac*100)}% 익절)",
+                    "verdict": verdict,
+                })
+            else:
+                # 임박
+                out.append({
+                    "severity": "info",
+                    "label": f"Alpha Bet 익절 임박",
+                    "detail": f"{name} {ret_pct:+.1f}% — {note} {-margin:.1f}%pt 남음",
+                    "verdict": "STAY",
+                })
+
+    # 4) scale_outs 없으면 target_return_pct 단일 체크
+    if not scale_outs:
+        tgt = er.get("target_return_pct")
+        if tgt is not None and ret_frac >= tgt * 0.95:
+            margin = (ret_frac - tgt) * 100
+            if margin >= 0:
+                out.append({
+                    "severity": "warn",
+                    "label": "Alpha Bet target 도달",
+                    "detail": f"{name} {ret_pct:+.1f}% — target {tgt*100:+.0f}% 도달",
+                    "verdict": "SELL",
+                })
+            else:
+                out.append({
+                    "severity": "info",
+                    "label": "Alpha Bet target 임박",
+                    "detail": f"{name} {ret_pct:+.1f}% — target {tgt*100:+.0f}% 까지 {-margin:.1f}%pt",
+                    "verdict": "STAY",
+                })
+
+    # 5) 본주 target (예: SK하이닉스 ₩2.5M) — 본주 가격 fetch 필요
+    # 이번 단계에선 trigger 만 기록, 본주 가격 lookup 은 향후 alpha_bet_signals.py 에서
+    underlying = er.get("target_underlying_price")
+    if underlying:
+        out.append({
+            "severity": "info",
+            "label": "Alpha Bet 본주 target",
+            "detail": f"{name} — 본주 target: {underlying} (별도 가격 모니터링 필요)",
+            "verdict": "STAY",
+        })
+
+    # 신호 없음 + 본주 target 도 없음 → 'STAY THE COURSE' 명시 (작전 정상 진행)
+    if not out:
+        out.append({
+            "severity": "info",
+            "label": "Alpha Bet 작동 중",
+            "detail": f"{name} {ret_pct:+.1f}% — 신호 없음, stay the course (보유 유지)",
+            "verdict": "STAY",
+        })
+    return out
+
+
+def build_alpha_bet_signals(holdings: list[dict]) -> list[dict[str, Any]]:
+    """Layer 0 — Alpha Bet 신호.
+
+    Active alpha bets 별로 종목 매칭 → exit_rules trigger 체크.
+    반환: items list (severity·label·detail·verdict 키), 우선순위:
+      STOP > SELL > TRIM > ADD > STAY
+    """
+    bets = _load_active_alpha_bets()
+    if not bets:
+        return []
+    items: list[dict[str, Any]] = []
+    matched_holdings: set[str] = set()
+    for h in holdings:
+        v = _hold_value(h)
+        if v < _MIN_VALUE_KRW:
+            continue
+        bet = _match_alpha_bet(h, bets)
+        if not bet:
+            continue
+        signals = _bet_signal_for_holding(h, bet)
+        for s in signals:
+            s["bet_id"] = bet.get("id")
+            s["bet_name"] = bet.get("name")
+            items.append(s)
+        matched_holdings.add(_hold_name(h))
+
+    # 미매칭 active bets 도 표시 (포지션이 비어있거나 ₩5M 미만 — 진입 미완)
+    for b in bets:
+        # 해당 bet 에 매칭된 holding 이 하나도 없으면
+        b_name = (b.get("name") or "").lower()
+        if not any(b_name in mn.lower() or any(kw in mn.lower() and kw in b_name for kw in ["하이닉스","soxl","tqqq","qld"]) for mn in matched_holdings):
+            items.append({
+                "severity": "info",
+                "label": "Alpha Bet 미매칭",
+                "detail": f"{b.get('name','')} — 포트폴리오에 매칭 holding 없음 (또는 ₩5M 미만)",
+                "verdict": "STAY",
+                "bet_id": b.get("id"),
+                "bet_name": b.get("name"),
+            })
+
+    # 우선순위 정렬: STOP > SELL > TRIM > ADD > STAY
+    order = {"STOP": 0, "SELL": 1, "TRIM": 2, "ADD": 3, "STAY": 4}
+    items.sort(key=lambda x: order.get(x.get("verdict", "STAY"), 5))
+    return items
+
+
+def _holding_in_active_bets(holding: dict, bets: list[dict]) -> bool:
+    """이 holding 이 active alpha bet 에 매칭되는지 — 일반 익절/손실 룰 skip 판정용."""
+    return _match_alpha_bet(holding, bets) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +362,8 @@ def build_portfolio_check(holdings: list[dict], diag: dict[str, Any]) -> list[di
         # 반도체와 100% 겹치면 — 위의 '반도체 집중' 신호로 충분 (중복 surfacing 제거)
 
     # 3) 익절 임박 — materiality 통과 + 수익률 ≥ +30%
+    # 단, alpha_bet 룰이 있는 종목은 Layer 0 에서 종목별 룰로 처리 — 중복 surfacing 방지
+    active_bets = _load_active_alpha_bets()
     profit_candidates = []
     for h in holdings:
         v = _hold_value(h)
@@ -165,17 +373,19 @@ def build_portfolio_check(holdings: list[dict], diag: dict[str, Any]) -> list[di
             continue
         if pnl < _MIN_PNL_KRW:
             continue
+        if _holding_in_active_bets(h, active_bets):
+            continue  # Layer 0 에서 처리
         if ret >= _PROFIT_TAKE_PCT:
             profit_candidates.append((h, ret, pnl))
     profit_candidates.sort(key=lambda t: -t[1])
     for h, ret, pnl in profit_candidates[:3]:
         items.append({
             "severity": "info",
-            "label": "익절 후보",
-            "detail": f"{_hold_name(h)} {ret:+.1f}% (₩{pnl / 1e6:.1f}M)",
+            "label": "익절 후보 (일반 룰)",
+            "detail": f"{_hold_name(h)} {ret:+.1f}% (₩{pnl / 1e6:.1f}M) — 사용자 alpha_bet 룰 없음, 일반 +{_PROFIT_TAKE_PCT:.0f}% 임계 적용",
         })
 
-    # 4) 손실 주의 — materiality 통과 + 수익률 ≤ -15%
+    # 4) 손실 주의 — alpha_bet 매칭 종목은 Layer 0 에서 처리
     loss_candidates = []
     for h in holdings:
         v = _hold_value(h)
@@ -185,14 +395,16 @@ def build_portfolio_check(holdings: list[dict], diag: dict[str, Any]) -> list[di
             continue
         if abs(pnl) < _MIN_PNL_KRW:
             continue
+        if _holding_in_active_bets(h, active_bets):
+            continue  # Layer 0 에서 처리
         if ret <= _LOSS_CUT_PCT:
             loss_candidates.append((h, ret, pnl))
     loss_candidates.sort(key=lambda t: t[1])
     for h, ret, pnl in loss_candidates[:2]:
         items.append({
             "severity": "warn",
-            "label": "손실 주의",
-            "detail": f"{_hold_name(h)} {ret:+.1f}% (₩{pnl / 1e6:.1f}M)",
+            "label": "손실 주의 (일반 룰)",
+            "detail": f"{_hold_name(h)} {ret:+.1f}% (₩{pnl / 1e6:.1f}M) — 사용자 alpha_bet 룰 없음, 일반 {_LOSS_CUT_PCT:.0f}% 임계 적용",
         })
 
     # 5) 사용자 memo 에 명시된 target 트래킹 — 예: "₩2.5M 도달 시 수익실현"
@@ -396,18 +608,38 @@ def synthesize_headline(
     alpha_candidates: list[dict],
     layer_c_actions: list[dict],
     core_cards: list[dict] | None = None,
+    alpha_bet_signals: list[dict] | None = None,
 ) -> str:
-    """3-Layer 결과를 종합해서 헤드라인 생성.
+    """4-Layer (0/A/B/C) 결과 종합 헤드라인.
 
-    하드코딩된 "나스닥 고점권" 류 제거. 데이터 기반 합성:
-    - Layer A 의 가장 critical 한 risk (warn)
-    - Layer B 의 알파 후보 유무
-    - Layer C 의 액션 유무
-    - Core 트래커의 verdict (TQQQ 진입 적기 등 강한 신호)
+    우선순위:
+    - Layer 0 (Alpha Bet): STOP/SELL 신호 — 최우선 (사용자 본인 룰)
+    - Layer A (포트폴리오): warn severity — 두 번째
+    - Layer B (Alpha): Core 트래커 강한 매수 / 알파 후보
+    - Layer C (리밸런싱): 액션 유무
 
     Returns: 한 줄 헤드라인 (max ~60자)
     """
     bits: list[str] = []
+
+    # 0) Layer 0 — Alpha Bet STOP/SELL/TRIM (최우선)
+    if alpha_bet_signals:
+        critical = [s for s in alpha_bet_signals if s.get("verdict") in ("STOP", "SELL")]
+        if critical:
+            s = critical[0]
+            name = s.get("bet_name", "").split(" ")[0] if s.get("bet_name") else ""
+            verdict = s["verdict"]
+            label_short = "손절" if verdict == "STOP" else "익절 도달"
+            bits.append(f"{name} {label_short}!" if name else f"{verdict} 신호")
+            # STOP/SELL 발화되면 다른 신호는 거의 의미 없음 — 단, 알파 후보 1줄만 추가
+            if alpha_candidates:
+                bits.append(f"알파 후보 {len(alpha_candidates)}건")
+            return " · ".join(bits)
+        trims = [s for s in alpha_bet_signals if s.get("verdict") == "TRIM"]
+        if trims:
+            s = trims[0]
+            name = s.get("bet_name", "").split(" ")[0] if s.get("bet_name") else ""
+            bits.append(f"{name} 부분 익절 검토" if name else "부분 익절 검토")
 
     # 1) Layer A — warn severity 가 있으면 최우선 (포트폴리오 risk)
     warns = [it for it in (layer_a_items or []) if it.get("severity") == "warn"]
@@ -481,6 +713,75 @@ _PRIORITY_COLOR = {
     "medium": ("#F59E0B", "주의"),
     "low": ("#94A3B8", "참고"),
 }
+
+
+_VERDICT_COLOR = {
+    "STOP": "#EF4444",
+    "SELL": "#F59E0B",
+    "TRIM": "#F59E0B",
+    "ADD":  "#06B6D4",
+    "STAY": "#22C55E",
+}
+_VERDICT_LABEL_KO = {
+    "STOP": "🛑 손절",
+    "SELL": "📤 전량 익절",
+    "TRIM": "✂️ 부분 익절",
+    "ADD":  "➕ 추가 매수",
+    "STAY": "✅ 유지 (Stay the Course)",
+}
+
+
+def render_layer_0_html(signals: list[dict]) -> str:
+    """Layer 0 — Alpha Bet 신호. 사용자 본인 ledger 의 종목별 룰 기반.
+
+    신호 없거나 STAY 만 있으면 한 줄 간단 요약. STOP/SELL/TRIM 있으면 강조 박스.
+    """
+    if not signals:
+        body = (
+            '<div style="font-size:13px; color:var(--muted); line-height:1.6;">'
+            'Active alpha bet 없음 — data/alpha_bets.json 에 status="active" bet 추가 시 노출'
+            '</div>'
+        )
+        return (
+            '<section style="margin-bottom:18px; padding:14px 18px; '
+            'background:var(--panel); border:1px solid var(--border); '
+            'border-left:3px solid var(--muted); border-radius:8px;">'
+            '<div style="font-size:10.5px; color:var(--muted); font-weight:700; '
+            'text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;">'
+            'Layer 0 — Alpha Bet 신호 (본인 룰)</div>'
+            f'{body}</section>'
+        )
+
+    # 신호별 카드
+    cards = []
+    for s in signals:
+        verdict = s.get("verdict", "STAY")
+        color = _VERDICT_COLOR.get(verdict, "#94A3B8")
+        v_label = _VERDICT_LABEL_KO.get(verdict, verdict)
+        label = s.get("label", "")
+        detail = s.get("detail", "")
+        cards.append(
+            f'<div style="padding:10px 14px; margin-bottom:6px; '
+            f'background:var(--panel-2); border-left:3px solid {color}; border-radius:6px;">'
+            f'<div style="display:flex; justify-content:space-between; gap:10px; '
+            f'flex-wrap:wrap; align-items:baseline; margin-bottom:4px;">'
+            f'<div style="font-size:12.5px; color:var(--text); font-weight:600;">{label}</div>'
+            f'<div style="font-size:13px; font-weight:800; color:{color};">{v_label}</div>'
+            f'</div>'
+            f'<div style="font-size:12px; color:var(--text-soft); line-height:1.55;">{detail}</div>'
+            f'</div>'
+        )
+
+    return (
+        '<section style="margin-bottom:18px; padding:14px 18px; '
+        'background:var(--panel); border:1px solid var(--border); '
+        'border-left:3px solid #06B6D4; border-radius:8px;">'
+        '<div style="font-size:10.5px; color:#06B6D4; font-weight:700; '
+        'text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;">'
+        '🎯 Layer 0 — Alpha Bet 신호 (본인 ledger 룰)</div>'
+        + "".join(cards) +
+        '</section>'
+    )
 
 
 def render_layer_a_html(items: list[dict]) -> str:
