@@ -4,5 +4,11 @@
     "ok": true,
     "ticker": null,
     "severity": "critical"
+  },
+  "R8:new_entrants:AAON,CSTM,DELL,DOC,DY,NBIS,NWPX,TECK": {
+    "sent_at": "2026-06-01T10:23:05",
+    "ok": true,
+    "ticker": null,
+    "severity": "critical"
   }
 }
