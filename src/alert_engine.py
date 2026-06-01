@@ -25,6 +25,8 @@ from typing import Any
 from .utils import get_logger
 from .telegram_notifier import send_telegram_plain
 
+# Path 이미 import 됨
+
 log = get_logger("alert_engine")
 
 # Dedup 윈도우 (rule_id 기준)
@@ -66,8 +68,48 @@ def _now_utc_iso() -> str:
     return _dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
 
+# Dedup state file — alpha.db 와 별개. workflow 끝에 commit 가능 (작은 JSON)
+_DEDUP_FILE = Path(__file__).resolve().parents[1] / "data" / "alert_dedup.json"
+
+
+def _load_dedup_state() -> dict:
+    """File-based dedup — alpha.db 의 alert_log 보다 우선."""
+    try:
+        if _DEDUP_FILE.exists():
+            with open(_DEDUP_FILE, encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception as e:
+        log.debug("dedup state load 실패: %s", e)
+    return {}
+
+
+def _save_dedup_state(state: dict) -> None:
+    try:
+        _DEDUP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_DEDUP_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log.warning("dedup state save 실패: %s", e)
+
+
 def _was_sent_recently(conn: sqlite3.Connection, rule_id: str, hours: int = _DEDUP_HOURS_DEFAULT) -> bool:
-    """rule_id 가 최근 N시간 안 발화됐는지 — dedup 체크."""
+    """rule_id 가 최근 N시간 안 발화됐는지.
+
+    Primary: data/alert_dedup.json (workflow 간 보존)
+    Fallback: alpha.db alert_log (workflow run 내)
+    """
+    # 1) File-based
+    state = _load_dedup_state()
+    entry = state.get(rule_id)
+    if entry and entry.get("ok"):
+        try:
+            last_sent = _dt.datetime.fromisoformat(entry["sent_at"])
+            if (_dt.datetime.utcnow() - last_sent).total_seconds() < hours * 3600:
+                return True
+        except Exception:
+            pass
+
+    # 2) DB fallback (workflow run 내)
     cur = conn.cursor()
     cutoff = (_dt.datetime.utcnow() - _dt.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")
     cur.execute(
@@ -79,6 +121,25 @@ def _was_sent_recently(conn: sqlite3.Connection, rule_id: str, hours: int = _DED
 
 def _log_alert(conn: sqlite3.Connection, rule_id: str, ticker: str | None,
                severity: str, message: str, ok: bool, meta: dict | None = None) -> None:
+    """양쪽 저장: file (영구) + DB (workflow 내)."""
+    # 1) File dedup state update
+    state = _load_dedup_state()
+    state[rule_id] = {
+        "sent_at": _now_utc_iso(),
+        "ok": bool(ok),
+        "ticker": ticker,
+        "severity": severity,
+        # 오래된 항목 자동 정리 위해 마지막 30일만 유지하는 게 좋지만 일단 단순
+    }
+    # 30일 이상 된 entry 자동 정리
+    cutoff = _dt.datetime.utcnow() - _dt.timedelta(days=30)
+    state = {
+        k: v for k, v in state.items()
+        if _try_parse_dt(v.get("sent_at")) >= cutoff
+    }
+    _save_dedup_state(state)
+
+    # 2) DB (workflow run 내 — debug 용)
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO alert_log (rule_id, ticker, severity, message, sent_at, ok, meta_json) "
@@ -87,6 +148,16 @@ def _log_alert(conn: sqlite3.Connection, rule_id: str, ticker: str | None,
          1 if ok else 0, json.dumps(meta or {}, ensure_ascii=False)),
     )
     conn.commit()
+
+
+def _try_parse_dt(s: str | None) -> _dt.datetime:
+    """ISO datetime 파싱 — 실패 시 0001-01-01 (즉 정리 대상)."""
+    if not s:
+        return _dt.datetime(1, 1, 1)
+    try:
+        return _dt.datetime.fromisoformat(s)
+    except Exception:
+        return _dt.datetime(1, 1, 1)
 
 
 def _send_or_skip(conn: sqlite3.Connection, rule_id: str, ticker: str | None,

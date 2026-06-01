@@ -115,16 +115,26 @@ def load_us_wide() -> list[dict]:
 def score_and_save(rows: list[dict], scan_date: str, day_index: int) -> list[dict]:
     """Sampling + score + DB 저장.
 
-    day_index (day-of-year 1~365): rotation 으로 매일 다른 subset cover.
-    전체 universe 약 12일에 1회 cover (2300종 / 200/일).
+    Mode:
+      - 기본: SAMPLE_SIZE rotation (일별 200종)
+      - FULL_SCAN=1 환경변수: 전체 universe 한 번에 score (시간 길지만 빠른 첫 cover)
     """
     if not rows:
         return []
-    days_to_cover = max(1, (len(rows) // SAMPLE_SIZE) + 1)
-    rot = day_index % days_to_cover
-    sliced = rows[rot * SAMPLE_SIZE : (rot + 1) * SAMPLE_SIZE]
-    log.info("Today scanning %d/%d (rotation %d/%d, 전체 cover 주기 %d일)",
-             len(sliced), len(rows), rot + 1, days_to_cover, days_to_cover)
+
+    # FULL_SCAN 모드 — 환경변수
+    import os
+    full_scan = os.environ.get("FULL_SCAN", "").lower() in ("1", "true", "yes")
+
+    if full_scan:
+        sliced = rows
+        log.info("FULL_SCAN mode — 전체 %d 종목 scoring (약 60~90분 예상)", len(sliced))
+    else:
+        days_to_cover = max(1, (len(rows) // SAMPLE_SIZE) + 1)
+        rot = day_index % days_to_cover
+        sliced = rows[rot * SAMPLE_SIZE : (rot + 1) * SAMPLE_SIZE]
+        log.info("Today scanning %d/%d (rotation %d/%d, 전체 cover 주기 %d일)",
+                 len(sliced), len(rows), rot + 1, days_to_cover, days_to_cover)
 
     hits = []
     # 진단 통계

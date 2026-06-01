@@ -1,0 +1,76 @@
+name: Full Universe Scan (1회성)
+
+# 수동 실행 only — 전체 7,500종 한 번에 score.
+# 시간: 약 60~90분 예상.
+# 첫 시작 시 1회 실행 → 이후 매일 daily cron 이 *변동* 만 update.
+on:
+  workflow_dispatch:
+
+jobs:
+  full_scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180     # 3시간 (충분히 여유)
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pykrx yfinance pandas requests finance-datareader
+
+      - name: 1) Dynamic Universe rebuild (KR + US)
+        continue-on-error: true
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python scripts/build_dynamic_universe.py
+
+      - name: 2) FULL SCAN (전체 universe, ~60~90분)
+        env:
+          PYTHONUNBUFFERED: "1"
+          FULL_SCAN: "1"                 # 전체 모드 활성화
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/weekly_growth_scan.py
+
+      - name: 3) Commit results
+        if: always()
+        run: |
+          git config user.name "alpha-bot"
+          git config user.email "alpha-bot@users.noreply.github.com"
+          # 결과 file 들 — universe / DB / dedup
+          cp data/alpha.db /tmp/new_alpha.db 2>/dev/null || true
+          cp data/kr_dynamic_universe.csv /tmp/kr_dyn.csv 2>/dev/null || true
+          cp data/us_dynamic_universe.csv /tmp/us_dyn.csv 2>/dev/null || true
+          cp data/alert_dedup.json /tmp/dedup.json 2>/dev/null || true
+          for i in 1 2 3; do
+            git fetch origin main
+            git checkout -f -B main origin/main
+            [ -f /tmp/new_alpha.db ] && cp /tmp/new_alpha.db data/alpha.db
+            [ -f /tmp/kr_dyn.csv ] && cp /tmp/kr_dyn.csv data/kr_dynamic_universe.csv
+            [ -f /tmp/us_dyn.csv ] && cp /tmp/us_dyn.csv data/us_dynamic_universe.csv
+            [ -f /tmp/dedup.json ] && cp /tmp/dedup.json data/alert_dedup.json
+            git add data/alpha.db data/kr_dynamic_universe.csv data/us_dynamic_universe.csv data/alert_dedup.json 2>/dev/null || true
+            if git diff --cached --quiet; then
+              echo "No changes"
+              exit 0
+            fi
+            git commit -m "Full universe scan complete $(date -u +'%Y-%m-%d %H:%M UTC')"
+            if git push origin main; then
+              echo "✓ pushed"
+              exit 0
+            fi
+            sleep 5
+          done

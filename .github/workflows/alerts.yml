@@ -12,9 +12,13 @@ jobs:
   alert:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write       # alert_dedup.json commit 위해
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -25,7 +29,6 @@ jobs:
       - name: Install dependencies (minimal)
         run: |
           python -m pip install --upgrade pip
-          # alert_engine 필수 의존성만 — 가벼움
           pip install requests yfinance pykrx
 
       - name: Run alert cycle
@@ -36,11 +39,28 @@ jobs:
         run: |
           python -m src.alert_engine
 
-      - name: Upload alert log artifact (디버그)
+      - name: Commit alert_dedup.json (영구화)
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: alert-db-${{ github.run_id }}
-          path: data/alpha.db
-          if-no-files-found: ignore
-          retention-days: 7
+        run: |
+          git config user.name "alpha-bot"
+          git config user.email "alpha-bot@users.noreply.github.com"
+          if [ -f data/alert_dedup.json ]; then
+            cp data/alert_dedup.json /tmp/alert_dedup.json
+            for i in 1 2 3; do
+              git fetch origin main
+              git checkout -f -B main origin/main
+              cp /tmp/alert_dedup.json data/alert_dedup.json
+              git add data/alert_dedup.json
+              if git diff --cached --quiet; then
+                echo "dedup file no change"
+                exit 0
+              fi
+              git commit -m "alert dedup update $(date -u +'%H:%M UTC')"
+              if git push origin main; then
+                echo "✓ dedup pushed"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "⚠️ push 3회 실패 — 다음 cycle 재시도"
+          fi
