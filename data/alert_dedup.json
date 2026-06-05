@@ -6,7 +6,7 @@
     "severity": "critical"
   },
   "R8:new_entrants:AAON,CSTM,DELL,DOC,DY,NBIS,NWPX,TECK": {
-    "sent_at": "2026-06-04T15:35:59",
+    "sent_at": "2026-06-05T15:56:44",
     "ok": true,
     "ticker": null,
     "severity": "critical"
