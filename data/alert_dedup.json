@@ -10,5 +10,11 @@
     "ok": true,
     "ticker": null,
     "severity": "critical"
+  },
+  "R8:new_entrants:INCY,WWD": {
+    "sent_at": "2026-06-11T21:23:47",
+    "ok": true,
+    "ticker": null,
+    "severity": "critical"
   }
 }
