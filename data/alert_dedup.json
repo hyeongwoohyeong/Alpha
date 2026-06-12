@@ -16,5 +16,11 @@
     "ok": true,
     "ticker": null,
     "severity": "critical"
+  },
+  "R8:new_entrants:ACMR,AMRX,CAI,INCY,KLIC,WWD": {
+    "sent_at": "2026-06-12T21:49:01",
+    "ok": true,
+    "ticker": null,
+    "severity": "critical"
   }
 }
