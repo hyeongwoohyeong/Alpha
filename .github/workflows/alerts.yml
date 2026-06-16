@@ -39,28 +39,54 @@ jobs:
         run: |
           python -m src.alert_engine
 
-      - name: Commit alert_dedup.json (영구화)
+      - name: Commit alert_dedup.json (영구화) — JSON merge 지원
         if: always()
         run: |
           git config user.name "alpha-bot"
           git config user.email "alpha-bot@users.noreply.github.com"
-          if [ -f data/alert_dedup.json ]; then
-            cp data/alert_dedup.json /tmp/alert_dedup.json
-            for i in 1 2 3; do
-              git fetch origin main
-              git checkout -f -B main origin/main
-              cp /tmp/alert_dedup.json data/alert_dedup.json
-              git add data/alert_dedup.json
-              if git diff --cached --quiet; then
-                echo "dedup file no change"
-                exit 0
-              fi
-              git commit -m "alert dedup update $(date -u +'%H:%M UTC')"
-              if git push origin main; then
-                echo "✓ dedup pushed"
-                exit 0
-              fi
-              sleep 2
-            done
-            echo "⚠️ push 3회 실패 — 다음 cycle 재시도"
+          if [ ! -f data/alert_dedup.json ]; then
+            echo "dedup file 없음 — skip"
+            exit 0
           fi
+          # 우리 dedup state 백업
+          cp data/alert_dedup.json /tmp/our_dedup.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git checkout -f -B main origin/main
+            # origin 의 dedup file 과 *우리* dedup state JSON-level merge
+            python3 <<'PYEOF'
+import json
+from pathlib import Path
+ours_path = Path('/tmp/our_dedup.json')
+theirs_path = Path('data/alert_dedup.json')
+ours = json.load(open(ours_path, encoding='utf-8')) if ours_path.exists() else {}
+theirs = json.load(open(theirs_path, encoding='utf-8')) if theirs_path.exists() else {}
+# Merge: 최신 sent_at 우선 (rule_id 별)
+merged = dict(theirs)
+for k, v in ours.items():
+    if k not in merged:
+        merged[k] = v
+        continue
+    # sent_at 더 최근 거 채택
+    t_ours = v.get("sent_at", "")
+    t_theirs = merged[k].get("sent_at", "")
+    if t_ours > t_theirs:
+        merged[k] = v
+# Save merged
+json.dump(merged, open(theirs_path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+print(f"merged: {len(merged)} entries (ours={len(ours)} + theirs={len(theirs)})")
+PYEOF
+            git add data/alert_dedup.json
+            if git diff --cached --quiet; then
+              echo "dedup no change (merge result == theirs)"
+              exit 0
+            fi
+            git commit -m "alert dedup merge $(date -u +'%H:%M UTC')"
+            if git push origin main; then
+              echo "✓ dedup pushed (try $i)"
+              exit 0
+            fi
+            echo "push fail try $i, retry..."
+            sleep 3
+          done
+          echo "⚠️ push 5회 실패 — 다음 cycle 자동 재시도"

@@ -1,12 +1,13 @@
 {
   "_doc": "매크로 이벤트 캘린더 — 브리핑 엔진이 다가오는 이벤트 7일 surfacing. 시간은 KST. FOMC 등 알려진 일정은 하드코딩, 어닝 일정은 yfinance Ticker.calendar 로 자동 보강.",
-  "_source": "FRED + Fed 공식 발표 + yfinance + 주요 발표 패턴",
-  "_updated": "2026-05-31",
+  "_source": "FRED + Fed 공식 발표 + 주요 발표 패턴",
+  "_updated": "2026-06-01",
+  "_timezone_note": "모든 time/date 는 KST 기준. 미국 EDT (3~11월): 8:30 AM ET = 21:30 KST 같은 날. EST (11~3월): 8:30 AM ET = 22:30 KST. FOMC 14:00 ET 수 = KST 03:00 목 새벽.",
   "events": [
     {
       "date": "2026-06-04",
-      "time_kst": "21:30",
-      "title": "미국 4월 잡스 (Job Openings, JOLTS)",
+      "time_kst": "23:00",
+      "title": "미국 4월 JOLTS (10:00 AM ET)",
       "category": "macro",
       "importance": "medium",
       "impact": "QQQ/SPY 단기 변동 ↑ — 고용 강세면 Fed 매파"
@@ -14,7 +15,7 @@
     {
       "date": "2026-06-06",
       "time_kst": "21:30",
-      "title": "미국 5월 비농업 고용 (NFP)",
+      "title": "미국 5월 NFP 비농업 고용 (8:30 AM ET)",
       "category": "macro",
       "importance": "high",
       "impact": "QQQ/SPY/TQQQ 큰 변동 — Fed 금리 경로 신호"
@@ -22,7 +23,7 @@
     {
       "date": "2026-06-11",
       "time_kst": "21:30",
-      "title": "미국 5월 CPI",
+      "title": "미국 5월 CPI (8:30 AM ET)",
       "category": "macro",
       "importance": "high",
       "impact": "TQQQ/QQQ 큰 변동 — 인플레 surprise 시 ±2%+"
@@ -30,7 +31,7 @@
     {
       "date": "2026-06-12",
       "time_kst": "21:30",
-      "title": "미국 5월 PPI",
+      "title": "미국 5월 PPI (8:30 AM ET)",
       "category": "macro",
       "importance": "medium",
       "impact": "TQQQ/QQQ 단기 변동"
@@ -38,15 +39,15 @@
     {
       "date": "2026-06-17",
       "time_kst": "21:30",
-      "title": "미국 5월 소매판매",
+      "title": "미국 5월 소매판매 (8:30 AM ET)",
       "category": "macro",
       "importance": "medium",
       "impact": "소비 강세면 SPY ↑, TLT ↓"
     },
     {
-      "date": "2026-06-18",
+      "date": "2026-06-19",
       "time_kst": "03:00",
-      "title": "FOMC 결정 + 점도표 + 파월 기자회견",
+      "title": "FOMC 결정 + 점도표 + 파월 기자회견 (미국 6/18 수 2:00 PM ET)",
       "category": "macro",
       "importance": "critical",
       "impact": "TQQQ/QQQ/BTC 큰 변동 ±3%+ 가능. 6월 점도표가 핵심"
@@ -54,7 +55,7 @@
     {
       "date": "2026-06-26",
       "time_kst": "21:30",
-      "title": "미국 5월 PCE (Fed 가 가장 보는 인플레 지표)",
+      "title": "미국 5월 PCE — Fed 가 가장 보는 인플레 지표 (8:30 AM ET)",
       "category": "macro",
       "importance": "high",
       "impact": "TQQQ/QQQ ±1~2% 변동, FOMC 후속 신호"

@@ -23,17 +23,27 @@
         "pnl_krw_mm": 1.9
       },
       "exit_rules": {
-        "target_underlying_price": "SK하이닉스 ₩2,500,000",
-        "target_return_pct": 0.25,
+        "target_underlying_price": "SK하이닉스 ₩3,000,000 (revised 2026-06)",
+        "target_return_pct": 0.40,
         "stop_loss_pct": -0.15,
+        "trailing_stop_pct": -0.08,
+        "trailing_stop_note": "peak (52W high) 대비 -8% 깨질 시 자동 exit. trend following.",
         "scale_out": [
-          {"trigger_pct": 0.15, "fraction": 0.33, "note": "1차 익절 (보수)"},
-          {"trigger_pct": 0.25, "fraction": 0.33, "note": "2차 익절 (target)"},
-          {"trigger_pct": 0.40, "fraction": 0.34, "note": "3차 익절 (over-shoot)"}
+          {"trigger_pct": 0.15, "fraction": 0.25, "note": "1차 익절 (보수, 본전 + small)"},
+          {"trigger_pct": 0.25, "fraction": 0.25, "note": "2차 익절 (구 target)"},
+          {"trigger_pct": 0.40, "fraction": 0.25, "note": "3차 익절 (new target — 본주 ₩3M)"},
+          {"trigger_pct": 0.60, "fraction": 0.25, "note": "4차 익절 (over-shoot, 본주 ₩3.5M+)"}
+        ],
+        "_revision_history": [
+          {"date": "2026-06-01", "from": "target ₩2.5M / +25%", "to": "target ₩3.0M / +40% + trailing stop -8%",
+           "reason": "수익중 종목 추세 따라가기 + 종전 후 단기 악재 X 판단. Trend following + trailing stop 도입으로 over-shoot 포착"}
         ]
       },
       "realized": null,
-      "lessons": []
+      "lessons": [
+        "2026-06-01 thesis 변경: 단일 target ₩2.5M 에서 +40% / 본주 ₩3M + trailing stop 도입. *trend following* 패러다임 — 수익중인 종목은 trailing stop 으로 보호하면서 over-shoot 포착",
+        "Trailing stop 룰 검증 필요 — peak 대비 -8% 가 적절한지 vs 너무 빠른 exit 인지 monitoring"
+      ]
     },
     {
       "id": "bet_002_soxl",

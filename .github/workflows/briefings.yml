@@ -1,16 +1,16 @@
 name: Daily Briefings
 
 # 하루 3회 시황 브리핑 — 텔레그램 다이제스트 push.
-# 시간대 (KST → UTC 변환, KST = UTC+9):
-#   08:30 KST = 23:30 UTC (전날)
-#   18:00 KST = 09:00 UTC
-#   22:00 KST = 13:00 UTC
-# Note: GitHub Actions cron 은 ±10분 드리프트 — 정확한 시각 보장 X.
+# 도착 목표 시각 (KST):
+#   아침 09:00 — Lead time 보정: cron 08:45 KST = UTC 23:45 (전날)
+#   저녁 18:00 — cron 17:45 KST = UTC 08:45
+#   밤   22:00 — cron 21:45 KST = UTC 12:45
+# Lead time: GitHub Actions drift (5~10분) + workflow execution (2~3분) = 약 15분
 on:
   schedule:
-    - cron: "30 23 * * *"   # 08:30 KST — 아침
-    - cron: "0 9 * * *"     # 18:00 KST — 저녁
-    - cron: "0 13 * * *"    # 22:00 KST — 밤
+    - cron: "45 23 * * *"   # 09:00 KST 도착 목표 — 아침
+    - cron: "45 8 * * *"    # 18:00 KST 도착 목표 — 저녁
+    - cron: "45 12 * * *"   # 22:00 KST 도착 목표 — 밤
   workflow_dispatch:
     inputs:
       slot:
