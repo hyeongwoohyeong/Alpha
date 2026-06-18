@@ -3,5 +3,10 @@
     "ts": "2026-06-18T21:15:46.433424+09:00",
     "ok": false,
     "error": "403 Client Error: Forbidden for url: https://openapi.tossinvest.com/oauth2/token"
+  },
+  {
+    "ts": "2026-06-18T21:36:47.072578+09:00",
+    "ok": false,
+    "error": "OAuth fail 403: {\"error\":\"access_denied\",\"error_description\":\"IP address not allowed\"}"
   }
 ]
