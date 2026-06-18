@@ -1,0 +1,485 @@
+{
+  "_doc": "Macro Cycle Tracker seed — 12 active + 15 watch list. v3 (2026-06-16). Active 12 = phase transition alert 대상. Watch 15 = 분기 review only.",
+  "_version": "v3",
+  "_updated": "2026-06-16",
+  "active_cycles": [
+    {
+      "cycle_id": 1,
+      "cycle_name": "부동산 18-Year Land Cycle",
+      "category": "Cycle",
+      "current_phase": 4,
+      "phase_label": "Peak 임박",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "미국 신축 허가 2024 신고가 후 둔화",
+        "REITs 자금 유출 2분기 연속",
+        "18yr 학설 (Phil Anderson) 2007 + 18 = 2025~2026",
+        "한국 KB 부동산 가격지수 정체"
+      ],
+      "cycle_strength_score": 35,
+      "priced_in_score": 75,
+      "leading_indicators": [
+        {"name": "US 신축허가", "source": "FRED:PERMIT", "threshold": "YoY -10%"},
+        {"name": "30yr 모기지", "source": "FRED:MORTGAGE30US", "threshold": "< 6.0%"},
+        {"name": "한국 KB 가격지수", "source": "ECOS:KB_HOUSE", "threshold": "YoY -5%"},
+        {"name": "REITs ETF VNQ", "source": "yfinance:VNQ", "threshold": "DD -20%"}
+      ],
+      "trigger_events": [
+        {"name": "US 30yr 모기지 6% 하향 돌파", "type": "macro", "alert_level": "high"},
+        {"name": "한국 KB -10% YoY", "type": "macro", "alert_level": "critical"}
+      ],
+      "watch_date": "2028-Q1",
+      "watch_note": "bottom 근방 = 분양 시점 2028.7 직전",
+      "primary_beneficiaries": ["DHI", "LEN", "NVR"],
+      "secondary_beneficiaries": ["SPG", "EQR", "AMT"],
+      "etfs": ["ITB", "XHB", "VNQ"],
+      "korea_proxy_stocks": ["KB금융", "신한지주", "메리츠", "삼성생명"],
+      "leverage_options": "NAIL (3x homebuilders)",
+      "update_frequency": "weekly",
+      "user_priority": "★★★",
+      "discovery_source": "manual",
+      "user_note": "분양 deadline 2028.7 = cycle bottom 근방 = 분양가 유리"
+    },
+    {
+      "cycle_id": 2,
+      "cycle_name": "우크라이나 재건",
+      "category": "Event-driven",
+      "current_phase": 1,
+      "phase_label": "Bust → Accumulation 임박",
+      "phase_confidence": "MEDIUM",
+      "confidence_basis": [
+        "트럼프 휴전 협상 진척 신호 (2026 상반기)",
+        "EU 재건 펀딩 약정 €100B+",
+        "한국 K-방산 NATO 진출 가속",
+        "단 휴전 발표 시점 불명"
+      ],
+      "cycle_strength_score": 60,
+      "priced_in_score": 25,
+      "leading_indicators": [
+        {"name": "Ukraine Reconstruction Fund 약정", "source": "manual", "threshold": "€200B+"},
+        {"name": "트럼프-푸틴 외교 채널", "source": "news", "threshold": "정상회담 발표"},
+        {"name": "한국 K-방산 수출", "source": "manual", "threshold": "YoY +50%"},
+        {"name": "European Defense ETF EUAD", "source": "yfinance:NLR", "threshold": "신고가"}
+      ],
+      "trigger_events": [
+        {"name": "트럼프-푸틴 정상회담 발표", "type": "geopolitical", "alert_level": "critical"},
+        {"name": "EU 재건 펀딩 €200B+ 확정", "type": "policy", "alert_level": "critical"},
+        {"name": "Zelensky 협상 합의 발언", "type": "geopolitical", "alert_level": "high"}
+      ],
+      "watch_date": "2026-Q4",
+      "watch_note": "휴전 발표 추정 시점",
+      "primary_beneficiaries": ["CAT", "URI", "MLM", "VMC"],
+      "secondary_beneficiaries": ["두산밥캣", "HD현대건설기계", "한화오션"],
+      "etfs": ["PAVE", "IGF"],
+      "korea_proxy_stocks": ["현대건설", "삼성물산", "두산밥캣", "한화오션"],
+      "leverage_options": null,
+      "update_frequency": "weekly",
+      "user_priority": "★★★",
+      "discovery_source": "manual",
+      "user_note": "Alpha bet 1순위 후보 — 휴전 발표 전 매집"
+    },
+    {
+      "cycle_id": 3,
+      "cycle_name": "BTC Halving Cycle",
+      "category": "Cycle",
+      "current_phase": 4,
+      "phase_label": "Peak",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "Halving 2024-04 + 18~24개월 = 2026 상반기 peak",
+        "MVRV 5+ (peak zone)",
+        "ETF 자금 둔화",
+        "Hash rate 신고가 후 정체"
+      ],
+      "cycle_strength_score": 30,
+      "priced_in_score": 85,
+      "leading_indicators": [
+        {"name": "BTC MVRV", "source": "glassnode", "threshold": "< 1.5 (bottom 신호)"},
+        {"name": "BTC ETF 누적 자금", "source": "manual", "threshold": "30일 outflow"},
+        {"name": "Hash rate", "source": "blockchain.com", "threshold": "신고가 vs 정체"},
+        {"name": "BTC vs 200wk MA", "source": "yfinance:BTC-USD", "threshold": "200wk 하향 = bottom 임박"}
+      ],
+      "trigger_events": [
+        {"name": "BTC -70% DD 도달", "type": "price", "alert_level": "critical"},
+        {"name": "MVRV < 1", "type": "onchain", "alert_level": "critical"},
+        {"name": "ETF 누적 outflow 30일", "type": "flow", "alert_level": "high"}
+      ],
+      "watch_date": "2027-Q3",
+      "watch_note": "다음 bottom 도달 추정 → 분양 직후 entry",
+      "primary_beneficiaries": ["IBIT", "FBTC"],
+      "secondary_beneficiaries": ["MSTR", "COIN", "MARA", "RIOT"],
+      "etfs": ["IBIT", "BITX"],
+      "korea_proxy_stocks": [],
+      "leverage_options": "BITX 2x",
+      "update_frequency": "daily",
+      "user_priority": "★★★",
+      "discovery_source": "manual",
+      "user_note": "분양 직후 (2028.8~) BTC DD entry = 사용자 강점"
+    },
+    {
+      "cycle_id": 4,
+      "cycle_name": "AI Infrastructure Super Cycle (Liquid Cooling + Optical Interconnect 포함)",
+      "category": "Structural Theme",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "Hyperscalers 2025 capex $600B+ 가이드",
+        "NVDA backlog 18개월+",
+        "Vertiv liquid cooling backlog 신고가",
+        "광 트랜시버 800G → 1.6T 가속",
+        "데이터센터 미국 전력 5%+"
+      ],
+      "cycle_strength_score": 95,
+      "priced_in_score": 85,
+      "leading_indicators": [
+        {"name": "Hyperscaler capex YoY", "source": "manual", "threshold": "< +20% = 둔화"},
+        {"name": "NVDA 분기 매출", "source": "yfinance:NVDA", "threshold": "QoQ negative"},
+        {"name": "Vertiv VRT backlog", "source": "manual", "threshold": "QoQ negative"},
+        {"name": "광 트랜시버 ASP", "source": "manual", "threshold": "Q over Q decline"}
+      ],
+      "trigger_events": [
+        {"name": "Hyperscaler capex YoY 둔화", "type": "earnings", "alert_level": "critical"},
+        {"name": "NVDA 분기 어닝 miss", "type": "earnings", "alert_level": "critical"},
+        {"name": "전력 capex 가이드 하향", "type": "guide", "alert_level": "high"}
+      ],
+      "watch_date": "2027-Q2",
+      "watch_note": "capex 둔화 신호 확인",
+      "primary_beneficiaries": ["NVDA", "AVGO", "ANET", "VRT"],
+      "secondary_beneficiaries": ["MRVL", "LITE", "COHR", "ETN", "GEV"],
+      "etfs": ["SMH", "SOXX", "AIQ", "IGV"],
+      "korea_proxy_stocks": ["SK하이닉스", "한미반도체", "솔브레인", "ISC"],
+      "leverage_options": "SOXL 3x, NVDL 2x",
+      "update_frequency": "weekly",
+      "user_priority": "★ (보유중)",
+      "discovery_source": "manual",
+      "user_note": "현재 KODEX 하이닉스 + SOXL 보유. 추가 X. Pullback 시 VRT/ANET 검토."
+    },
+    {
+      "cycle_id": 5,
+      "cycle_name": "방산 / Missile Supply Chain (Defense Electronics 포함)",
+      "category": "Policy-driven",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "NATO 3% GDP 합의 가시화",
+        "한국 K-방산 수출 매년 20%+ 증가",
+        "Israel/이란/중동 위기 지속",
+        "미국 DoD missile 보충 backlog 24개월+"
+      ],
+      "cycle_strength_score": 80,
+      "priced_in_score": 70,
+      "leading_indicators": [
+        {"name": "NATO 지출 GDP %", "source": "manual", "threshold": "< 2.5% = 둔화"},
+        {"name": "한국 방산 수출", "source": "manual", "threshold": "YoY negative"},
+        {"name": "RTX/LMT backlog", "source": "manual", "threshold": "QoQ decline"},
+        {"name": "중동 갈등 escalation", "source": "news", "threshold": "휴전 합의"}
+      ],
+      "trigger_events": [
+        {"name": "NATO 3% 합의 부결", "type": "policy", "alert_level": "high"},
+        {"name": "트럼프 NATO 탈퇴 발언", "type": "geopolitical", "alert_level": "critical"},
+        {"name": "중동 휴전 합의", "type": "geopolitical", "alert_level": "high"}
+      ],
+      "watch_date": "2028-Q4",
+      "watch_note": "NATO 지출 둔화 신호 점검",
+      "primary_beneficiaries": ["LMT", "RTX", "NOC", "GD"],
+      "secondary_beneficiaries": ["KTOS", "AVAV", "LHX", "HII"],
+      "etfs": ["ITA", "XAR", "PPA"],
+      "korea_proxy_stocks": ["한화에어로스페이스", "LIG넥스원", "한국항공우주", "풍산"],
+      "leverage_options": null,
+      "update_frequency": "weekly",
+      "user_priority": "★",
+      "discovery_source": "manual",
+      "user_note": "한화에어로 / LIG 모니터링 — pullback 시 검토"
+    },
+    {
+      "cycle_id": 6,
+      "cycle_name": "SMR / Nuclear Renaissance",
+      "category": "Policy-driven",
+      "current_phase": 2,
+      "phase_label": "Accumulation → Markup 진입",
+      "phase_confidence": "MEDIUM",
+      "confidence_basis": [
+        "DOE SMR 펀딩 $900M 확정",
+        "데이터센터 24/7 power demand",
+        "NRC 인허가 첫 상업 SMR 2028~2030",
+        "단 첫 가동까지 5~7년 lag"
+      ],
+      "cycle_strength_score": 70,
+      "priced_in_score": 60,
+      "leading_indicators": [
+        {"name": "NRC SMR 인허가 진척", "source": "manual", "threshold": "첫 승인 = critical"},
+        {"name": "DOE 펀딩 확장", "source": "manual", "threshold": "$2B+ = bullish"},
+        {"name": "U3O8 spot price", "source": "yfinance:URA", "threshold": "$80+ = bullish"},
+        {"name": "Hyperscaler nuclear deal", "source": "news", "threshold": "AMZN/MSFT 발표"}
+      ],
+      "trigger_events": [
+        {"name": "NRC 인허가 승인", "type": "policy", "alert_level": "critical"},
+        {"name": "Hyperscaler SMR 계약 발표", "type": "deal", "alert_level": "critical"},
+        {"name": "트럼프 nuclear executive order", "type": "policy", "alert_level": "high"}
+      ],
+      "watch_date": "2027-Q1",
+      "watch_note": "NRC 첫 상업 인허가 마감",
+      "primary_beneficiaries": ["BWXT", "CCJ", "CEG"],
+      "secondary_beneficiaries": ["SMR", "NNE", "OKLO", "NRG", "VST"],
+      "etfs": ["NLR", "URA", "URNM"],
+      "korea_proxy_stocks": ["두산에너빌리티", "우진엔텍", "한전기술", "BHI"],
+      "leverage_options": "URNJ 2x",
+      "update_frequency": "weekly",
+      "user_priority": "★",
+      "discovery_source": "manual",
+      "user_note": "두산에너빌리티 모니터링"
+    },
+    {
+      "cycle_id": 7,
+      "cycle_name": "GLP-1 / Obesity Drug Cycle",
+      "category": "Structural Theme",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "LLY Mounjaro 매출 1년 +300%",
+        "NVO Wegovy 공급 부족 지속",
+        "GLP-1 시장 $150B+ 추정 (2030)",
+        "알츠하이머 / 심혈관 적응증 확대"
+      ],
+      "cycle_strength_score": 90,
+      "priced_in_score": 80,
+      "leading_indicators": [
+        {"name": "LLY 분기 매출", "source": "yfinance:LLY", "threshold": "QoQ growth slow"},
+        {"name": "NVO 공급 회복", "source": "manual", "threshold": "재고 정상화"},
+        {"name": "경쟁자 Phase 3 결과", "source": "manual", "threshold": "Roche/Pfizer 성공"},
+        {"name": "Medicare reimbursement", "source": "news", "threshold": "확대"}
+      ],
+      "trigger_events": [
+        {"name": "Roche/Pfizer GLP-1 Phase 3 성공", "type": "drug", "alert_level": "high"},
+        {"name": "부작용 issue (FDA 경고)", "type": "drug", "alert_level": "critical"},
+        {"name": "의보 reimbursement 확대", "type": "policy", "alert_level": "high"}
+      ],
+      "watch_date": "2028-Q2",
+      "watch_note": "patent cliff / generic 진입 신호",
+      "primary_beneficiaries": ["LLY", "NVO"],
+      "secondary_beneficiaries": ["AMGN", "PFE", "RHHBY"],
+      "etfs": ["XPH", "IBB"],
+      "korea_proxy_stocks": ["펩트론", "인벤티지랩", "디앤디파마텍"],
+      "leverage_options": "LLYU 2x",
+      "update_frequency": "weekly",
+      "user_priority": "★",
+      "discovery_source": "manual",
+      "user_note": "LLY pullback 시 alpha bet 후보"
+    },
+    {
+      "cycle_id": 8,
+      "cycle_name": "AI Grid / 전력 Super Cycle",
+      "category": "Structural Theme",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "미국 전력 capex $200B+ 가이드",
+        "변압기 lead time 130주",
+        "GEV backlog $130B+",
+        "한국 HD현대일렉트릭 backlog 신고가"
+      ],
+      "cycle_strength_score": 88,
+      "priced_in_score": 75,
+      "leading_indicators": [
+        {"name": "GEV backlog", "source": "manual", "threshold": "QoQ negative"},
+        {"name": "변압기 ASP", "source": "manual", "threshold": "안정/하락"},
+        {"name": "AI capex 가이드", "source": "manual", "threshold": "둔화"},
+        {"name": "한국 전력기기 수출", "source": "manual", "threshold": "YoY +30%"}
+      ],
+      "trigger_events": [
+        {"name": "AI capex 가이드 하향", "type": "guide", "alert_level": "critical"},
+        {"name": "변압기 ASP 하락", "type": "macro", "alert_level": "high"},
+        {"name": "GEV 어닝 miss", "type": "earnings", "alert_level": "high"}
+      ],
+      "watch_date": "2028-Q4",
+      "watch_note": "전력 capex 둔화",
+      "primary_beneficiaries": ["GEV", "ETN", "HUBB", "AME", "ROK"],
+      "secondary_beneficiaries": ["EMR", "JCI", "VRT"],
+      "etfs": ["GRID", "XLU", "PAVE"],
+      "korea_proxy_stocks": ["HD현대일렉트릭", "효성중공업", "LS ELECTRIC", "일진전기"],
+      "leverage_options": null,
+      "update_frequency": "weekly",
+      "user_priority": "★",
+      "discovery_source": "manual",
+      "user_note": "HD현대일렉트릭 / GEV 모니터링"
+    },
+    {
+      "cycle_id": 9,
+      "cycle_name": "반도체 + Advanced Packaging + Reshoring/FA",
+      "category": "Cycle",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "DRAM/NAND ASP 5분기 연속 상승",
+        "SK하이닉스 HBM3E NVDA 독점 공급",
+        "CoWoS capacity bottleneck",
+        "Glass substrate 2025~2027 양산",
+        "CHIPS Act + IRA reshoring 본격"
+      ],
+      "cycle_strength_score": 92,
+      "priced_in_score": 85,
+      "leading_indicators": [
+        {"name": "DRAM ASP", "source": "manual", "threshold": "2Q 연속 하락"},
+        {"name": "HBM 가격", "source": "manual", "threshold": "인하 신호"},
+        {"name": "NVDA 가이드", "source": "yfinance:NVDA", "threshold": "miss"},
+        {"name": "CoWoS capacity", "source": "manual", "threshold": "충족"},
+        {"name": "TSM AZ / Samsung TX 가동", "source": "news", "threshold": "양산 시작"}
+      ],
+      "trigger_events": [
+        {"name": "DRAM ASP 2분기 연속 하락", "type": "macro", "alert_level": "critical"},
+        {"name": "HBM 가격 인하", "type": "macro", "alert_level": "critical"},
+        {"name": "NVDA 가이드 miss", "type": "earnings", "alert_level": "critical"},
+        {"name": "트럼프 reshoring 행정명령", "type": "policy", "alert_level": "high"}
+      ],
+      "watch_date": "2027-Q2",
+      "watch_note": "HBM4 cycle peak 추정",
+      "primary_beneficiaries": ["NVDA", "SK하이닉스", "TSM", "AVGO"],
+      "secondary_beneficiaries": ["AMAT", "ASML", "LRCX", "Amkor", "HPSP", "한미반도체", "ROK", "EMR"],
+      "etfs": ["SMH", "SOXX", "BOTZ", "PAVE"],
+      "korea_proxy_stocks": ["SK하이닉스", "삼성전자", "한미반도체", "HPSP", "ISC", "솔브레인", "두산로보틱스"],
+      "leverage_options": "SOXL 3x, NVDL 2x",
+      "update_frequency": "weekly",
+      "user_priority": "★ (보유중)",
+      "discovery_source": "manual",
+      "user_note": "현재 보유. Trailing stop -8% 신뢰. Reshoring/FA = 두산로보틱스 모니터링"
+    },
+    {
+      "cycle_id": 10,
+      "cycle_name": "조선 Super Cycle",
+      "category": "Cycle",
+      "current_phase": 3,
+      "phase_label": "Markup → Peak 임박",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "BDI 1년 +35%, Clarkson 신조선가 ATH",
+        "IMO 환경규제 (탄소세 2027) → LNG선 발주 폭증",
+        "한화오션 / HD현대중공업 backlog 4년+",
+        "한국 글로벌 점유 55%+"
+      ],
+      "cycle_strength_score": 85,
+      "priced_in_score": 75,
+      "leading_indicators": [
+        {"name": "BDI", "source": "yfinance:BDRY", "threshold": "-30% drop"},
+        {"name": "Clarkson 신조선가", "source": "manual", "threshold": "6개월 정체"},
+        {"name": "한국 조선사 수주", "source": "manual", "threshold": "QoQ negative"},
+        {"name": "LNG선 발주", "source": "manual", "threshold": "감소"}
+      ],
+      "trigger_events": [
+        {"name": "신조선가 6개월 정체 (Peak 신호)", "type": "macro", "alert_level": "critical"},
+        {"name": "BDI -30% drop", "type": "macro", "alert_level": "high"},
+        {"name": "다음 cycle 2048~2050 도래 alert (long-term)", "type": "cycle", "alert_level": "info"}
+      ],
+      "watch_date": "2048-Q1",
+      "watch_note": "다음 cycle bottom — 사용자 만 53세 long-term reminder",
+      "primary_beneficiaries": ["HD한국조선해양", "한화오션", "HD현대중공업", "삼성중공업"],
+      "secondary_beneficiaries": ["HD현대미포", "STX엔진", "한국카본"],
+      "etfs": ["BOAT (간접)"],
+      "korea_proxy_stocks": ["한화오션", "HD한국조선해양", "HD현대중공업", "삼성중공업"],
+      "leverage_options": null,
+      "update_frequency": "weekly",
+      "user_priority": "★",
+      "discovery_source": "manual",
+      "user_note": "Peak 임박. 신규 진입 X. 다음 cycle 2050년 long-term alert 설정"
+    },
+    {
+      "cycle_id": 11,
+      "cycle_name": "구리 Green Transition Super Cycle",
+      "category": "Cycle",
+      "current_phase": 3,
+      "phase_label": "Markup",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "LME 구리 재고 5년 최저",
+        "광산 capex 10년 정체",
+        "EV 1대 = 60kg 구리",
+        "데이터센터 전력망 구리 demand",
+        "Goldman Sachs $15,000/t 추정"
+      ],
+      "cycle_strength_score": 88,
+      "priced_in_score": 55,
+      "leading_indicators": [
+        {"name": "LME 구리 spot", "source": "yfinance:HG=F", "threshold": "$12,000/t 돌파"},
+        {"name": "LME 재고", "source": "manual", "threshold": "5년 최저 유지"},
+        {"name": "FCX 분기 매출", "source": "yfinance:FCX", "threshold": "YoY +30%"},
+        {"name": "광산 capex", "source": "manual", "threshold": "회복 = bearish"}
+      ],
+      "trigger_events": [
+        {"name": "구리 LME $12,000/t 돌파", "type": "macro", "alert_level": "critical"},
+        {"name": "칠레/페루 광산 파업 / 환경규제", "type": "supply", "alert_level": "critical"},
+        {"name": "미국 인프라 capex 가이드 상향", "type": "policy", "alert_level": "high"}
+      ],
+      "watch_date": "2028-Q4",
+      "watch_note": "cycle 후반 진입",
+      "primary_beneficiaries": ["FCX", "SCCO", "BHP", "RIO", "TECK"],
+      "secondary_beneficiaries": ["AA", "VALE", "ANTO"],
+      "etfs": ["COPX", "COPP", "XME"],
+      "korea_proxy_stocks": ["풍산", "LS", "고려아연", "영풍"],
+      "leverage_options": null,
+      "update_frequency": "weekly",
+      "user_priority": "★★",
+      "discovery_source": "manual",
+      "user_note": "FCX / 풍산 pullback 시 alpha bet 후보"
+    },
+    {
+      "cycle_id": 12,
+      "cycle_name": "Fed Rate Cut + Credit Distress",
+      "category": "Cycle",
+      "current_phase": 3,
+      "phase_label": "Cutting",
+      "phase_confidence": "HIGH",
+      "confidence_basis": [
+        "Fed dot plot 2회 cut 가이드 (2026)",
+        "Core PCE 2.3% 근접",
+        "고용 신규 감소",
+        "Credit spread BB 380bp+"
+      ],
+      "cycle_strength_score": 85,
+      "priced_in_score": 60,
+      "leading_indicators": [
+        {"name": "Fed funds rate", "source": "FRED:FEDFUNDS", "threshold": "< 3.5%"},
+        {"name": "Core PCE", "source": "FRED:PCEPILFE", "threshold": "2.0% 도달"},
+        {"name": "실업률", "source": "FRED:UNRATE", "threshold": "> 5.0%"},
+        {"name": "Credit spread (HY)", "source": "FRED:BAMLH0A0HYM2", "threshold": "> 500bp"}
+      ],
+      "trigger_events": [
+        {"name": "Fed 50bp cut surprise", "type": "macro", "alert_level": "critical"},
+        {"name": "실업률 5% 돌파", "type": "macro", "alert_level": "critical"},
+        {"name": "Credit spread 500bp+", "type": "macro", "alert_level": "critical"},
+        {"name": "Private credit default 신고가", "type": "credit", "alert_level": "high"}
+      ],
+      "watch_date": "2027-Q1",
+      "watch_note": "마지막 cut 추정",
+      "primary_beneficiaries": ["TQQQ", "QQQ", "TLT"],
+      "secondary_beneficiaries": ["SPG", "AMT", "NEE", "SO"],
+      "etfs": ["TQQQ", "TLT", "VNQ", "XLU"],
+      "korea_proxy_stocks": ["KB금융", "한국전력", "KODEX 200"],
+      "leverage_options": "TQQQ 3x, TMF 3x",
+      "update_frequency": "daily",
+      "user_priority": "★★★",
+      "discovery_source": "manual",
+      "user_note": "Core thesis — TQQQ sweet spot entry 시점"
+    }
+  ],
+  "watch_list": [
+    {"cycle_id": 101, "cycle_name": "Insurance / Reinsurance Hard Market", "category": "Cycle", "current_phase": 3, "user_priority": "watch", "reason_demoted": "한국 align 낮음, 사용자 portfolio 강점 아님"},
+    {"cycle_id": 102, "cycle_name": "항공기 (Aircraft)", "category": "Cycle", "current_phase": 2, "user_priority": "watch", "reason_demoted": "방산 #5 에 일부 포함"},
+    {"cycle_id": 103, "cycle_name": "굴삭기 / 건설장비", "category": "Cycle", "current_phase": 1, "user_priority": "watch", "reason_demoted": "우크라 재건 #2 trigger 시 동반"},
+    {"cycle_id": 104, "cycle_name": "우라늄", "category": "Cycle", "current_phase": 3, "user_priority": "watch", "reason_demoted": "SMR #6 과 중복"},
+    {"cycle_id": 105, "cycle_name": "리튬", "category": "Cycle", "current_phase": 1, "user_priority": "watch", "reason_demoted": "Bust 진행중 — phase 2 진입 시 promote 후보"},
+    {"cycle_id": 106, "cycle_name": "농산물 (Grain)", "category": "Cycle", "current_phase": 1, "user_priority": "watch", "reason_demoted": "엘니뇨 trigger 대기"},
+    {"cycle_id": 107, "cycle_name": "원유 / 가스", "category": "Cycle", "current_phase": 2, "user_priority": "watch", "reason_demoted": "사용자 thesis 아님"},
+    {"cycle_id": 108, "cycle_name": "노령화 (Aging Healthcare)", "category": "Structural Theme", "current_phase": 3, "user_priority": "watch", "reason_demoted": "GLP-1 #7 이 대표"},
+    {"cycle_id": 109, "cycle_name": "K-Culture wave", "category": "Structural Theme", "current_phase": 2, "user_priority": "watch", "reason_demoted": "BTS 복귀 2027 — phase 전환 시 promote"},
+    {"cycle_id": 110, "cycle_name": "태양광", "category": "Policy-driven", "current_phase": 1, "user_priority": "watch", "reason_demoted": "Trump 정책 risk"},
+    {"cycle_id": 111, "cycle_name": "달러 cycle (DXY)", "category": "Cycle", "current_phase": 5, "user_priority": "watch", "reason_demoted": "Fed cut #12 으로 cover"},
+    {"cycle_id": 112, "cycle_name": "엘니뇨 / 라니냐", "category": "Event-driven", "current_phase": 1, "user_priority": "watch", "reason_demoted": "농산물 trigger"},
+    {"cycle_id": 113, "cycle_name": "수자원 / Desalination", "category": "Structural Theme", "current_phase": 2, "user_priority": "watch", "reason_demoted": "Long-term theme, 분양 후"},
+    {"cycle_id": 114, "cycle_name": "PC Refresh", "category": "Cycle", "current_phase": 2, "user_priority": "watch", "reason_demoted": "반도체 #9 와 일부 중복"},
+    {"cycle_id": 115, "cycle_name": "미국 대선 cycle", "category": "Event-driven", "current_phase": 0, "user_priority": "watch", "reason_demoted": "2028 대선 — Fed/Reshoring trigger"}
+  ]
+}

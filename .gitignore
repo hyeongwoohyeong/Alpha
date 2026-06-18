@@ -35,3 +35,11 @@ data/alpha.db-journal
 data/alpha.db-wal
 data/alpha.db-shm
 data/.fuse_hidden*
+
+# Cycle tracker DB (local only)
+data/cycle_tracker.db
+data/cycle_tracker.db-journal
+data/cycle_tracker.db-wal
+
+# Toss API token cache
+data/.toss_token_cache.json
