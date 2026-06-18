@@ -3,8 +3,9 @@ name: Toss Portfolio Sync
 # 토스증권 Open API → portfolio.json 자동 갱신.
 # 3시간마다: 매일 09/12/15/18/21/00/03/06 KST = UTC 00/03/06/09/12/15/18/21
 on:
-  schedule:
-#    - cron: "10 */3 * * *"   # disabled — toss IP allowlist 로 Mac launchd 로 이동   # 매 3시간 + 10분 lead (drift 보정)
+  # schedule disabled — 토스 IP allowlist 강제 정책으로 GitHub Actions runner IP 차단.
+  # 대신 Mac launchd cron (~/Library/LaunchAgents/com.alpha.toss_sync.plist) 사용.
+  # 수동 trigger 만 유지 (디버그용).
   workflow_dispatch:
 
 jobs:
