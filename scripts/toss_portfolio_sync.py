@@ -293,6 +293,10 @@ def sync(dry_run: bool = False) -> dict:
         "note": existing.get("note", "토스 Open API 자동 sync. 퇴직연금 + TIGER S&P500 등 토스 API 외 자산은 _stale_since 표시 후 유지."),
         "holdings": sorted(merged, key=lambda h: h.get("value_krw", 0), reverse=True),
     }
+    # Preserve manual fields from existing portfolio.json (milestones, manual updates)
+    for field in ("_milestone", "_last_manual_update_at", "_phase"):
+        if field in existing:
+            out[field] = existing[field]
 
     if dry_run:
         # 압축 출력
