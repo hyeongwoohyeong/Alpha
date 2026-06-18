@@ -142,19 +142,19 @@ def fetch_holdings(token: str, account_seq: int) -> dict:
 
 
 def fetch_exchange_rate(token: str) -> float:
-    """USD→KRW. 실패 시 fallback 1370."""
+    """USD→KRW. 실패 시 fallback 1540 (2026-06 실제 환율 — 토스 마이데이터 USD ₩37.8M / $24,570 = ₩1,540)."""
     try:
         data = _api("/api/v1/exchange-rate", token).get("result", {})
-        # docs: { "usdToKrw": "1370.0" } 등 — 정확한 key 는 응답 보고 추후 fix
+        # docs: { "usdToKrw": "1540.0" } 등 — 정확한 key 는 응답 보고 추후 fix
         rate = (
             data.get("usdToKrw")
             or data.get("USD_KRW")
             or data.get("rate")
-            or 1370
+            or 1540
         )
         return float(rate)
     except Exception:
-        return 1370.0
+        return 1540.0
 
 
 # ─────────────────────────────────────────────────────────────

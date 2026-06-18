@@ -1,16 +1,16 @@
 {
   "_doc": "대시보드 wealth_dashboard.json 빌더의 정적 입력. 부동산/부채/실현손익/월별스냅샷 — 자주 안 바뀌는 항목들. 변경 시 직접 편집 후 scripts/build_wealth_dashboard.py 재실행.",
   "balance_sheet": {
-    "as_of": "2026-05-30",
+    "as_of": "2026-06-18",
     "real_estate_krw": 0,
     "apartment_paid_krw": 97600000,
     "apartment_target_krw": 400000000,
     "apartment_deadline": "2028-07",
     "deposit_krw": 20000000,
-    "cash_outside_krw": 611151,
+    "cash_outside_krw": 82241,
     "btc_krw": 0,
-    "debt_krw": 88291878,
-    "_note": "apartment_paid_krw = 분양 계약금 (이미 납입). target = 최종 ₩4억. deadline 2028.7 까지 추가 ₩3.024억 마련 필요. debt_krw 는 신한 U드림 마통 잔액."
+    "debt_krw": 88168800,
+    "_note": "apartment_paid_krw = 분양 계약금 (이미 납입). target = 최종 ₩4억. deadline 2028.7 까지 추가 ₩3.024억 마련 필요. debt_krw 는 신한 U드림 마통 잔액. 2026-06-18 토스 마이데이터 캡처 기준 cash + debt 정확화."
   },
   "realized_pnl": {
     "_doc": "주식·ETF 실현손익 (코인 별도 — coin_realized_pnl 참조)",
@@ -45,7 +45,8 @@
   },
   "monthly_snapshots": [
     {"month": "2026-04", "totalAsset": 214050432, "totalDebt": 88291878, "netWorth": 125758554, "income": 0, "capGain": 0, "other": 0, "deltaNW": 0, "_note": "4월말 NW는 5월 흐름으로부터 역산. totalAsset/Debt 정확치 아님 — 4월말 데이터 입력 시 갱신"},
-    {"month": "2026-05", "totalAsset": 267571844, "totalDebt": 88291878, "netWorth": 179279966, "income": 17877860, "capGain": 31766630, "other": -3000000, "deltaNW": 53521412, "_income_breakdown": {"salary": 4840450, "bonus": 13037410}}
+    {"month": "2026-05", "totalAsset": 267571844, "totalDebt": 88291878, "netWorth": 179279966, "income": 17877860, "capGain": 31766630, "other": -3000000, "deltaNW": 53521412, "_income_breakdown": {"salary": 4840450, "bonus": 13037410}},
+    {"month": "2026-06", "totalAsset": 290960606, "totalDebt": 88168800, "netWorth": 202791806, "income": 4840450, "capGain": 18671390, "other": 0, "deltaNW": 23511840, "_income_breakdown": {"salary": 4840450}, "_milestone": "🎉 NW ₩200M 돌파 — 꼬마몬 → 브이몬 진화. 만 30세, 분양 deadline 2028.7 (26개월 남음). 토스증권 Open API 자동 sync 연동 day."}
   ],
   "cashflow": {
     "deltaNW": 53521412,
