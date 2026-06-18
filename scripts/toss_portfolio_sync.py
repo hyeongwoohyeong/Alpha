@@ -1,20 +1,23 @@
 """
 토스증권 Open API portfolio sync — 3시간마다 cron.
 
-OAuth 2.0 Client Credentials Grant 로 access_token 발급 후
-잔고 / 보유종목 / 예수금 fetch → portfolio.json 자동 update.
+Reference: https://openapi.tossinvest.com/openapi-docs/overview.md
 
 환경변수 (GitHub Secrets):
-  TOSS_CLIENT_ID         — 토스증권 API client_id
-  TOSS_CLIENT_SECRET     — client_secret
-  TOSS_ACCOUNT_NUMBER    — 사용자 계좌번호 (예: "12345678-01")
-  TOSS_OAUTH_HOST        — (optional) 기본 https://openapi.tossinvest.com
-  TOSS_API_HOST          — (optional) 기본 https://openapi.tossinvest.com
+  TOSS_CLIENT_ID         — API key (tsck_live_...)
+  TOSS_CLIENT_SECRET     — Secret key (tssk_live_...)
+  TOSS_ACCOUNT_SEQ       — accountSeq (보통 "1" — 계좌번호 X, 시퀀스)
+                           legacy TOSS_ACCOUNT_NUMBER 도 호환
 
-reference: https://developers.tossinvest.com/docs
+API endpoints (확정):
+  POST /oauth2/token          — Client Credentials Grant (scope 파라미터 X)
+  GET  /api/v1/accounts       — 계좌 list (Bearer only)
+  GET  /api/v1/holdings       — 보유 주식 (+ X-Tossinvest-Account 헤더)
+  GET  /api/v1/exchange-rate  — KRW↔USD 환율
 
-기존 portfolio.json 의 hand-curated 필드 (memo, account, type, leverage, high_vol)
-는 ticker 기준으로 *보존*. value/shares/cost/return 만 갱신.
+기존 portfolio.json 의 hand-curated 필드 (memo / account / type / leverage / high_vol)
+는 symbol 기준 *보존*. 가격/수량/PnL 만 update. 토스 holdings 에 없는 holding (퇴직연금 등)
+은 _stale_since 표시 후 *유지*.
 """
 
 from __future__ import annotations
@@ -36,12 +39,31 @@ SYNC_LOG = REPO_ROOT / "data" / "toss_sync_log.json"
 
 KST = timezone(timedelta(hours=9))
 
-OAUTH_HOST = os.environ.get("TOSS_OAUTH_HOST", "https://openapi.tossinvest.com")
-API_HOST = os.environ.get("TOSS_API_HOST", "https://openapi.tossinvest.com")
+BASE = os.environ.get("TOSS_API_HOST", "https://openapi.tossinvest.com")
 
 
 # ─────────────────────────────────────────────────────────────
-# OAuth (Client Credentials Grant)
+# Symbol normalization (토스 symbol → 기존 portfolio.json ticker)
+# ─────────────────────────────────────────────────────────────
+
+# 토스가 주는 symbol vs 우리가 portfolio.json 에 쓰던 ticker
+# (e.g. 토스 "0193T0" = KODEX SK하이닉스단일종목레버리지 = 우리 "KODEX_HYNIX_2X")
+SYMBOL_ALIASES: dict[str, str] = {
+    "0193T0": "KODEX_HYNIX_2X",
+    "0167A0": "SOL_AI_SEMI",
+    "488080": "TIGER_SEMI_2X",
+    "0190C0": "RISE_HD_PHYSAI",
+    # US tickers 는 그대로 (QQQ, QLD, TQQQ, SOXL, SCHD, JEPQ, NASA, GLD, SLV, TSLL, NFLX, NFXL, RL, MCD, TDG, SN ...)
+    # KR ETF 도 6자리 코드 그대로 (360750, 133690 ...)
+}
+
+
+def normalize_symbol(symbol: str) -> str:
+    return SYMBOL_ALIASES.get(symbol, symbol)
+
+
+# ─────────────────────────────────────────────────────────────
+# OAuth (Client Credentials Grant) — scope 파라미터 X
 # ─────────────────────────────────────────────────────────────
 
 def get_access_token() -> str:
@@ -60,19 +82,21 @@ def get_access_token() -> str:
     if not (client_id and client_secret):
         raise RuntimeError("TOSS_CLIENT_ID / TOSS_CLIENT_SECRET 환경변수 누락")
 
-    url = f"{OAUTH_HOST}/oauth2/token"
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    data = {
-        "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "scope": "accounts:read balance:read",
-    }
-    resp = requests.post(url, headers=headers, data=data, timeout=15)
-    resp.raise_for_status()
+    resp = requests.post(
+        f"{BASE}/oauth2/token",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+        },
+        timeout=15,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"OAuth fail {resp.status_code}: {resp.text[:300]}")
     payload = resp.json()
     token = payload["access_token"]
-    expires_in = payload.get("expires_in", 3600)
+    expires_in = int(payload.get("expires_in", 3600))
 
     TOKEN_CACHE.write_text(json.dumps({
         "access_token": token,
@@ -86,81 +110,115 @@ def get_access_token() -> str:
 # Toss API calls
 # ─────────────────────────────────────────────────────────────
 
-def _api(path: str, token: str, account: str | None = None) -> dict:
+def _api(path: str, token: str, account_seq: str | int | None = None) -> dict:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
     }
-    if account:
-        headers["X-Tossinvest-Account"] = account
-    url = f"{API_HOST}{path}"
-    resp = requests.get(url, headers=headers, timeout=20)
+    if account_seq is not None:
+        headers["X-Tossinvest-Account"] = str(account_seq)
+    resp = requests.get(f"{BASE}{path}", headers=headers, timeout=20)
     if resp.status_code >= 400:
-        raise RuntimeError(f"Toss API {path} → {resp.status_code}: {resp.text[:200]}")
+        raise RuntimeError(f"Toss {path} → {resp.status_code}: {resp.text[:300]}")
     return resp.json()
 
 
-def fetch_account_summary(token: str, account: str) -> dict:
-    """예수금 + 평가 총액."""
-    return _api(f"/v1/accounts/{account}/balance", token, account)
+def get_account_seq(token: str) -> int:
+    """env 에 없으면 /api/v1/accounts 로 자동 탐지 (첫 BROKERAGE 계좌)."""
+    env_seq = os.environ.get("TOSS_ACCOUNT_SEQ") or os.environ.get("TOSS_ACCOUNT_NUMBER")
+    if env_seq and env_seq.isdigit():
+        return int(env_seq)
+    accts = _api("/api/v1/accounts", token).get("result", [])
+    for a in accts:
+        if a.get("accountType") == "BROKERAGE":
+            return int(a["accountSeq"])
+    if accts:
+        return int(accts[0]["accountSeq"])
+    raise RuntimeError("계좌 X — /api/v1/accounts 결과 비어있음")
 
 
-def fetch_positions(token: str, account: str) -> list[dict]:
-    """보유 종목 list."""
-    payload = _api(f"/v1/accounts/{account}/positions", token, account)
-    # 응답 schema 가 확정될 때까지 graceful:
-    if isinstance(payload, dict):
-        return payload.get("positions") or payload.get("data") or []
-    return payload if isinstance(payload, list) else []
+def fetch_holdings(token: str, account_seq: int) -> dict:
+    return _api("/api/v1/holdings", token, account_seq)
+
+
+def fetch_exchange_rate(token: str) -> float:
+    """USD→KRW. 실패 시 fallback 1370."""
+    try:
+        data = _api("/api/v1/exchange-rate", token).get("result", {})
+        # docs: { "usdToKrw": "1370.0" } 등 — 정확한 key 는 응답 보고 추후 fix
+        rate = (
+            data.get("usdToKrw")
+            or data.get("USD_KRW")
+            or data.get("rate")
+            or 1370
+        )
+        return float(rate)
+    except Exception:
+        return 1370.0
 
 
 # ─────────────────────────────────────────────────────────────
-# Portfolio merge (hand-curated 필드 보존)
+# Holdings parse → portfolio.json item shape
+# ─────────────────────────────────────────────────────────────
+
+def _normalize_item(item: dict, usd_to_krw: float) -> dict:
+    symbol_raw = item.get("symbol", "")
+    ticker = normalize_symbol(symbol_raw)
+    name = item.get("name", symbol_raw)
+    quantity = float(item.get("quantity") or 0)
+    last_price = float(item.get("lastPrice") or 0)
+    avg_price = float(item.get("averagePurchasePrice") or 0)
+    currency = item.get("currency", "KRW")
+    mv = item.get("marketValue") or {}
+    pl = item.get("profitLoss") or {}
+    purchase_amount = float(mv.get("purchaseAmount") or 0)
+    amount = float(mv.get("amount") or 0)
+    pl_amount = float(pl.get("amount") or 0)
+    pl_rate = float(pl.get("rate") or 0)
+
+    # Convert to KRW
+    if currency == "USD":
+        value_krw = int(round(amount * usd_to_krw))
+        cost_krw = int(round(purchase_amount * usd_to_krw))
+        pnl_krw = int(round(pl_amount * usd_to_krw))
+    else:
+        value_krw = int(round(amount))
+        cost_krw = int(round(purchase_amount))
+        pnl_krw = int(round(pl_amount))
+
+    return {
+        "ticker": ticker,
+        "name": name,
+        "yf_ticker": symbol_raw if currency == "USD" else None,  # US ticker 그대로 yfinance 호환
+        "shares": quantity,
+        "last_price": last_price,
+        "avg_price": avg_price,
+        "value_krw": value_krw,
+        "cost_krw": cost_krw,
+        "pnl_krw": pnl_krw,
+        "return_pct": round(pl_rate * 100, 2),
+        "currency": currency,
+        "toss_symbol": symbol_raw,
+    }
+
+
+# ─────────────────────────────────────────────────────────────
+# Merge with existing portfolio.json (hand-curated 필드 보존)
 # ─────────────────────────────────────────────────────────────
 
 PRESERVE_FIELDS = ("yf_ticker", "type", "account", "memo", "leverage", "high_vol")
 
 
-def _normalize_toss_position(pos: dict) -> dict:
-    """토스 응답 → portfolio.json holding shape."""
-    # 응답 schema 가 확정되면 mapping 정확화 필요. 현재는 best-effort.
-    ticker = (
-        pos.get("ticker")
-        or pos.get("symbol")
-        or pos.get("isin")
-        or pos.get("stockCode")
-        or "UNKNOWN"
-    )
-    name = pos.get("name") or pos.get("stockName") or ticker
-    shares = float(pos.get("quantity") or pos.get("shares") or 0)
-    value = float(pos.get("evaluationAmount") or pos.get("marketValue") or pos.get("value") or 0)
-    cost = float(pos.get("purchaseAmount") or pos.get("cost") or pos.get("averageCost") or 0)
-    if cost == 0 and shares > 0 and pos.get("avgPrice"):
-        cost = float(pos["avgPrice"]) * shares
-    pnl = value - cost if (value and cost) else 0
-    ret = (pnl / cost * 100) if cost else 0
-    currency = pos.get("currency", "KRW")
-    # USD 자산은 환율 적용 별도 필요 (API 가 KRW 환산값 제공 시 그대로 사용)
-    return {
-        "ticker": ticker,
-        "name": name,
-        "shares": shares,
-        "value_krw": int(round(value)),
-        "cost_krw": int(round(cost)),
-        "pnl_krw": int(round(pnl)),
-        "return_pct": round(ret, 2),
-        "currency": currency,
-    }
-
-
 def merge_holdings(existing: list[dict], fresh: list[dict]) -> list[dict]:
-    """Ticker key 매칭. hand-curated 필드 보존, 가격/수량/PnL 만 update."""
     existing_by_ticker = {h["ticker"]: h for h in existing}
     merged = []
+    fresh_tickers = set()
+
     for new in fresh:
         ticker = new["ticker"]
+        fresh_tickers.add(ticker)
         old = existing_by_ticker.get(ticker, {})
-        out = dict(old)  # preserve everything
+        out = dict(old)
         out.update({
             "ticker": ticker,
             "name": new["name"] or old.get("name", ticker),
@@ -170,23 +228,26 @@ def merge_holdings(existing: list[dict], fresh: list[dict]) -> list[dict]:
             "pnl_krw": new["pnl_krw"],
             "return_pct": new["return_pct"],
         })
-        # ensure preserve fields exist (don't blank them)
+        # Don't blank preserved fields if exist in old
         for f in PRESERVE_FIELDS:
             if f not in out and f in old:
                 out[f] = old[f]
+        # Remove stale flag if previously marked
+        out.pop("_stale_since", None)
         merged.append(out)
-    # Add holdings that were in existing but not in fresh (stale — keep but flag)
-    fresh_tickers = {h["ticker"] for h in merged}
+
+    # Keep stale holdings (퇴직연금 etc. — 토스 API 가 안 가져옴)
     for old_ticker, old in existing_by_ticker.items():
         if old_ticker not in fresh_tickers:
             stale = dict(old)
-            stale["_stale_since"] = datetime.now(KST).isoformat()
+            stale["_stale_since"] = stale.get("_stale_since") or datetime.now(KST).isoformat()
             merged.append(stale)
+
     # Recompute net_worth_pct
-    total = sum(h.get("value_krw", 0) for h in merged if "_stale_since" not in h)
-    for h in merged:
-        if total > 0 and "_stale_since" not in h:
-            h["net_worth_pct"] = round(h["value_krw"] / total * 100, 1)
+    total = sum(h.get("value_krw", 0) for h in merged)
+    if total > 0:
+        for h in merged:
+            h["net_worth_pct"] = round(h.get("value_krw", 0) / total * 100, 1)
     return merged
 
 
@@ -195,36 +256,63 @@ def merge_holdings(existing: list[dict], fresh: list[dict]) -> list[dict]:
 # ─────────────────────────────────────────────────────────────
 
 def sync(dry_run: bool = False) -> dict:
-    account = os.environ.get("TOSS_ACCOUNT_NUMBER")
-    if not account:
-        raise RuntimeError("TOSS_ACCOUNT_NUMBER 환경변수 누락")
-
     token = get_access_token()
-    summary = fetch_account_summary(token, account)
-    positions = fetch_positions(token, account)
+    account_seq = get_account_seq(token)
+    usd_to_krw = fetch_exchange_rate(token)
+    raw = fetch_holdings(token, account_seq).get("result", {})
+
+    items = raw.get("items") or []
+    fresh = [_normalize_item(item, usd_to_krw) for item in items]
+
+    # Summary from API (KRW + USD already separated)
+    mv = raw.get("marketValue") or {}
+    pl_summary = raw.get("profitLoss") or {}
+    krw_amount = float((mv.get("amount") or {}).get("krw") or 0)
+    usd_amount = float((mv.get("amount") or {}).get("usd") or 0)
+    toss_total_krw = int(round(krw_amount + usd_amount * usd_to_krw))
 
     existing = json.loads(PORTFOLIO_PATH.read_text(encoding="utf-8")) if PORTFOLIO_PATH.exists() else {"holdings": []}
-    fresh_holdings = [_normalize_toss_position(p) for p in positions]
-    merged = merge_holdings(existing.get("holdings", []), fresh_holdings)
+    merged = merge_holdings(existing.get("holdings", []), fresh)
+    total_value = sum(h.get("value_krw", 0) for h in merged)
 
-    total_value = sum(h.get("value_krw", 0) for h in merged if "_stale_since" not in h)
     out = {
         "as_of": datetime.now(KST).isoformat(),
         "base_currency": "KRW",
         "total_value_krw": total_value,
         "_sync_source": "toss_open_api",
         "_sync_summary": {
-            "deposit_krw": summary.get("depositAmount") or summary.get("cashKrw"),
-            "total_assets": summary.get("totalAssets"),
+            "account_seq": account_seq,
+            "usd_to_krw": usd_to_krw,
+            "toss_krw_value": int(krw_amount),
+            "toss_usd_value": usd_amount,
+            "toss_total_krw_only": toss_total_krw,
+            "toss_pl_rate": float(pl_summary.get("rate") or 0),
             "holdings_count": len([h for h in merged if "_stale_since" not in h]),
             "stale_count": len([h for h in merged if "_stale_since" in h]),
         },
-        "note": existing.get("note", "자동 sync — 토스증권 Open API"),
-        "holdings": merged,
+        "note": existing.get("note", "토스 Open API 자동 sync. 퇴직연금 + TIGER S&P500 등 토스 API 외 자산은 _stale_since 표시 후 유지."),
+        "holdings": sorted(merged, key=lambda h: h.get("value_krw", 0), reverse=True),
     }
 
     if dry_run:
-        print(json.dumps(out, indent=2, ensure_ascii=False)[:2000])
+        # 압축 출력
+        summary = dict(out["_sync_summary"])
+        print(json.dumps({
+            "as_of": out["as_of"],
+            "total_value_krw": out["total_value_krw"],
+            "_sync_summary": summary,
+            "holdings": [
+                {
+                    "ticker": h["ticker"],
+                    "name": h.get("name"),
+                    "shares": h.get("shares"),
+                    "value_krw": h["value_krw"],
+                    "return_pct": h.get("return_pct"),
+                    "_stale_since": h.get("_stale_since"),
+                }
+                for h in out["holdings"]
+            ],
+        }, indent=2, ensure_ascii=False))
         return out
 
     PORTFOLIO_PATH.write_text(json.dumps(out, indent=2, ensure_ascii=False))
@@ -234,7 +322,7 @@ def sync(dry_run: bool = False) -> dict:
         "ts": datetime.now(KST).isoformat(),
         "ok": True,
         "total_value_krw": total_value,
-        "holdings_count": len(merged),
+        "holdings_count": out["_sync_summary"]["holdings_count"],
     }
     logs = []
     if SYNC_LOG.exists():
@@ -252,12 +340,14 @@ def main() -> int:
     dry_run = "--dry-run" in sys.argv
     try:
         result = sync(dry_run=dry_run)
-        print(f"  ✓ synced — total ₩{result['total_value_krw']:,}, "
-              f"{result['_sync_summary']['holdings_count']} holdings")
+        print(
+            f"  ✓ synced — total ₩{result['total_value_krw']:,}, "
+            f"{result['_sync_summary']['holdings_count']} live + "
+            f"{result['_sync_summary']['stale_count']} stale"
+        )
         return 0
     except Exception as e:
         print(f"  ✗ toss sync failed: {e}", file=sys.stderr)
-        # Log failure
         try:
             logs = json.loads(SYNC_LOG.read_text()) if SYNC_LOG.exists() else []
             logs.append({
