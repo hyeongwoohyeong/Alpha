@@ -8,5 +8,11 @@
     "ts": "2026-06-18T21:36:47.072578+09:00",
     "ok": false,
     "error": "OAuth fail 403: {\"error\":\"access_denied\",\"error_description\":\"IP address not allowed\"}"
+  },
+  {
+    "ts": "2026-06-18T22:30:24.395151+09:00",
+    "ok": true,
+    "total_value_krw": 169573301,
+    "holdings_count": 20
   }
 ]
