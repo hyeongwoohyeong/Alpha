@@ -53,6 +53,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # SQLite WAL checkpoint — WAL 파일 데이터를 main DB 파일에 반영 후 git add
+          python3 -c "import sqlite3; c=sqlite3.connect('data/alpha.db'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close(); print('WAL checkpoint done')"
           git add data/kr_dynamic_universe.csv data/alpha.db || true
           if git diff --cached --quiet; then
             echo "변경 없음 — commit skip"
