@@ -54,28 +54,20 @@ jobs:
             git fetch origin main
             git checkout -f -B main origin/main
             # origin 의 dedup file 과 *우리* dedup state JSON-level merge
-            python3 <<'PYEOF'
+            python3 -c "
 import json
 from pathlib import Path
 ours_path = Path('/tmp/our_dedup.json')
 theirs_path = Path('data/alert_dedup.json')
-ours = json.load(open(ours_path, encoding='utf-8')) if ours_path.exists() else {}
-theirs = json.load(open(theirs_path, encoding='utf-8')) if theirs_path.exists() else {}
-# Merge: 최신 sent_at 우선 (rule_id 별)
+ours = json.load(open(ours_path)) if ours_path.exists() else {}
+theirs = json.load(open(theirs_path)) if theirs_path.exists() else {}
 merged = dict(theirs)
 for k, v in ours.items():
-    if k not in merged:
+    if k not in merged or v.get('sent_at', '') > merged[k].get('sent_at', ''):
         merged[k] = v
-        continue
-    # sent_at 더 최근 거 채택
-    t_ours = v.get("sent_at", "")
-    t_theirs = merged[k].get("sent_at", "")
-    if t_ours > t_theirs:
-        merged[k] = v
-# Save merged
-json.dump(merged, open(theirs_path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
-print(f"merged: {len(merged)} entries (ours={len(ours)} + theirs={len(theirs)})")
-PYEOF
+json.dump(merged, open(theirs_path, 'w'), indent=2, ensure_ascii=False)
+print(f'merged: {len(merged)} entries (ours={len(ours)} + theirs={len(theirs)})')
+"
             git add data/alert_dedup.json
             if git diff --cached --quiet; then
               echo "dedup no change (merge result == theirs)"
