@@ -122,5 +122,11 @@
     "ok": true,
     "total_value_krw": 105783401,
     "holdings_count": 17
+  },
+  {
+    "ts": "2026-07-23T18:28:25.280266+09:00",
+    "ok": true,
+    "total_value_krw": 109035705,
+    "holdings_count": 17
   }
 ]
