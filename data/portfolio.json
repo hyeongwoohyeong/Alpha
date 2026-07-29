@@ -1,36 +1,20 @@
 {
-  "as_of": "2026-07-28T02:44:52.858876+09:00",
+  "as_of": "2026-07-29T19:33:39.741346+09:00",
   "base_currency": "KRW",
-  "total_value_krw": 100969500,
+  "total_value_krw": 103357489,
   "_sync_source": "toss_open_api",
   "_sync_summary": {
     "account_seq": 1,
     "usd_to_krw": 1540.0,
-    "toss_krw_value": 35926390,
-    "toss_usd_value": 13178.893399,
-    "toss_total_krw_only": 56221886,
-    "toss_pl_rate": -0.4935,
-    "holdings_count": 17,
-    "stale_count": 11
+    "toss_krw_value": 20547390,
+    "toss_usd_value": 11708.635549,
+    "toss_total_krw_only": 38578689,
+    "toss_pl_rate": -0.5852,
+    "holdings_count": 8,
+    "stale_count": 20
   },
   "note": "토스증권 위탁 + 미래에셋 연금저축 + DB 퇴직연금 + 주택보증금 + 마이너스통장 통합. 토스 sync 가 위탁만 자동 update, 비-토스 자산은 _stale_since 표시로 보존. 중복 의심 (DC 4건 + 360750/133690 stale 부분 = 미래에셋 DB 안에 포함 가능성) — 다음 turn 정리 필요. 반도체 집중 (KODEX 하이닉스 +27.48%, SOXL +14.86%) 의도된 알파 베팅 — 본주 ₩3M / +40% target / trailing stop -8%.",
   "holdings": [
-    {
-      "ticker": "KODEX_HYNIX_2X",
-      "name": "KODEX SK하이닉스단일종목레버리지",
-      "yf_ticker": null,
-      "shares": 2580.0,
-      "value_krw": 35797500,
-      "cost_krw": 73538135,
-      "pnl_krw": -37740635,
-      "return_pct": -51.32,
-      "net_worth_pct": 35.5,
-      "leverage": true,
-      "high_vol": true,
-      "type": "단일종목 레버리지 ETF",
-      "account": "토스 국내",
-      "memo": "핵심 알파 베팅 — SK하이닉스 ₩2.5M 도달 시 단계적 수익실현 예정. 단일 종목 2x 집중 (포트폴리오 ~49%)"
-    },
     {
       "ticker": "PENSION_TIGER_SP500",
       "name": "TIGER 미국S&P500 (연금)",
@@ -46,7 +30,23 @@
       "leverage": false,
       "high_vol": false,
       "_stale_since": "2026-06-19T23:43:09.232664+09:00",
-      "net_worth_pct": 30.7
+      "net_worth_pct": 30.0
+    },
+    {
+      "ticker": "KODEX_HYNIX_2X",
+      "name": "KODEX SK하이닉스단일종목레버리지",
+      "yf_ticker": null,
+      "shares": 2580.0,
+      "value_krw": 20446500,
+      "cost_krw": 73538135,
+      "pnl_krw": -53091635,
+      "return_pct": -72.19,
+      "net_worth_pct": 19.8,
+      "leverage": true,
+      "high_vol": true,
+      "type": "단일종목 레버리지 ETF",
+      "account": "토스 국내",
+      "memo": "핵심 알파 베팅 — SK하이닉스 ₩2.5M 도달 시 단계적 수익실현 예정. 단일 종목 2x 집중 (포트폴리오 ~49%)"
     },
     {
       "ticker": "SOXL",
@@ -57,12 +57,29 @@
       "cost_krw": 35516010,
       "pnl_krw": -15744058,
       "return_pct": -44.32,
-      "net_worth_pct": 19.6,
+      "net_worth_pct": 19.1,
       "leverage": true,
       "high_vol": true,
       "type": "섹터 레버리지 ETF",
       "account": "토스 해외",
-      "memo": "필라델피아 반도체 3X — 하이닉스 테마 보강. KODEX 하이닉스와 합쳐 반도체 익스포저 ~69%"
+      "memo": "필라델피아 반도체 3X — 하이닉스 테마 보강. KODEX 하이닉스와 합쳐 반도체 익스포저 ~69%",
+      "_stale_since": "2026-07-29T19:33:39.741158+09:00"
+    },
+    {
+      "ticker": "QLD",
+      "name": "QLD",
+      "yf_ticker": "QLD",
+      "shares": 142.897485,
+      "value_krw": 17880048,
+      "cost_krw": 17891346,
+      "pnl_krw": -11298,
+      "return_pct": -0.06,
+      "net_worth_pct": 17.3,
+      "leverage": true,
+      "high_vol": true,
+      "type": "레버리지 ETF",
+      "account": "토스 해외",
+      "memo": "나스닥 2X — 소액 포지션"
     },
     {
       "ticker": "PENSION_TIGER_NASDAQ100",
@@ -79,7 +96,7 @@
       "leverage": false,
       "high_vol": false,
       "_stale_since": "2026-06-19T23:43:09.232950+09:00",
-      "net_worth_pct": 6.6
+      "net_worth_pct": 6.5
     },
     {
       "ticker": "PENSION_PURUN_DC_1Y",
@@ -92,7 +109,7 @@
       "account": "미래에셋 DC 가입자",
       "memo": "DC 퇴직연금 안 정기예금 — 안전자산. 1년 만기.",
       "_stale_since": "2026-06-19T23:43:09.232956+09:00",
-      "net_worth_pct": 3.5
+      "net_worth_pct": 3.4
     },
     {
       "ticker": "PENSION_HEUNGKUK_DC_3Y",
@@ -172,30 +189,14 @@
       "_stale_since": "2026-07-11T23:42:08.439337+09:00"
     },
     {
-      "ticker": "QLD",
-      "name": "QLD",
-      "yf_ticker": "QLD",
-      "shares": 0.897485,
-      "value_krw": 112671,
-      "cost_krw": 117035,
-      "pnl_krw": -4364,
-      "return_pct": -3.72,
-      "net_worth_pct": 0.1,
-      "leverage": true,
-      "high_vol": true,
-      "type": "레버리지 ETF",
-      "account": "토스 해외",
-      "memo": "나스닥 2X — 소액 포지션"
-    },
-    {
       "ticker": "TQQQ",
       "name": "TQQQ",
       "yf_ticker": "TQQQ",
       "shares": 0.923132,
-      "value_krw": 88524,
+      "value_krw": 88070,
       "cost_krw": 115377,
-      "pnl_krw": -26852,
-      "return_pct": -23.27,
+      "pnl_krw": -27307,
+      "return_pct": -23.66,
       "net_worth_pct": 0.1,
       "leverage": true,
       "high_vol": true,
@@ -217,23 +218,8 @@
       "high_vol": false,
       "type": "원자재 ETF",
       "account": "토스 해외",
-      "memo": "은"
-    },
-    {
-      "ticker": "RISE_HD_PHYSAI",
-      "name": "RISE 현대차고정피지컬AI",
-      "yf_ticker": null,
-      "shares": 7.0,
-      "value_krw": 57575,
-      "cost_krw": 84364,
-      "pnl_krw": -26789,
-      "return_pct": -31.75,
-      "net_worth_pct": 0.1,
-      "leverage": false,
-      "high_vol": false,
-      "type": "테마 ETF",
-      "account": "토스 국내",
-      "memo": "피지컬 AI 테마 — 현대차 그룹 노출"
+      "memo": "은",
+      "_stale_since": "2026-07-29T19:33:39.741203+09:00"
     },
     {
       "ticker": "PENSION_MIRAE_CASH",
@@ -253,16 +239,32 @@
       "name": "QQQ",
       "yf_ticker": "QQQ",
       "shares": 0.051313,
-      "value_krw": 53584,
+      "value_krw": 53505,
       "cost_krw": 48848,
-      "pnl_krw": 4736,
-      "return_pct": 9.69,
+      "pnl_krw": 4657,
+      "return_pct": 9.53,
       "net_worth_pct": 0.1,
       "leverage": false,
       "high_vol": false,
       "type": "지수 ETF",
       "account": "토스 해외",
       "memo": "나스닥100"
+    },
+    {
+      "ticker": "RISE_HD_PHYSAI",
+      "name": "RISE 현대차고정피지컬AI",
+      "yf_ticker": null,
+      "shares": 7.0,
+      "value_krw": 51100,
+      "cost_krw": 84364,
+      "pnl_krw": -33264,
+      "return_pct": -39.42,
+      "net_worth_pct": 0.0,
+      "leverage": false,
+      "high_vol": false,
+      "type": "테마 ETF",
+      "account": "토스 국내",
+      "memo": "피지컬 AI 테마 — 현대차 그룹 노출"
     },
     {
       "ticker": "NASA",
@@ -278,33 +280,18 @@
       "high_vol": false,
       "type": "테마 ETF",
       "account": "토스 해외",
-      "memo": "우주/항공 테마"
-    },
-    {
-      "ticker": "TIGER_SEMI_2X",
-      "name": "TIGER 반도체TOP10레버리지",
-      "yf_ticker": null,
-      "shares": 1.0,
-      "value_krw": 36445,
-      "cost_krw": 78063,
-      "pnl_krw": -41618,
-      "return_pct": -53.31,
-      "net_worth_pct": 0.0,
-      "leverage": true,
-      "high_vol": true,
-      "type": "레버리지 ETF",
-      "account": "토스 국내",
-      "memo": "잔여 1주 — 대부분 매도 후 KODEX 하이닉스로 전환"
+      "memo": "우주/항공 테마",
+      "_stale_since": "2026-07-29T19:33:39.741215+09:00"
     },
     {
       "ticker": "SOL_AI_SEMI",
       "name": "SOL AI반도체TOP2플러스",
       "yf_ticker": null,
       "shares": 2.0,
-      "value_krw": 34870,
+      "value_krw": 27280,
       "cost_krw": 33681,
-      "pnl_krw": 1189,
-      "return_pct": 3.53,
+      "pnl_krw": -6401,
+      "return_pct": -19.0,
       "net_worth_pct": 0.0,
       "leverage": false,
       "high_vol": false,
@@ -326,7 +313,8 @@
       "high_vol": false,
       "type": "인컴 ETF",
       "account": "토스 해외",
-      "memo": "나스닥 커버드콜 인컴 — 소액"
+      "memo": "나스닥 커버드콜 인컴 — 소액",
+      "_stale_since": "2026-07-29T19:33:39.741223+09:00"
     },
     {
       "ticker": "GLD",
@@ -342,7 +330,8 @@
       "high_vol": false,
       "type": "원자재 ETF",
       "account": "토스 해외",
-      "memo": "금"
+      "memo": "금",
+      "_stale_since": "2026-07-29T19:33:39.741230+09:00"
     },
     {
       "ticker": "TSLL",
@@ -358,7 +347,8 @@
       "high_vol": true,
       "type": "단일종목 레버리지 ETF",
       "account": "토스 해외",
-      "memo": "TSLA 2X — 소액"
+      "memo": "TSLA 2X — 소액",
+      "_stale_since": "2026-07-29T19:33:39.741238+09:00"
     },
     {
       "ticker": "NFXL",
@@ -374,7 +364,24 @@
       "high_vol": true,
       "type": "단일종목 레버리지 ETF",
       "account": "토스 해외",
-      "memo": "NFLX 2X — 소액"
+      "memo": "NFLX 2X — 소액",
+      "_stale_since": "2026-07-29T19:33:39.741245+09:00"
+    },
+    {
+      "ticker": "TIGER_SEMI_2X",
+      "name": "TIGER 반도체TOP10레버리지",
+      "yf_ticker": null,
+      "shares": 1.0,
+      "value_krw": 22510,
+      "cost_krw": 78063,
+      "pnl_krw": -55553,
+      "return_pct": -71.16,
+      "net_worth_pct": 0.0,
+      "leverage": true,
+      "high_vol": true,
+      "type": "레버리지 ETF",
+      "account": "토스 국내",
+      "memo": "잔여 1주 — 대부분 매도 후 KODEX 하이닉스로 전환"
     },
     {
       "ticker": "NFLX",
@@ -390,7 +397,8 @@
       "high_vol": false,
       "type": "개별주",
       "account": "토스 해외",
-      "memo": "미디어/스트리밍 — 소액"
+      "memo": "미디어/스트리밍 — 소액",
+      "_stale_since": "2026-07-29T19:33:39.741253+09:00"
     },
     {
       "ticker": "MCD",
@@ -406,7 +414,8 @@
       "high_vol": false,
       "type": "개별주",
       "account": "토스 해외",
-      "memo": "방어적 quality — 소액"
+      "memo": "방어적 quality — 소액",
+      "_stale_since": "2026-07-29T19:33:39.741260+09:00"
     },
     {
       "ticker": "PENSION_SAVING_FUND_MISC",
@@ -420,6 +429,22 @@
       "memo": "연금저축계좌(신) 총 ₩21,857,381 - TIGER ETF underlying ₩21,847,280 = 잔액 ~₩10K.",
       "_stale_since": "2026-06-19T23:43:09.232971+09:00",
       "net_worth_pct": 0.0
+    },
+    {
+      "ticker": "SCHD",
+      "name": "SCHD",
+      "yf_ticker": "SCHD",
+      "shares": 0.18475,
+      "value_krw": 9676,
+      "cost_krw": 9008,
+      "pnl_krw": 668,
+      "return_pct": 7.41,
+      "net_worth_pct": 0.0,
+      "leverage": false,
+      "high_vol": false,
+      "type": "배당 ETF",
+      "account": "토스 해외",
+      "memo": "배당성장 — 소액"
     },
     {
       "ticker": "TOSS_KRW_CASH",
@@ -436,22 +461,6 @@
       "account": "토스",
       "memo": "예수금",
       "_stale_since": "2026-06-18T22:30:24.392286+09:00"
-    },
-    {
-      "ticker": "SCHD",
-      "name": "SCHD",
-      "yf_ticker": "SCHD",
-      "shares": 0.18475,
-      "value_krw": 9531,
-      "cost_krw": 9008,
-      "pnl_krw": 523,
-      "return_pct": 5.8,
-      "net_worth_pct": 0.0,
-      "leverage": false,
-      "high_vol": false,
-      "type": "배당 ETF",
-      "account": "토스 해외",
-      "memo": "배당성장 — 소액"
     }
   ],
   "_milestone": "2026-06-18 NW ₩200M 돌파 — 꼬마몬 → 브이몬 진화. 만 30세 (1996년생), 분양 deadline 2028.7 (26개월), 목표 ₩300M.",
