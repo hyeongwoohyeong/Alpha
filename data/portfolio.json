@@ -1,15 +1,15 @@
 {
-  "as_of": "2026-08-01T10:19:40.547663+09:00",
+  "as_of": "2026-08-08T15:24:44.442485+09:00",
   "base_currency": "KRW",
-  "total_value_krw": 110062237,
+  "total_value_krw": 102721713,
   "_sync_source": "toss_open_api",
   "_sync_summary": {
     "account_seq": 1,
     "usd_to_krw": 1540.0,
-    "toss_krw_value": 28521900,
-    "toss_usd_value": 10818.60177,
-    "toss_total_krw_only": 45182547,
-    "toss_pl_rate": -0.5049,
+    "toss_krw_value": 19079100,
+    "toss_usd_value": 12183.716594,
+    "toss_total_krw_only": 37842024,
+    "toss_pl_rate": -0.5923,
     "holdings_count": 5,
     "stale_count": 23
   },
@@ -30,23 +30,7 @@
       "leverage": false,
       "high_vol": false,
       "_stale_since": "2026-06-19T23:43:09.232664+09:00",
-      "net_worth_pct": 28.1
-    },
-    {
-      "ticker": "KODEX_HYNIX_2X",
-      "name": "KODEX SK하이닉스단일종목레버리지",
-      "yf_ticker": null,
-      "shares": 2580.0,
-      "value_krw": 28521900,
-      "cost_krw": 73538135,
-      "pnl_krw": -45016235,
-      "return_pct": -61.21,
-      "net_worth_pct": 25.9,
-      "leverage": true,
-      "high_vol": true,
-      "type": "단일종목 레버리지 ETF",
-      "account": "토스 국내",
-      "memo": "핵심 알파 베팅 — SK하이닉스 ₩2.5M 도달 시 단계적 수익실현 예정. 단일 종목 2x 집중 (포트폴리오 ~49%)"
+      "net_worth_pct": 30.1
     },
     {
       "ticker": "SOXL",
@@ -57,7 +41,7 @@
       "cost_krw": 35516010,
       "pnl_krw": -15744058,
       "return_pct": -44.32,
-      "net_worth_pct": 18.0,
+      "net_worth_pct": 19.2,
       "leverage": true,
       "high_vol": true,
       "type": "섹터 레버리지 ETF",
@@ -66,20 +50,52 @@
       "_stale_since": "2026-07-29T19:33:39.741158+09:00"
     },
     {
+      "ticker": "KODEX_HYNIX_2X",
+      "name": "KODEX SK하이닉스단일종목레버리지",
+      "yf_ticker": null,
+      "shares": 2580.0,
+      "value_krw": 19079100,
+      "cost_krw": 73538135,
+      "pnl_krw": -54459035,
+      "return_pct": -74.05,
+      "net_worth_pct": 18.6,
+      "leverage": true,
+      "high_vol": true,
+      "type": "단일종목 레버리지 ETF",
+      "account": "토스 국내",
+      "memo": "핵심 알파 베팅 — SK하이닉스 ₩2.5M 도달 시 단계적 수익실현 예정. 단일 종목 2x 집중 (포트폴리오 ~49%)"
+    },
+    {
       "ticker": "QLD",
       "name": "QLD",
       "yf_ticker": "QLD",
       "shares": 82.897485,
-      "value_krw": 10681490,
+      "value_krw": 11771725,
       "cost_krw": 10379102,
-      "pnl_krw": 302388,
-      "return_pct": 2.91,
-      "net_worth_pct": 9.7,
+      "pnl_krw": 1392623,
+      "return_pct": 13.41,
+      "net_worth_pct": 11.5,
       "leverage": true,
       "high_vol": true,
       "type": "레버리지 ETF",
       "account": "토스 해외",
       "memo": "나스닥 2X — 소액 포지션"
+    },
+    {
+      "ticker": "TQQQ",
+      "name": "TQQQ",
+      "yf_ticker": "TQQQ",
+      "shares": 59.923132,
+      "value_krw": 6872212,
+      "cost_krw": 6076119,
+      "pnl_krw": 796093,
+      "return_pct": 13.1,
+      "net_worth_pct": 6.7,
+      "leverage": true,
+      "high_vol": true,
+      "type": "레버리지 ETF",
+      "account": "토스 해외",
+      "memo": "나스닥 3X — 소액 포지션"
     },
     {
       "ticker": "PENSION_TIGER_NASDAQ100",
@@ -96,23 +112,7 @@
       "leverage": false,
       "high_vol": false,
       "_stale_since": "2026-06-19T23:43:09.232950+09:00",
-      "net_worth_pct": 6.1
-    },
-    {
-      "ticker": "TQQQ",
-      "name": "TQQQ",
-      "yf_ticker": "TQQQ",
-      "shares": 58.923132,
-      "value_krw": 5863724,
-      "cost_krw": 5971014,
-      "pnl_krw": -107290,
-      "return_pct": -1.79,
-      "net_worth_pct": 5.3,
-      "leverage": true,
-      "high_vol": true,
-      "type": "레버리지 ETF",
-      "account": "토스 해외",
-      "memo": "나스닥 3X — 소액 포지션"
+      "net_worth_pct": 6.5
     },
     {
       "ticker": "PENSION_PURUN_DC_1Y",
@@ -125,7 +125,7 @@
       "account": "미래에셋 DC 가입자",
       "memo": "DC 퇴직연금 안 정기예금 — 안전자산. 1년 만기.",
       "_stale_since": "2026-06-19T23:43:09.232956+09:00",
-      "net_worth_pct": 3.2
+      "net_worth_pct": 3.4
     },
     {
       "ticker": "PENSION_HEUNGKUK_DC_3Y",
@@ -138,7 +138,7 @@
       "account": "미래에셋 DC 가입자",
       "memo": "DC 퇴직연금 안 이율보증형 보험 — 안전자산.",
       "_stale_since": "2026-06-19T23:43:09.232959+09:00",
-      "net_worth_pct": 1.6
+      "net_worth_pct": 1.7
     },
     {
       "ticker": "RL",
@@ -168,7 +168,7 @@
       "account": "미래에셋 DC 가입자",
       "memo": "DC 퇴직연금 안 정기예금.",
       "_stale_since": "2026-06-19T23:43:09.232963+09:00",
-      "net_worth_pct": 0.4
+      "net_worth_pct": 0.5
     },
     {
       "ticker": "TDG",
@@ -226,16 +226,32 @@
       "name": "SCHD",
       "yf_ticker": "SCHD",
       "shares": 1.18475,
-      "value_krw": 61067,
+      "value_krw": 61851,
       "cost_krw": 60460,
-      "pnl_krw": 607,
-      "return_pct": 1.0,
+      "pnl_krw": 1391,
+      "return_pct": 2.3,
       "net_worth_pct": 0.1,
       "leverage": false,
       "high_vol": false,
       "type": "배당 ETF",
       "account": "토스 해외",
       "memo": "배당성장 — 소액"
+    },
+    {
+      "ticker": "QQQ",
+      "name": "QQQ",
+      "yf_ticker": "QQQ",
+      "shares": 0.051313,
+      "value_krw": 57135,
+      "cost_krw": 48848,
+      "pnl_krw": 8287,
+      "return_pct": 16.96,
+      "net_worth_pct": 0.1,
+      "leverage": false,
+      "high_vol": false,
+      "type": "지수 ETF",
+      "account": "토스 해외",
+      "memo": "나스닥100"
     },
     {
       "ticker": "PENSION_MIRAE_CASH",
@@ -249,22 +265,6 @@
       "memo": "DC 퇴직연금 안 현금성자산.",
       "_stale_since": "2026-06-19T23:43:09.232967+09:00",
       "net_worth_pct": 0.1
-    },
-    {
-      "ticker": "QQQ",
-      "name": "QQQ",
-      "yf_ticker": "QQQ",
-      "shares": 0.051313,
-      "value_krw": 54366,
-      "cost_krw": 48848,
-      "pnl_krw": 5518,
-      "return_pct": 11.29,
-      "net_worth_pct": 0.0,
-      "leverage": false,
-      "high_vol": false,
-      "type": "지수 ETF",
-      "account": "토스 해외",
-      "memo": "나스닥100"
     },
     {
       "ticker": "RISE_HD_PHYSAI",
