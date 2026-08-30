@@ -1,7 +1,7 @@
 {
   "_doc": "100% × 3~5번 alpha 베팅 ledger. 형우의 mission: 큰 베팅으로 자산 cycle 단축. Hit rate 추적 + 학습 패턴 누적.",
   "_workflow": "신규 베팅 → status='active' 추가. 익절/손절 → status='realized' or 'failed'. lessons 채워서 학습 누적.",
-  "as_of": "2026-05-30",
+  "as_of": "2026-08-30",
   "bets": [
     {
       "id": "bet_001_kodex_hynix",
@@ -23,26 +23,45 @@
         "pnl_krw_mm": 1.9
       },
       "exit_rules": {
-        "target_underlying_price": "SK하이닉스 ₩3,300,000 (revised 2026-06-21)",
-        "target_return_pct": 0.40,
+        "target_underlying_price": "KODEX ₩28,504/주 (평단 — 원가회수 후 전량 청산)",
+        "target_return_pct": 0.4,
         "stop_loss_pct": -0.15,
         "trailing_stop_pct": -0.08,
         "trailing_stop_note": "peak (52W high) 대비 -8% 깨질 시 자동 exit. trend following.",
         "scale_out": [
-          {"trigger_pct": 0.15, "fraction": 1.0, "note": "전량 익절 — 본주 ₩3,300,000 도달 시 KODEX 전량 청산"}
+          {
+            "trigger_price_kodex": 28504,
+            "fraction": 1.0,
+            "note": "평단(₩28,504/주) 회복 시 전량 익절. 분양자금 확보 우선. 330만원 target 포기."
+          }
         ],
         "_revision_history": [
-          {"date": "2026-06-01", "from": "target ₩2.5M / +25%", "to": "target ₩3.0M / +40% + trailing stop -8%",
-           "reason": "수익중 종목 추세 따라가기 + 종전 후 단기 악재 X 판단. Trend following + trailing stop 도입으로 over-shoot 포착"},
-          {"date": "2026-06-21", "from": "target ₩3.0M / scale-out 4구간", "to": "target ₩3.3M / 전량 일괄 청산",
-           "reason": "부분익절 선호 안 함. 컨센서스 상위 구간(DS ₩310만/삼성 ₩350만 사이) 분석 기반 단일 exit price 확정"}
+          {
+            "date": "2026-06-01",
+            "from": "target ₩2.5M / +25%",
+            "to": "target ₩3.0M / +40% + trailing stop -8%",
+            "reason": "수익중 종목 추세 따라가기 + 종전 후 단기 악재 X 판단. Trend following + trailing stop 도입으로 over-shoot 포착"
+          },
+          {
+            "date": "2026-06-21",
+            "from": "target ₩3.0M / scale-out 4구간",
+            "to": "target ₩3.3M / 전량 일괄 청산",
+            "reason": "부분익절 선호 안 함. 컨센서스 상위 구간(DS ₩310만/삼성 ₩350만 사이) 분석 기반 단일 exit price 확정"
+          },
+          {
+            "date": "2026-08-30",
+            "from": "target 하이닉스 본주 ₩3,300,000 / KODEX 전량 청산",
+            "to": "KODEX 평단 ₩28,504/주 회복 시 전량 청산",
+            "reason": "7월 폭락 후 멘탈 관리 + 분양자금 확보 우선. 더 이상 고점 회복 기다리지 않고 평단만 되면 탈출."
+          }
         ]
       },
       "realized": null,
       "lessons": [
         "2026-06-01 thesis 변경: 단일 target ₩2.5M 에서 +40% / 본주 ₩3M + trailing stop 도입. *trend following* 패러다임 — 수익중인 종목은 trailing stop 으로 보호하면서 over-shoot 포착",
         "Trailing stop 룰 검증 필요 — peak 대비 -8% 가 적절한지 vs 너무 빠른 exit 인지 monitoring"
-      ]
+      ],
+      "memo": "평단 ₩28,504 회복 = 전량 매도. 그 이상 기대 안 함."
     },
     {
       "id": "bet_002_soxl",
@@ -64,11 +83,19 @@
         "pnl_krw_mm": -1.3
       },
       "exit_rules": {
-        "target_return_pct": 0.30,
+        "target_return_pct": 0.3,
         "stop_loss_pct": -0.15,
         "scale_out": [
-          {"trigger_pct": 0.20, "fraction": 0.50, "note": "1차 익절"},
-          {"trigger_pct": 0.30, "fraction": 0.50, "note": "2차 익절"}
+          {
+            "trigger_pct": 0.2,
+            "fraction": 0.5,
+            "note": "1차 익절"
+          },
+          {
+            "trigger_pct": 0.3,
+            "fraction": 0.5,
+            "note": "2차 익절"
+          }
         ]
       },
       "realized": null,
@@ -110,7 +137,10 @@
       "thesis": "BTC 동조 + smart contract layer-1",
       "category": "Crypto (Layer-1)",
       "status": "realized",
-      "entry": {"date": "2025", "note": "2025 단일 진입/매도"},
+      "entry": {
+        "date": "2025",
+        "note": "2025 단일 진입/매도"
+      },
       "current": null,
       "exit_rules": null,
       "realized": {
@@ -126,7 +156,10 @@
       "thesis": "Layer-1 경쟁 / 단일 코인 베팅",
       "category": "Crypto (Single Layer-1)",
       "status": "failed",
-      "entry": {"date": "2025~2026", "note": "2025 +₩2M 익절 후 2026 재진입 → 손실"},
+      "entry": {
+        "date": "2025~2026",
+        "note": "2025 +₩2M 익절 후 2026 재진입 → 손실"
+      },
       "current": null,
       "exit_rules": null,
       "realized": {
@@ -146,14 +179,17 @@
       "thesis": "나스닥 cycle dislocation 진입 후 빠른 익절 (2026.05.22)",
       "category": "Leveraged ETF (Tactical)",
       "status": "realized",
-      "entry": {"date": "이전", "note": "정확한 entry 추적 안 됨"},
+      "entry": {
+        "date": "이전",
+        "note": "정확한 entry 추적 안 됨"
+      },
       "current": null,
       "exit_rules": null,
       "realized": {
         "date": "2026-05-22",
         "gain_krw_mm": 0.54,
         "gain_pct_qld": 0.416,
-        "gain_pct_tqqq": 0.710,
+        "gain_pct_tqqq": 0.71,
         "note": "QLD +41.6% / TQQQ +71.0% 짧은 보유 후 익절. 100% 베팅 mission 의 partial proof — *훨씬 큰 자금 투입 시* +71% 가 큰 alpha."
       },
       "lessons": [
@@ -168,7 +204,10 @@
       "thesis": "한국 반도체 cycle 베팅 — 하이닉스/삼성전자 동조",
       "category": "Leveraged ETF (Sector 2x)",
       "status": "realized",
-      "entry": {"date": "2026 초 추정", "amount_krw_mm": 60.65},
+      "entry": {
+        "date": "2026 초 추정",
+        "amount_krw_mm": 60.65
+      },
       "current": null,
       "exit_rules": null,
       "realized": {
@@ -220,7 +259,7 @@
     "total_realized_bets": 5,
     "wins": 4,
     "losses": 1,
-    "hit_rate": 0.80,
+    "hit_rate": 0.8,
     "total_realized_pnl_krw_mm": 21.78,
     "biggest_win_krw_mm": 26.35,
     "biggest_loss_krw_mm": -20.19,
