@@ -200,5 +200,21 @@
     "ok": true,
     "total_value_krw": 82237241,
     "holdings_count": 5
+  },
+  {
+    "ts": "2026-08-31T01:23:35.988959+09:00",
+    "ok": false,
+    "error": "OAuth fail 403: {\"error\":\"access_denied\",\"error_description\":\"IP address not allowed\"}"
+  },
+  {
+    "ts": "2026-08-31T01:25:31.560840+09:00",
+    "ok": false,
+    "error": "OAuth fail 403: {\"error\":\"access_denied\",\"error_description\":\"IP address not allowed\"}"
+  },
+  {
+    "ts": "2026-08-31T01:27:45.545156+09:00",
+    "ok": true,
+    "total_value_krw": 82237241,
+    "holdings_count": 5
   }
 ]
