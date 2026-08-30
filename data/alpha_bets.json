@@ -69,37 +69,26 @@
       "ticker": "SOXL",
       "thesis": "글로벌 반도체 cycle + AI capex. 3x 베타로 빠른 hit. 하이닉스 보완 (KR semi + US semi).",
       "category": "Leveraged ETF (Sector 3x)",
-      "status": "active",
+      "status": "closed",
       "entry": {
         "date": "2026-04",
         "price_krw_approx": 351117,
         "amount_krw_mm": 30.5,
         "shares": 87
       },
-      "current": {
-        "date": "2026-05-30",
-        "value_krw_mm": 29.2,
-        "return_pct": -0.044,
-        "pnl_krw_mm": -1.3
+      "current": null,
+      "exit_rules": null,
+      "realized": {
+        "date": "2026-07-10",
+        "shares": 87,
+        "pnl_krw": -18091178,
+        "return_pct": -59.3,
+        "note": "stop-loss 전량 매도"
       },
-      "exit_rules": {
-        "target_return_pct": 0.3,
-        "stop_loss_pct": -0.15,
-        "scale_out": [
-          {
-            "trigger_pct": 0.2,
-            "fraction": 0.5,
-            "note": "1차 익절"
-          },
-          {
-            "trigger_pct": 0.3,
-            "fraction": 0.5,
-            "note": "2차 익절"
-          }
-        ]
-      },
-      "realized": null,
-      "lessons": []
+      "lessons": [
+        "3x 레버리지 섹터 ETF는 반도체 업황 하락 시 낙폭 과대. KR(하이닉스) + US(SOXL) 동시 보유는 반도체 익스포저 과잉 집중 — 분산 효과 없음.",
+        "단일 섹터 3x는 thesis 훼손 즉시 손절이 맞음. 보완 포지션 논리로 보유하면 손실 누적."
+      ]
     },
     {
       "id": "bet_003_btc_lifetime",
