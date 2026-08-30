@@ -1,38 +1,20 @@
 {
-  "as_of": "2026-08-30T09:02:00+09:00",
+  "as_of": "2026-08-30T23:22:06.179394+09:00",
   "base_currency": "KRW",
-  "total_value_krw": 110292184,
-  "_sync_source": "toss_mydata_manual",
+  "total_value_krw": 82237241,
+  "_sync_source": "toss_open_api",
   "_sync_summary": {
-    "toss_brokerage": 37859630,
-    "toss_total_inv": 84914978,
-    "pension_saving": 22438355,
-    "dc_samjung": 20293687,
-    "housing_deposit": 117600000,
-    "minus_loan": -88855402,
-    "cash_kb": 780293,
-    "nw_total": 110292184,
-    "august_realized_pnl": 611522,
-    "note": "마이데이터 기준 순자산 ₩110.3M. 토스증권 기본계좌 -57.3%. 연금저축(신)+삼정DC=₩42.7M."
+    "account_seq": 1,
+    "usd_to_krw": 1540.0,
+    "toss_krw_value": 24845400,
+    "toss_usd_value": 8078.749606,
+    "toss_total_krw_only": 37286674,
+    "toss_pl_rate": -0.5726,
+    "holdings_count": 5,
+    "stale_count": 6
   },
   "note": "8월말. 하이닉스 여전히 2,580주 보유(-66.21%, 미실현손실 -₩48.7M). TQQQ 스윙 부분 익절(+₩61만, 8/11). SCHD 8주 추가. TIGER 나스닥100 연금 12주 추가. NW: 7월 ₩134M → 8월 ₩110M (-₩24M). 누적 고점(6월 ₩202M) 대비 -₩92M.",
   "holdings": [
-    {
-      "ticker": "KODEX_HYNIX_2X",
-      "name": "KODEX SK하이닉스단일종목레버리지",
-      "yf_ticker": null,
-      "shares": 2580.0,
-      "value_krw": 24845400,
-      "cost_krw": 73538177,
-      "pnl_krw": -48692777,
-      "return_pct": -66.21,
-      "net_worth_pct": 22.5,
-      "leverage": true,
-      "high_vol": true,
-      "type": "단일종목 레버리지 ETF",
-      "account": "토스 국내",
-      "memo": "핵심 베팅. 아직 보유. exit target 재검토 필요."
-    },
     {
       "ticker": "PENSION_TIGER_SP500",
       "name": "TIGER 미국S&P500 (연금)",
@@ -47,18 +29,35 @@
       "memo": "자동 적립 유지.",
       "leverage": false,
       "high_vol": false,
-      "net_worth_pct": 26.1
+      "net_worth_pct": 35.0,
+      "_stale_since": "2026-08-30T23:22:06.179324+09:00"
+    },
+    {
+      "ticker": "KODEX_HYNIX_2X",
+      "name": "KODEX SK하이닉스단일종목레버리지",
+      "yf_ticker": null,
+      "shares": 2580.0,
+      "value_krw": 24845400,
+      "cost_krw": 73538135,
+      "pnl_krw": -48692735,
+      "return_pct": -66.21,
+      "net_worth_pct": 30.2,
+      "leverage": true,
+      "high_vol": true,
+      "type": "단일종목 레버리지 ETF",
+      "account": "토스 국내",
+      "memo": "핵심 베팅. 아직 보유. exit target 재검토 필요."
     },
     {
       "ticker": "QLD",
       "name": "QLD",
       "yf_ticker": "QLD",
       "shares": 84.896447,
-      "value_krw": 10566296,
-      "cost_krw": 10124703,
-      "pnl_krw": 441593,
-      "return_pct": 4.36,
-      "net_worth_pct": 9.6,
+      "value_krw": 11788873,
+      "cost_krw": 10654223,
+      "pnl_krw": 1134651,
+      "return_pct": 10.64,
+      "net_worth_pct": 14.3,
       "leverage": true,
       "high_vol": true,
       "type": "레버리지 ETF",
@@ -79,7 +78,8 @@
       "memo": "연금저축 8월 12주 추가매수 (1→13주).",
       "leverage": false,
       "high_vol": false,
-      "net_worth_pct": 7.3
+      "net_worth_pct": 9.8,
+      "_stale_since": "2026-08-30T23:22:06.179346+09:00"
     },
     {
       "ticker": "PENSION_PURUN_DC_1Y",
@@ -92,7 +92,22 @@
       "account": "미래에셋 DC 가입자",
       "leverage": false,
       "high_vol": false,
-      "net_worth_pct": 3.2
+      "net_worth_pct": 4.3,
+      "_stale_since": "2026-08-30T23:22:06.179351+09:00"
+    },
+    {
+      "ticker": "TOSS_CASH",
+      "name": "토스증권 예수금",
+      "value_krw": 2219309,
+      "cost_krw": 2219309,
+      "pnl_krw": 0,
+      "return_pct": 0.0,
+      "net_worth_pct": 2.7,
+      "leverage": false,
+      "high_vol": false,
+      "type": "현금",
+      "account": "토스",
+      "_stale_since": "2026-08-30T23:22:06.179365+09:00"
     },
     {
       "ticker": "PENSION_HEUNGKUK_DC_3Y",
@@ -105,7 +120,8 @@
       "account": "미래에셋 DC 가입자",
       "leverage": false,
       "high_vol": false,
-      "net_worth_pct": 1.6
+      "net_worth_pct": 2.2,
+      "_stale_since": "2026-08-30T23:22:06.179356+09:00"
     },
     {
       "ticker": "PENSION_MIRAE_CASH",
@@ -118,18 +134,19 @@
       "account": "미래에셋 DC 가입자",
       "leverage": false,
       "high_vol": false,
-      "net_worth_pct": 0.5
+      "net_worth_pct": 0.7,
+      "_stale_since": "2026-08-30T23:22:06.179360+09:00"
     },
     {
       "ticker": "SCHD",
       "name": "SCHD",
       "yf_ticker": "SCHD",
       "shares": 9.18475,
-      "value_krw": 442447,
-      "cost_krw": 443558,
-      "pnl_krw": -1088,
-      "return_pct": -0.25,
-      "net_worth_pct": 0.4,
+      "value_krw": 493644,
+      "cost_krw": 491583,
+      "pnl_krw": 2061,
+      "return_pct": 0.41,
+      "net_worth_pct": 0.6,
       "leverage": false,
       "high_vol": false,
       "type": "배당 ETF",
@@ -141,10 +158,10 @@
       "name": "TQQQ",
       "yf_ticker": "TQQQ",
       "shares": 0.923132,
-      "value_krw": 91550,
-      "cost_krw": 87671,
-      "pnl_krw": 3881,
-      "return_pct": 4.43,
+      "value_krw": 102144,
+      "cost_krw": 93604,
+      "pnl_krw": 8539,
+      "return_pct": 9.12,
       "net_worth_pct": 0.1,
       "leverage": true,
       "high_vol": true,
@@ -157,39 +174,16 @@
       "name": "QQQ",
       "yf_ticker": "QQQ",
       "shares": 0.051313,
-      "value_krw": 50742,
-      "cost_krw": 45893,
-      "pnl_krw": 4849,
-      "return_pct": 10.57,
-      "net_worth_pct": 0.0,
+      "value_krw": 56614,
+      "cost_krw": 48848,
+      "pnl_krw": 7765,
+      "return_pct": 15.89,
+      "net_worth_pct": 0.1,
       "leverage": false,
       "high_vol": false,
       "type": "지수 ETF",
       "account": "토스 해외"
-    },
-    {
-      "ticker": "TOSS_CASH",
-      "name": "토스증권 예수금",
-      "value_krw": 2219309,
-      "cost_krw": 2219309,
-      "pnl_krw": 0,
-      "return_pct": 0.0,
-      "net_worth_pct": 2.0,
-      "leverage": false,
-      "high_vol": false,
-      "type": "현금",
-      "account": "토스"
     }
-  ],
-  "_monthly_log": [
-    {"month": "2026-06", "nw": 202791806, "note": "고점. 하이닉스 ₩92.3M (+27.5%). SOXL ₩35.8M."},
-    {"month": "2026-07", "nw": 134350000, "note": "하이닉스 폭락(-67%). SOXL 손절(-₩18.1M). QLD/TQQQ 스윙 진입."},
-    {"month": "2026-08", "nw": 110292184, "note": "TQQQ 스윙 부분 익절(+₩61만). SCHD/나스닥 적립. 하이닉스 여전히 보유."}
-  ],
-  "_pending_actions": [
-    "하이닉스 exit target 재설정 — ₩330만원 여전히 유효? 아니면 하향 조정?",
-    "QLD 84주 스윙 exit 조건 설정",
-    "SPY 적립 본격 시작 (하이닉스 익절 전이라도 소액)"
   ],
   "_last_manual_update_at": "2026-08-30T09:02+09:00 — 토스 스크린샷 기준 수기 업데이트"
 }
