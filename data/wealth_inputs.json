@@ -1,63 +1,305 @@
 {
   "_doc": "대시보드 wealth_dashboard.json 빌더의 정적 입력. 부동산/부채/실현손익/월별스냅샷 — 자주 안 바뀌는 항목들. 변경 시 직접 편집 후 scripts/build_wealth_dashboard.py 재실행.",
   "balance_sheet": {
-    "as_of": "2026-06-18",
+    "as_of": "2026-08-30",
     "real_estate_krw": 0,
     "apartment_paid_krw": 97600000,
     "apartment_target_krw": 400000000,
     "apartment_deadline": "2028-07",
     "deposit_krw": 20000000,
-    "cash_outside_krw": 82241,
+    "cash_outside_krw": 780293,
     "btc_krw": 0,
-    "debt_krw": 88168800,
-    "_note": "apartment_paid_krw = 분양 계약금 (이미 납입). target = 최종 ₩4억. deadline 2028.7 까지 추가 ₩3.024억 마련 필요. debt_krw 는 신한 U드림 마통 잔액. 2026-06-18 토스 마이데이터 캡처 기준 cash + debt 정확화."
+    "debt_krw": 88855402,
+    "_note": "apartment_paid_krw = 분양 계약금 (이미 납입). target = ₩4억 (자기자본 100%). deadline 2028.7. debt_krw 는 신한 U드림 마통 잔액. 2026-08-30 토스 마이데이터 기준."
   },
   "realized_pnl": {
     "_doc": "주식·ETF 실현손익 (코인 별도 — coin_realized_pnl 참조)",
     "kpi": {
-      "ytdNet": 31772316,
-      "ytdGain": 31766630,
+      "ytdNet": 16827221,
+      "ytdGain": 16821535,
       "ytdInc": 5686,
-      "mtd": 31772316,
-      "estTax": 4972442
+      "mtd": 611522,
+      "estTax": 3150738,
+      "_asof": "2026-08-30"
     },
     "monthly": [
-      {"month": "2026-01", "gain": 2428026, "income": 0, "cost": 0, "net": 2428026, "cumulative": 2428026},
-      {"month": "2026-02", "gain": -6691, "income": 493, "cost": 76, "net": -6274, "cumulative": 2421752},
-      {"month": "2026-03", "gain": 97650, "income": 7691, "cost": 1184, "net": 104157, "cumulative": 2525909},
-      {"month": "2026-04", "gain": 0, "income": 10226, "cost": 1574, "net": 8652, "cumulative": 2534561},
-      {"month": "2026-05", "gain": 31766630, "income": 5686, "cost": 875, "net": 31772316, "cumulative": 34306877, "_note": "realized_pnl.monthly.income은 배당/이자만 — 급여/상여는 별도(monthly_snapshots/cashflow)"},
-      {"month": "2026-06", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-07", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-08", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-09", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-10", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-11", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877},
-      {"month": "2026-12", "gain": 0, "income": 0, "cost": 0, "net": 0, "cumulative": 34306877}
+      {
+        "month": "2026-01",
+        "gain": 2428026,
+        "income": 0,
+        "cost": 0,
+        "net": 2428026,
+        "cumulative": 2428026
+      },
+      {
+        "month": "2026-02",
+        "gain": -6691,
+        "income": 493,
+        "cost": 76,
+        "net": -6274,
+        "cumulative": 2421752
+      },
+      {
+        "month": "2026-03",
+        "gain": 97650,
+        "income": 7691,
+        "cost": 1184,
+        "net": 104157,
+        "cumulative": 2525909
+      },
+      {
+        "month": "2026-04",
+        "gain": 0,
+        "income": 10226,
+        "cost": 1574,
+        "net": 8652,
+        "cumulative": 2534561
+      },
+      {
+        "month": "2026-05",
+        "gain": 31766630,
+        "income": 5686,
+        "cost": 875,
+        "net": 31772316,
+        "cumulative": 34306877,
+        "_note": "realized_pnl.monthly.income은 배당/이자만 — 급여/상여는 별도(monthly_snapshots/cashflow)"
+      },
+      {
+        "month": "2026-06",
+        "gain": 0,
+        "income": 0,
+        "cost": 0,
+        "net": 0,
+        "cumulative": 34306877
+      },
+      {
+        "month": "2026-07",
+        "gain": -18091178,
+        "income": 0,
+        "cost": 0,
+        "net": -18091178,
+        "cumulative": 16215699,
+        "_note": "SOXL 87주 전량 손절. 반도체 폭락 (-₩18.1M)."
+      },
+      {
+        "month": "2026-08",
+        "gain": 611522,
+        "income": 0,
+        "cost": 0,
+        "net": 611522,
+        "cumulative": 16827221,
+        "_note": "TQQQ 58주 스윙 익절 +10.9% (8/11)."
+      },
+      {
+        "month": "2026-09",
+        "gain": 0,
+        "income": 0,
+        "cost": 0,
+        "net": 0,
+        "cumulative": 34306877
+      },
+      {
+        "month": "2026-10",
+        "gain": 0,
+        "income": 0,
+        "cost": 0,
+        "net": 0,
+        "cumulative": 34306877
+      },
+      {
+        "month": "2026-11",
+        "gain": 0,
+        "income": 0,
+        "cost": 0,
+        "net": 0,
+        "cumulative": 34306877
+      },
+      {
+        "month": "2026-12",
+        "gain": 0,
+        "income": 0,
+        "cost": 0,
+        "net": 0,
+        "cumulative": 34306877
+      }
     ],
     "recent_ledger": [
-      {"date": "2026-05-27", "type": "매매차익", "name": "TIGER 반도체TOP10 레버리지", "ticker": "TIGER_SEMI_2X", "qty": null, "krwPnL": 12309903, "fee": 0, "tax": 0, "netPnL": 12309903, "category": "국내주식", "memo": "5/27 대량 매도 +20.3%"},
-      {"date": "2026-05-27", "type": "매매차익", "name": "TSLL", "ticker": "TSLL", "qty": null, "krwPnL": 467471, "fee": 0, "tax": 0, "netPnL": 467471, "category": "해외주식 양도세", "memo": "5/27 매도 +10.7%"},
-      {"date": "2026-05-26", "type": "매매차익", "name": "SCHD", "ticker": "SCHD", "qty": null, "krwPnL": 126381, "fee": 0, "tax": 0, "netPnL": 126381, "category": "해외주식 양도세", "memo": "5/26 매도 +5.4%"},
-      {"date": "2026-05-26", "type": "매매차익", "name": "JEPQ", "ticker": "JEPQ", "qty": null, "krwPnL": 114312, "fee": 0, "tax": 0, "netPnL": 114312, "category": "해외주식 양도세", "memo": "5/26 매도 +4.2%"},
-      {"date": "2026-05-22", "type": "매매차익", "name": "ProShares Ultra QQQ (QLD)", "ticker": "QLD", "qty": null, "krwPnL": 493881, "fee": 0, "tax": 0, "netPnL": 493881, "category": "해외주식 양도세", "memo": "5/22 매도 +41.6%"}
+      {
+        "date": "2026-05-27",
+        "type": "매매차익",
+        "name": "TIGER 반도체TOP10 레버리지",
+        "ticker": "TIGER_SEMI_2X",
+        "qty": null,
+        "krwPnL": 12309903,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 12309903,
+        "category": "국내주식",
+        "memo": "5/27 대량 매도 +20.3%"
+      },
+      {
+        "date": "2026-05-27",
+        "type": "매매차익",
+        "name": "TSLL",
+        "ticker": "TSLL",
+        "qty": null,
+        "krwPnL": 467471,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 467471,
+        "category": "해외주식 양도세",
+        "memo": "5/27 매도 +10.7%"
+      },
+      {
+        "date": "2026-05-26",
+        "type": "매매차익",
+        "name": "SCHD",
+        "ticker": "SCHD",
+        "qty": null,
+        "krwPnL": 126381,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 126381,
+        "category": "해외주식 양도세",
+        "memo": "5/26 매도 +5.4%"
+      },
+      {
+        "date": "2026-05-26",
+        "type": "매매차익",
+        "name": "JEPQ",
+        "ticker": "JEPQ",
+        "qty": null,
+        "krwPnL": 114312,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 114312,
+        "category": "해외주식 양도세",
+        "memo": "5/26 매도 +4.2%"
+      },
+      {
+        "date": "2026-05-22",
+        "type": "매매차익",
+        "name": "ProShares Ultra QQQ (QLD)",
+        "ticker": "QLD",
+        "qty": null,
+        "krwPnL": 493881,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 493881,
+        "category": "해외주식 양도세",
+        "memo": "5/22 매도 +41.6%"
+      },
+      {
+        "date": "2026-07",
+        "type": "매매차익",
+        "name": "Direxion Daily Semi Bull 3X (SOXL)",
+        "ticker": "SOXL",
+        "qty": 87,
+        "krwPnL": -18091178,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": -18091178,
+        "category": "해외주식 양도세",
+        "memo": "7월 87주 전량 손절. 반도체 폭락 대응 (계획은 6/23이었으나 미이행 → 손실 확대)."
+      },
+      {
+        "date": "2026-08-11",
+        "type": "매매차익",
+        "name": "ProShares UltraPro QQQ (TQQQ)",
+        "ticker": "TQQQ",
+        "qty": 58,
+        "krwPnL": 611522,
+        "fee": 0,
+        "tax": 0,
+        "netPnL": 611522,
+        "category": "해외주식 양도세",
+        "memo": "8/11 58주 스윙 익절 +10.9%. 잔여 0.923주 계속 보유."
+      }
     ]
   },
   "monthly_snapshots": [
-    {"month": "2026-04", "totalAsset": 214050432, "totalDebt": 88291878, "netWorth": 125758554, "income": 0, "capGain": 0, "other": 0, "deltaNW": 0, "_note": "4월말 NW는 5월 흐름으로부터 역산. totalAsset/Debt 정확치 아님 — 4월말 데이터 입력 시 갱신"},
-    {"month": "2026-05", "totalAsset": 267571844, "totalDebt": 88291878, "netWorth": 179279966, "income": 17877860, "capGain": 31766630, "other": -3000000, "deltaNW": 53521412, "_income_breakdown": {"salary": 4840450, "bonus": 13037410}},
-    {"month": "2026-06", "totalAsset": 290960606, "totalDebt": 88168800, "netWorth": 202791806, "income": 4840450, "capGain": 18671390, "other": 0, "deltaNW": 23511840, "_income_breakdown": {"salary": 4840450}, "_milestone": "🎉 NW ₩200M 돌파 — 꼬마몬 → 브이몬 진화. 만 30세, 분양 deadline 2028.7 (26개월 남음). 토스증권 Open API 자동 sync 연동 day."}
+    {
+      "month": "2026-04",
+      "totalAsset": 214050432,
+      "totalDebt": 88291878,
+      "netWorth": 125758554,
+      "income": 0,
+      "capGain": 0,
+      "other": 0,
+      "deltaNW": 0,
+      "_note": "4월말 NW는 5월 흐름으로부터 역산. totalAsset/Debt 정확치 아님 — 4월말 데이터 입력 시 갱신"
+    },
+    {
+      "month": "2026-05",
+      "totalAsset": 267571844,
+      "totalDebt": 88291878,
+      "netWorth": 179279966,
+      "income": 17877860,
+      "capGain": 31766630,
+      "other": -3000000,
+      "deltaNW": 53521412,
+      "_income_breakdown": {
+        "salary": 4840450,
+        "bonus": 13037410
+      }
+    },
+    {
+      "month": "2026-06",
+      "totalAsset": 290960606,
+      "totalDebt": 88168800,
+      "netWorth": 202791806,
+      "income": 4840450,
+      "capGain": 18671390,
+      "other": -2000000,
+      "deltaNW": 23511840,
+      "_income_breakdown": {
+        "salary": 4840450
+      },
+      "_milestone": "NW 200M 돌파. 분양 deadline 2028.7 (26개월 남음)."
+    },
+    {
+      "month": "2026-07",
+      "totalAsset": 223205402,
+      "totalDebt": 88855402,
+      "netWorth": 134350000,
+      "income": 4840450,
+      "capGain": -18091178,
+      "other": -2000000,
+      "deltaNW": -68441806,
+      "_income_breakdown": {
+        "salary": 4840450
+      },
+      "_note": "하이닉스 폭락(-67%). SOXL 87주 전량 손절(-18.1M). QLD/TQQQ 스윙 신규 진입. 고점(202M) 대비 -68M."
+    },
+    {
+      "month": "2026-08",
+      "totalAsset": 199147586,
+      "totalDebt": 88855402,
+      "netWorth": 110292184,
+      "income": 4840450,
+      "capGain": 611522,
+      "other": -2000000,
+      "deltaNW": -24057816,
+      "_income_breakdown": {
+        "salary": 4840450
+      },
+      "_note": "TQQQ 8/11 58주 스윙 익절(+61만). SCHD 8주 추가. TIGER나스닥100 연금 12주 추가. 하이닉스 여전히 보유."
+    }
   ],
   "cashflow": {
-    "deltaNW": 53521412,
-    "deltaPct": 0.426,
-    "income": 17877860,
-    "capGain": 31766630,
-    "other": -3000000,
-    "debtChg": 2315450,
-    "asofMonth": "2026-05",
-    "_income_breakdown": {"salary": 4840450, "bonus_samjeong": 13037410},
-    "_other_breakdown": {"travel_living": -3000000}
+    "deltaNW": -24057816,
+    "deltaPct": -0.179,
+    "income": 4840450,
+    "capGain": 611522,
+    "other": -2000000,
+    "debtChg": 0,
+    "asofMonth": "2026-08",
+    "_income_breakdown": {
+      "salary": 4840450
+    },
+    "_other_breakdown": {
+      "living": -2000000
+    }
   },
   "coin_realized_pnl": {
     "_doc": "코인 거래 누적 실현손익 (KRW). 연도×코인 매트릭스. 거래소 기록 기준 — 새 거래 발생 시 by_year[YYYY][COIN] 수정 + 합계 재계산. 주식 realized_pnl 와 분리.",
@@ -101,16 +343,112 @@
       "ending_nw": 179279966,
       "opening_label": "기초 순자산 (4월말, 역산)",
       "flows": [
-        {"name": "월 급여", "value": 4840450},
-        {"name": "상여 (삼정회계)", "value": 13037410},
-        {"name": "실현 손익 (5월 매매)", "value": 31766630},
-        {"name": "평가 손익 (현재 보유)", "value": 9186686},
-        {"name": "배당/이자수익", "value": 5686},
-        {"name": "부동산/보증금 변동", "value": 0},
-        {"name": "부채 증감 효과", "value": -2315450},
-        {"name": "소비 (여행 + 생활비)", "value": -3000000}
+        {
+          "name": "월 급여",
+          "value": 4840450
+        },
+        {
+          "name": "상여 (삼정회계)",
+          "value": 13037410
+        },
+        {
+          "name": "실현 손익 (5월 매매)",
+          "value": 31766630
+        },
+        {
+          "name": "평가 손익 (현재 보유)",
+          "value": 9186686
+        },
+        {
+          "name": "배당/이자수익",
+          "value": 5686
+        },
+        {
+          "name": "부동산/보증금 변동",
+          "value": 0
+        },
+        {
+          "name": "부채 증감 효과",
+          "value": -2315450
+        },
+        {
+          "name": "소비 (여행 + 생활비)",
+          "value": -3000000
+        }
       ],
       "_note": "4월말 기초 NW는 역산. 평소 월 소비 ₩200만원, 5월은 여행 포함 ₩300만원."
+    },
+    "2026-06": {
+      "opening_nw": 179279966,
+      "ending_nw": 202791806,
+      "opening_label": "기초 순자산 (5월말)",
+      "flows": [
+        {
+          "name": "월 급여",
+          "value": 4840450
+        },
+        {
+          "name": "평가손익 (KODEX·SOXL 상승)",
+          "value": 18671390
+        },
+        {
+          "name": "소비 (생활비)",
+          "value": -2000000
+        },
+        {
+          "name": "기타",
+          "value": 2000000
+        }
+      ],
+      "_note": "KODEX+SOXL 평가수익 위주 상승. NW 200M 돌파."
+    },
+    "2026-07": {
+      "opening_nw": 202791806,
+      "ending_nw": 134350000,
+      "opening_label": "기초 순자산 (6월말)",
+      "flows": [
+        {
+          "name": "월 급여",
+          "value": 4840450
+        },
+        {
+          "name": "실현손실 (SOXL 손절)",
+          "value": -18091178
+        },
+        {
+          "name": "평가손실 (KODEX 폭락 주도)",
+          "value": -53191078
+        },
+        {
+          "name": "소비 (생활비)",
+          "value": -2000000
+        }
+      ],
+      "_note": "7월 반도체 폭락. KODEX -67% 미실현. SOXL 손절 -18.1M. QLD/TQQQ 스윙 신규 진입."
+    },
+    "2026-08": {
+      "opening_nw": 134350000,
+      "ending_nw": 110292184,
+      "opening_label": "기초 순자산 (7월말)",
+      "flows": [
+        {
+          "name": "월 급여",
+          "value": 4840450
+        },
+        {
+          "name": "실현이익 (TQQQ 58주 익절)",
+          "value": 611522
+        },
+        {
+          "name": "평가손실 (KODEX·기타 추가 하락)",
+          "value": -27509788
+        },
+        {
+          "name": "소비 (생활비)",
+          "value": -2000000
+        }
+      ],
+      "_note": "TQQQ 스윙 익절 +61만. SCHD/나스닥 소액 적립. 하이닉스 여전히 미실현손실 -48.7M."
     }
   }
 }
