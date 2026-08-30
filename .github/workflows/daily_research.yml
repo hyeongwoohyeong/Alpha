@@ -39,6 +39,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Reset DB if malformed
+        run: |
+          python - <<'EOF'
+          import sqlite3, os, sys
+          db = "data/alpha.db"
+          if not os.path.exists(db):
+              print("alpha.db 없음 — fresh 생성됨")
+              sys.exit(0)
+          try:
+              conn = sqlite3.connect(db)
+              result = conn.execute("PRAGMA integrity_check").fetchone()
+              conn.close()
+              if result and result[0] == "ok":
+                  print("alpha.db OK")
+              else:
+                  print(f"alpha.db integrity fail: {result} — 삭제 후 재생성")
+                  os.remove(db)
+          except Exception as e:
+              print(f"alpha.db malformed ({e}) — 삭제 후 재생성")
+              if os.path.exists(db):
+                  os.remove(db)
+          EOF
+
+      - name: Build US index universe (S&P500 + NDX100 + Russell1000)
+        continue-on-error: true
+        run: |
+          python scripts/build_us_index_universe.py
+
       - name: Run research pipeline
         env:
           # Yahoo가 GitHub Actions IP를 차단하는 경우를 대비

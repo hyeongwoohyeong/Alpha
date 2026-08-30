@@ -1,12 +1,13 @@
 """Master Universe Loader — 모든 universe csv 의 single source of truth.
 
-기존 6 파일을 dedup + tag 부여하여 단일 view 제공:
-  - universe.csv               (core 50, manual curated, 자세한 분석 대상)
-  - wide_universe.csv          (manual curated US, ~351)
-  - kr_universe.csv            (KR quality 필터 통과, 23)
-  - kr_momentum_universe.csv   (KR 모멘텀 종목 manual, 40)
-  - kr_dynamic_universe.csv    (KR fdr daily rebuild, ~2000)
-  - us_dynamic_universe.csv    (US fdr daily rebuild, ~5700)
+스크리닝 대상: US-only (S&P 500 + NASDAQ 100 + Russell 1000)
+국내 주식은 스크리닝하지 않음 (2026-08-31 결정).
+
+파일 구성:
+  - universe.csv               (core ~50, manual curated, 자세한 분석 대상)
+  - wide_universe.csv          (manual curated US, ~350)
+  - us_index_universe.csv      (S&P500 + NDX100 + R1000, ~1000, 자동 빌드)
+  - us_dynamic_universe.csv    (US fdr daily rebuild, fallback)
 
 사용:
     from src.master_universe import load_master_universe
@@ -16,8 +17,7 @@
 Tags 의미:
     core           — universe.csv 의 fully scored alpha 대상
     wide_curated   — wide_universe.csv 의 manual sector tag
-    kr_quality     — pykrx quality 필터 통과
-    kr_momentum    — manual momentum (한미반도체 등)
+    index          — S&P500 / NDX100 / Russell1000 구성 종목
     dynamic        — fdr 매일 rebuild 된 살아있는 종목
 """
 from __future__ import annotations
@@ -32,14 +32,14 @@ log = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 # Universe csv 경로 + tag
+# KR 소스 제거 (2026-08-31): 국내 주식 스크리닝 안 함
+# us_index_universe.csv 우선; 없으면 us_dynamic_universe.csv fallback
 _SOURCES: list[tuple[str, str, str]] = [
     # (file_name, source_tag, market_default)
     ("universe.csv",              "core",         "US"),
     ("wide_universe.csv",         "wide_curated", "US"),
-    ("kr_universe.csv",           "kr_quality",   "KR"),
-    ("kr_momentum_universe.csv",  "kr_momentum",  "KR"),
-    ("kr_dynamic_universe.csv",   "kr_dynamic",   "KR"),
-    ("us_dynamic_universe.csv",   "us_dynamic",   "US"),
+    ("us_index_universe.csv",     "index",        "US"),   # S&P500 + NDX100 + R1000
+    ("us_dynamic_universe.csv",   "us_dynamic",   "US"),   # fallback (없으면 skip)
 ]
 
 
@@ -149,11 +149,11 @@ def load_master_universe(
         srcs = r["sources"]
         if "core" in srcs:
             r["tags"].append("active_alpha")
-        if "kr_quality" in srcs:
-            r["tags"].append("quality_filter")
-        if "kr_momentum" in srcs or "wide_curated" in srcs:
+        if "wide_curated" in srcs:
             r["tags"].append("momentum_curated")
-        if any(s in srcs for s in ["kr_dynamic", "us_dynamic"]):
+        if "index" in srcs:
+            r["tags"].append("index_member")   # S&P500 / NDX100 / R1000
+        if "us_dynamic" in srcs:
             r["tags"].append("dynamic")
         # 두 개 이상 source 에 등장 = 강한 후보
         if len(srcs) >= 2:
