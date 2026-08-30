@@ -111,7 +111,7 @@ jobs:
             cp /tmp/new_alpha.db data/alpha.db
             [ -f /tmp/dead_strikes.json ] && cp /tmp/dead_strikes.json data/dead_ticker_strikes.json || true
             [ -f /tmp/wide_universe.csv ] && cp /tmp/wide_universe.csv data/wide_universe.csv || true
-            git add data/alpha.db data/dead_ticker_strikes.json data/wide_universe.csv
+            git add -f data/alpha.db data/dead_ticker_strikes.json data/wide_universe.csv
             if git diff --cached --quiet; then
               echo "No DB changes to commit"
               exit 0
