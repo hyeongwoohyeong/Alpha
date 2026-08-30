@@ -103,11 +103,15 @@ jobs:
           # rebase 를 쓰지 않는다. 매 시도마다: 워킹트리를 최신 origin/main 으로 강제
           # 초기화 → 새 DB 만 덮어쓰기 → DB 단일 변경 커밋 → fast-forward push.
           cp data/alpha.db /tmp/new_alpha.db
+          [ -f data/dead_ticker_strikes.json ] && cp data/dead_ticker_strikes.json /tmp/dead_strikes.json || true
+          [ -f data/wide_universe.csv ] && cp data/wide_universe.csv /tmp/wide_universe.csv || true
           for i in 1 2 3 4 5; do
             git fetch origin main
             git checkout -f -B main origin/main
             cp /tmp/new_alpha.db data/alpha.db
-            git add data/alpha.db
+            [ -f /tmp/dead_strikes.json ] && cp /tmp/dead_strikes.json data/dead_ticker_strikes.json || true
+            [ -f /tmp/wide_universe.csv ] && cp /tmp/wide_universe.csv data/wide_universe.csv || true
+            git add data/alpha.db data/dead_ticker_strikes.json data/wide_universe.csv
             if git diff --cached --quiet; then
               echo "No DB changes to commit"
               exit 0

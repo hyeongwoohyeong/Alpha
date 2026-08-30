@@ -137,6 +137,85 @@ def step_fetch_wide_market_data(
     return md_map
 
 
+# ---------------------------------------------------------------------------
+# Dead ticker 자동 정리
+# ---------------------------------------------------------------------------
+
+_STRIKES_FILE = PROJECT_ROOT / "data" / "dead_ticker_strikes.json"
+_WIDE_CSV = PROJECT_ROOT / "data" / "wide_universe.csv"
+_DEAD_STRIKE_THRESHOLD = 3   # 3회 연속 실패 → wide_universe.csv 에서 제거
+
+
+def purge_dead_tickers(wide_universe: list[dict], md_map: dict[str, dict]) -> list[str]:
+    """wide market fetch 후 실패 ticker strike 누적 → 임계 도달 시 wide_universe.csv 제거.
+
+    동작:
+      - available=True  → strike 0 으로 초기화
+      - available=False → strike +1
+      - strike >= 3     → wide_universe.csv 에서 해당 ticker 행 삭제
+
+    rate-limit 일시 실패(1~2회)는 정리 안 하고, 진짜 상장폐지만 제거.
+    core universe.csv 는 절대 건드리지 않음.
+
+    Returns:
+        removed: 이번 run 에 제거된 ticker 목록
+    """
+    import csv as _csv
+    import json as _json
+
+    # 1) strike 상태 로드
+    strikes: dict[str, dict] = {}
+    if _STRIKES_FILE.exists():
+        try:
+            strikes = _json.loads(_STRIKES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            strikes = {}
+
+    # 2) 이번 fetch 결과 반영
+    today = _dt.date.today().isoformat()
+    for row in wide_universe:
+        t = row["ticker"]
+        md = md_map.get(t, {})
+        if md.get("available"):
+            # 성공 → strike 초기화
+            strikes.pop(t, None)
+        else:
+            entry = strikes.setdefault(t, {"count": 0, "first_fail": today})
+            entry["count"] += 1
+            entry["last_fail"] = today
+
+    # 3) 임계 초과 ticker 수집
+    to_remove = {t for t, e in strikes.items() if e["count"] >= _DEAD_STRIKE_THRESHOLD}
+
+    removed: list[str] = []
+    if to_remove and _WIDE_CSV.exists():
+        # CSV 다시 쓰기 — to_remove 행 제외
+        with open(_WIDE_CSV, encoding="utf-8", newline="") as f:
+            reader = _csv.DictReader(f)
+            fieldnames = reader.fieldnames or []
+            kept_rows = [r for r in reader if r.get("ticker") not in to_remove]
+
+        with open(_WIDE_CSV, "w", encoding="utf-8", newline="") as f:
+            writer = _csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(kept_rows)
+
+        removed = list(to_remove)
+        for t in removed:
+            strikes.pop(t, None)   # 제거 완료 → strike 기록도 정리
+        log.info(
+            "[3/15] dead ticker 정리: %d개 wide_universe.csv 제거 → %s",
+            len(removed), removed,
+        )
+
+    # 4) strike 상태 저장
+    _STRIKES_FILE.parent.mkdir(exist_ok=True)
+    _STRIKES_FILE.write_text(
+        _json.dumps(strikes, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return removed
+
+
 def step_run_discovery(
     conn, run_id: str, date_iso: str,
     wide_universe: list[dict], md_map: dict[str, dict], top_k: int = 80,
@@ -1573,6 +1652,7 @@ def run_research(
             wide_md = step_fetch_wide_market_data(
                 conn, run_id, wide, date_iso, skip=skip_wide_fetch,
             )
+            purge_dead_tickers(wide, wide_md)   # 3회 연속 실패 → wide_universe.csv 자동 제거
             _, discovery_cands = step_run_discovery(
                 conn, run_id, date_iso, wide, wide_md, top_k=cfg.discovery_top_k,
             )
