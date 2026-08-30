@@ -32,16 +32,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pykrx yfinance pandas requests finance-datareader
+          pip install pykrx yfinance pandas requests finance-datareader lxml html5lib
 
-      - name: 1) Dynamic Universe rebuild (KR + US)
-        continue-on-error: true  # universe build 실패해도 다음 step 진행 (manual list 만으로도 동작)
+      - name: 1) US Index Universe rebuild (S&P500 + NASDAQ100 + Russell1000)
+        continue-on-error: true
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python scripts/build_us_index_universe.py
+
+      - name: 2) KR Dynamic Universe rebuild
+        continue-on-error: true
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           python scripts/build_dynamic_universe.py
 
-      - name: 2) Confluence Score Scan + Alert
+      - name: 3) Confluence Score Scan + Alert
         env:
           PYTHONUNBUFFERED: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -49,16 +56,15 @@ jobs:
         run: |
           python scripts/weekly_growth_scan.py
 
-      - name: 3) Commit results
+      - name: 4) Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # SQLite WAL checkpoint — WAL 파일 데이터를 main DB 파일에 반영 후 git add
           python3 -c "import sqlite3; c=sqlite3.connect('data/alpha.db'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close(); print('WAL checkpoint done')"
-          git add data/kr_dynamic_universe.csv data/alpha.db || true
+          git add data/kr_dynamic_universe.csv data/us_index_universe.csv data/alpha.db || true
           if git diff --cached --quiet; then
             echo "변경 없음 — commit skip"
           else
-            git commit -m "weekly universe scan $(date -u +'%Y-%m-%d')"
+            git commit -m "universe scan $(date -u +'%Y-%m-%d') — SP500+NDX100+R1000+KR"
             git push origin main || git pull --rebase origin main && git push origin main
           fi

@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies (minimal)
         run: |
           python -m pip install --upgrade pip
-          pip install requests yfinance pykrx openai
+          pip install requests yfinance pykrx openai anthropic
 
       - name: Determine slot
         id: slot
@@ -59,7 +59,19 @@ jobs:
           PYTHONUNBUFFERED: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # 뉴스 LLM 요약용 — Secrets 에 이미 있으면 자동 사용, 없으면 graceful skip
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -m src.briefing_engine ${{ steps.slot.outputs.value }}
+
+      - name: 프리라이프 텔레그램 브리핑 (아침만)
+        if: steps.slot.outputs.value == 'morning'
+        continue-on-error: true
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python scripts/fetch_tg_brief.py

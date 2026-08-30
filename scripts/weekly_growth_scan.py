@@ -65,18 +65,42 @@ def load_kr_dynamic() -> list[dict]:
 
 
 def load_us_wide() -> list[dict]:
-    """US universe 로드 — dynamic (NASDAQ+NYSE+AMEX 전종목) + manual curated 합집합."""
-    seen = set()
-    out = []
-    # 1) US dynamic (fdr fetched, daily rebuild)
+    """US universe 로드 — S&P 500 / NASDAQ 100 / Russell 1000 인덱스 universe 우선.
+
+    우선순위:
+      1) us_index_universe.csv   (build_us_index_universe.py 산출물 — S&P500+NDX100+R1000)
+      2) fallback: us_dynamic_universe.csv + wide_universe.csv (구 방식)
+    """
+    seen: set[str] = set()
+    out: list[dict] = []
+
+    # ── 1) Index Universe (신규, 우선) ─────────────────────────────────────────
+    idx_path = DATA_DIR / "us_index_universe.csv"
+    if idx_path.exists():
+        with open(idx_path, encoding="utf-8") as f:
+            lines = [l for l in f if not l.startswith("#")]
+        for row in csv.DictReader(lines):
+            t = row.get("ticker", "").strip()
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            out.append({
+                "ticker": t,
+                "name": row.get("name", ""),
+                "market": row.get("index_membership", "US"),  # SP500,NDX100 등
+                "sector": row.get("sector", ""),
+                "industry": row.get("industry", ""),
+                "tier": row.get("market_cap_tier", "large"),
+            })
+        if out:
+            log.info("us_index_universe.csv 로드: %d 종목 (S&P500+NDX100+R1000)", len(out))
+            return out
+        log.warning("us_index_universe.csv 있으나 비어 있음 — fallback")
+
+    # ── 2) Fallback: 구 dynamic + manual curated ──────────────────────────────
+    log.warning("us_index_universe.csv 없음 — 구 방식 fallback (build_us_index_universe.py 먼저 실행 필요)")
     dyn_path = DATA_DIR / "us_dynamic_universe.csv"
     if dyn_path.exists():
-        with open(dyn_path, encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("#"):
-                    continue
-                break
-        # reset, re-read skipping comments
         with open(dyn_path, encoding="utf-8") as f:
             lines = [l for l in f if not l.startswith("#")]
         for row in csv.DictReader(lines):
@@ -86,13 +110,12 @@ def load_us_wide() -> list[dict]:
             seen.add(t)
             out.append({
                 "ticker": t,
-                "name": row.get("name"),
-                "market": row.get("market"),
-                "sector": row.get("sector"),
-                "industry": row.get("industry"),
-                "tier": row.get("market_cap_tier"),
+                "name": row.get("name", ""),
+                "market": row.get("market", ""),
+                "sector": row.get("sector", ""),
+                "industry": row.get("industry", ""),
+                "tier": row.get("market_cap_tier", ""),
             })
-    # 2) Manual curated (wide_universe.csv) — 빠진 catalyst 종목 보완
     manual_path = DATA_DIR / "wide_universe.csv"
     if manual_path.exists():
         with open(manual_path, encoding="utf-8") as f:
@@ -103,11 +126,11 @@ def load_us_wide() -> list[dict]:
                 seen.add(t)
                 out.append({
                     "ticker": t,
-                    "name": row.get("name"),
-                    "market": row.get("exchange"),
-                    "sector": row.get("sector"),
-                    "industry": row.get("industry"),
-                    "tier": row.get("market_cap_tier"),
+                    "name": row.get("name", ""),
+                    "market": row.get("exchange", ""),
+                    "sector": row.get("sector", ""),
+                    "industry": row.get("industry", ""),
+                    "tier": row.get("market_cap_tier", ""),
                 })
     return out
 
