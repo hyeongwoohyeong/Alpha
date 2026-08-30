@@ -537,11 +537,21 @@ def build_morning_briefing() -> tuple[str, dict]:
     now = _NOW_KST()
     header = [f"🌅 아침 브리핑 — {now.strftime('%Y.%m.%d (%a)')}"]
     progress_lines, meta = build_progress_section()
+
+    # 프리라이프 채널 요약 (graceful — 실패 시 빈 list)
+    try:
+        from .tg_freelife import build_tg_freelife_section
+        tg_section = build_tg_freelife_section()
+    except Exception as e:
+        log.warning("tg_freelife import 실패: %s", e)
+        tg_section = []
+
     msg = _join(
         header,
         progress_lines,
         build_market_section(),
         build_news_section(),
+        tg_section,
         build_macro_section(days_ahead=7),
         build_alpha_bet_section(),
         build_checklist_section(),
