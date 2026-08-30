@@ -21,7 +21,9 @@ on:
 jobs:
   briefing:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: write       # tg_freelife_state.json commit 위해
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,3 +66,41 @@ jobs:
         run: |
           python -m src.briefing_engine ${{ steps.slot.outputs.value }}
 
+      - name: 프리라이프 브리핑 (신규 메시지만)
+        continue-on-error: true
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python scripts/fetch_tg_brief.py
+
+      - name: Commit freelife state (dedup 보존)
+        if: always()
+        run: |
+          git config user.name "alpha-bot"
+          git config user.email "alpha-bot@users.noreply.github.com"
+          if [ ! -f data/tg_freelife_state.json ]; then
+            echo "state file 없음 — skip"
+            exit 0
+          fi
+          cp data/tg_freelife_state.json /tmp/our_state.json
+          for i in 1 2 3; do
+            git fetch origin main
+            git checkout -f -B main origin/main
+            cp /tmp/our_state.json data/tg_freelife_state.json
+            git add data/tg_freelife_state.json
+            if git diff --cached --quiet; then
+              echo "state no change — skip"
+              exit 0
+            fi
+            git commit -m "chore: freelife state $(date -u +'%H:%M UTC')"
+            if git push origin main; then
+              echo "✓ state pushed (try $i)"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "⚠️ push 실패 — 다음 실행에서 재시도"
