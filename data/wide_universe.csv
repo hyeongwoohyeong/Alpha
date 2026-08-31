@@ -28,7 +28,6 @@ DELL,Dell Technologies,Technology,Computer Hardware,large,NYSE,0,0,0,1
 HPE,Hewlett Packard Enterprise,Technology,Computer Hardware,large,NYSE,0,0,0,1
 ANET,Arista Networks,Technology,Communication Equipment,large,NYSE,0,0,0,1
 CSCO,Cisco Systems,Technology,Communication Equipment,large,NASDAQ,0,0,0,1
-JNPR,Juniper Networks,Technology,Communication Equipment,mid,NYSE,0,0,0,1
 CIEN,Ciena,Technology,Communication Equipment,mid,NYSE,0,0,0,1
 CRDO,Credo Technology,Technology,Semiconductors,mid,NASDAQ,0,0,0,1
 ALAB,Astera Labs,Technology,Semiconductors,mid,NASDAQ,0,0,0,1
@@ -56,7 +55,6 @@ RBLX,Roblox,Communication Services,Electronic Gaming,mid,NYSE,0,0,0,1
 TWLO,Twilio,Technology,Software,mid,NYSE,0,0,0,1
 COIN,Coinbase,Financial Services,Capital Markets,large,NASDAQ,0,0,0,1
 HOOD,Robinhood Markets,Financial Services,Capital Markets,mid,NASDAQ,0,0,0,1
-SQ,Block,Technology,Software,large,NYSE,0,0,0,1
 PYPL,PayPal,Financial Services,Credit Services,large,NASDAQ,0,0,0,1
 V,Visa,Financial Services,Credit Services,large,NYSE,0,0,0,1
 MA,Mastercard,Financial Services,Credit Services,large,NYSE,0,0,0,1
@@ -70,7 +68,6 @@ SCHW,Charles Schwab,Financial Services,Capital Markets,large,NYSE,0,0,0,1
 BLK,BlackRock,Financial Services,Asset Management,large,NYSE,0,0,0,1
 KKR,KKR,Financial Services,Asset Management,large,NYSE,0,0,0,1
 APO,Apollo Global Management,Financial Services,Asset Management,large,NYSE,0,0,0,1
-BRK.B,Berkshire Hathaway,Financial Services,Insurance,large,NYSE,0,0,0,1
 PGR,Progressive,Financial Services,Insurance,large,NYSE,0,0,0,1
 TRV,Travelers,Financial Services,Insurance,large,NYSE,0,0,0,1
 LMT,Lockheed Martin,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
@@ -146,7 +143,6 @@ EW,Edwards Lifesciences,Healthcare,Medical Devices,large,NYSE,0,0,0,1
 ZBH,Zimmer Biomet,Healthcare,Medical Devices,large,NYSE,0,0,0,1
 TMDX,TransMedics Group,Healthcare,Medical Devices,mid,NASDAQ,0,0,0,1
 NTRA,Natera,Healthcare,Diagnostics & Research,large,NASDAQ,0,0,0,1
-EXAS,Exact Sciences,Healthcare,Diagnostics & Research,mid,NASDAQ,0,0,0,1
 VRTX,Vertex Pharmaceuticals,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
 REGN,Regeneron Pharmaceuticals,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
 GILD,Gilead Sciences,Healthcare,Biotechnology,large,NASDAQ,0,0,0,1
@@ -243,7 +239,6 @@ ESTC,Elastic,Technology,Software,mid,NYSE,0,0,0,1
 GTLB,GitLab,Technology,Software,mid,NASDAQ,0,0,0,1
 DT,Dynatrace,Technology,Software,large,NYSE,0,0,0,1
 NTAP,NetApp,Technology,Computer Hardware,large,NASDAQ,0,0,0,1
-PSTG,Pure Storage,Technology,Computer Hardware,large,NYSE,0,0,0,1
 WDC,Western Digital,Technology,Computer Hardware,mid,NASDAQ,0,0,0,1
 STX,Seagate Technology,Technology,Computer Hardware,large,NASDAQ,0,0,0,1
 ON,ON Semiconductor,Technology,Semiconductors,large,NASDAQ,0,0,0,1
@@ -280,7 +275,6 @@ EL,Estee Lauder,Consumer Defensive,Household Products,large,NYSE,0,0,0,1
 CL,Colgate-Palmolive,Consumer Defensive,Household Products,large,NYSE,0,0,0,1
 CHWY,Chewy,Consumer Discretionary,Internet Retail,mid,NYSE,0,0,0,1
 WIX,Wix.com,Technology,Software,mid,NASDAQ,0,0,1,1
-SQSP,Squarespace,Technology,Software,small,NYSE,0,0,0,0
 TWO,Two Harbors Investment,Real Estate,REIT Mortgage,small,NYSE,0,0,0,1
 NSA,National Storage Affiliates,Real Estate,REIT Industrial,small,NYSE,0,0,0,1
 DLR,Digital Realty Trust,Real Estate,REIT Specialty,large,NYSE,0,0,0,1
@@ -298,7 +292,6 @@ INFY,Infosys,Technology,Information Technology Services,large,NYSE,0,0,1,1
 WIT,Wipro,Technology,Information Technology Services,large,NYSE,0,0,1,1
 GLBE,Global-E Online,Technology,Software,small,NASDAQ,0,0,1,1
 DUOL,Duolingo,Technology,Software,large,NASDAQ,0,0,0,1
-COUP,Coupang,Consumer Discretionary,Internet Retail,large,NYSE,0,0,1,1
 CPNG,Coupang,Consumer Discretionary,Internet Retail,large,NYSE,0,0,1,0
 FOUR,Shift4 Payments,Technology,Software,mid,NYSE,0,0,0,1
 TOST,Toast,Technology,Software,large,NYSE,0,0,0,1
@@ -307,7 +300,6 @@ ESLT,Elbit Systems,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,1,1
 KTOS,Kratos Defense & Security,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,0,1
 AVAV,AeroVironment,Industrials,Aerospace & Defense,mid,NASDAQ,0,0,0,1
 MRCY,Mercury Systems,Industrials,Aerospace & Defense,small,NASDAQ,0,0,0,1
-MOG.A,Moog,Industrials,Aerospace & Defense,small,NYSE,0,0,0,1
 HWM,Howmet Aerospace,Industrials,Aerospace & Defense,large,NYSE,0,0,0,1
 MSTR,MicroStrategy,Technology,BTC Treasury,large,NASDAQ,0,0,0,1
 CVNA,Carvana,Consumer Discretionary,Auto Retail,mid,NYSE,0,0,0,1
@@ -316,7 +308,6 @@ RGTI,Rigetti Computing,Technology,Quantum Computing,small,NASDAQ,0,0,0,1
 IONQ,IonQ,Technology,Quantum Computing,mid,NYSE,0,0,0,1
 QBTS,D-Wave Quantum,Technology,Quantum Computing,small,NYSE,0,0,0,1
 CLSK,CleanSpark,Technology,BTC Mining,small,NASDAQ,0,0,0,1
-BITF,Bitfarms,Technology,BTC Mining,small,NASDAQ,0,0,0,1
 NBIS,Nebius Group,Technology,AI Cloud Infrastructure,mid,NASDAQ,0,0,0,1
 TLN,Talen Energy,Utilities,Nuclear Power,mid,NASDAQ,0,0,0,1
 OKLO,Oklo,Utilities,Nuclear SMR,small,NYSE,0,0,0,1
