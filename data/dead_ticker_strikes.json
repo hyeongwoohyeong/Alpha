@@ -1,41 +1,41 @@
 {
   "SATS": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "MASI": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "LNW": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "CNTA": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "IAC": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "BITF": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "VERB": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   },
   "HTBK": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-04",
     "last_fail": "2026-09-04"
   }
