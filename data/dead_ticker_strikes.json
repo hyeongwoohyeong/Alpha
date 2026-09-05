@@ -1,42 +1,172 @@
 {
-  "SATS": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "KURA": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "MASI": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "TRST": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "LNW": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "APC": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "CNTA": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "FSBC": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "IAC": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "ABUS": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "BITF": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "HPK": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "VERB": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "CRAI": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   },
-  "HTBK": {
-    "count": 2,
-    "first_fail": "2026-09-04",
-    "last_fail": "2026-09-04"
+  "MFIC": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "JANX": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "CCOI": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "ANNX": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "QDEL": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "INMD": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "XNCR": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "MOMO": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "SCHL": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "JBSS": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "METC": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "IMSR": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "SANA": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "SSYS": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "CRCT": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "TALK": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "DRUG": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "ADSE": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "GO": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "AMPH": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "LOT": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "AGNT": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "ESPR": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "GLIBK": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "AVO": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "WEST": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
+  },
+  "AURA": {
+    "count": 1,
+    "first_fail": "2026-09-05",
+    "last_fail": "2026-09-05"
   }
 }
