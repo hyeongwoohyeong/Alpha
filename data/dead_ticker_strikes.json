@@ -1,192 +1,42 @@
 {
-  "SBET": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "PNTG": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "HTLD": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "EYPT": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "FMNB": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "AMPH": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "LOT": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "TBPH": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "APOG": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "FCBC": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "VOR": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "GSM": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "AGNT": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "ODTX": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "GERN": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "OMER": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "SSII": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "CTMX": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "GSBC": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "CCBG": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "SPFI": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "AURA": {
-    "count": 2,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "REAL": {
+  "SATS": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "WYFI": {
+  "MASI": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "NWPX": {
+  "LNW": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "CERT": {
+  "CNTA": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "SPRY": {
+  "IAC": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "HPK": {
+  "BITF": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "HAFC": {
+  "VERB": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   },
-  "JANX": {
+  "HTBK": {
     "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "LYTS": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "IMSR": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "SSYS": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "ORIC": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "TALK": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "NB": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "AVTX": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
-  },
-  "MATW": {
-    "count": 1,
-    "first_fail": "2026-09-09",
-    "last_fail": "2026-09-09"
+    "first_fail": "2026-09-10",
+    "last_fail": "2026-09-10"
   }
 }
