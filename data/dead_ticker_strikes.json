@@ -1,202 +1,342 @@
 {
   "SATS": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "MASI": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "LNW": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "CNTA": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "IAC": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "BLFS": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "PWRL": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "PSEC": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "PSNL": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "BITF": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "ATEC": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "PNTG": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "LIFE": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "ASTE": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "FCEL": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "CEVA": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "TNDM": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "VERB": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "EGBN": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "HTBK": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "MPB": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "ROOT": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "THFF": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "WRLD": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "VOR": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "AGNT": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "ESPR": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "ODTX": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "LBRX": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "OMER": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "CYRX": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
-  },
-  "SSII": {
-    "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "CTMX": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "WEST": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "GSBC": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "CCBG": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "SPFI": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "LAES": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
   "AURA": {
-    "count": 1,
+    "count": 2,
     "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "last_fail": "2026-09-12"
   },
-  "EH": {
+  "CALM": {
     "count": 1,
-    "first_fail": "2026-09-11",
-    "last_fail": "2026-09-11"
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ORKA": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "VECO": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "PONY": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "DLO": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "FIZZ": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "KEEL": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ASO": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "BULL": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "COLM": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ICUI": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "PPTA": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "WSBC": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "KYIV": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "OPCH": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "HWKN": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "MCHB": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "TLX": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "HIVE": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "FMBH": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "WYFI": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ABTC": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "MNKD": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "CRAI": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "SHEN": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ORIC": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "GO": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "FMNB": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "AVR": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "AVTX": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "ETON": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "AMPH": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "TBPH": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "APOG": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "FCBC": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "GSM": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "NAVI": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "RDVT": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "GERN": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "BBSI": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "AVO": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
+  },
+  "MRLN": {
+    "count": 1,
+    "first_fail": "2026-09-12",
+    "last_fail": "2026-09-12"
   }
 }
