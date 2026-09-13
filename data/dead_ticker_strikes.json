@@ -1,57 +1,47 @@
 {
-  "AMPH": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "TBPH": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "APOG": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "FCBC": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "GSM": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "GERN": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "AVO": {
-    "count": 2,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
-  },
-  "LOT": {
+  "SATS": {
     "count": 1,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
   },
-  "MATW": {
+  "MASI": {
     "count": 1,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
   },
-  "GLIBK": {
+  "LNW": {
     "count": 1,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
   },
-  "OMER": {
+  "CNTA": {
     "count": 1,
-    "first_fail": "2026-09-12",
-    "last_fail": "2026-09-12"
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
+  },
+  "IAC": {
+    "count": 1,
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
+  },
+  "BITF": {
+    "count": 1,
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
+  },
+  "VERB": {
+    "count": 1,
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
+  },
+  "HTBK": {
+    "count": 1,
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
+  },
+  "ESPR": {
+    "count": 1,
+    "first_fail": "2026-09-13",
+    "last_fail": "2026-09-13"
   }
 }
